@@ -58,6 +58,17 @@ export default function AdminNav() {
           ⟳
         </button>
 
+        <Link
+          href="/admin/profile"
+          className={`rounded border px-3 py-2 text-sm font-semibold ${
+            pathname === '/admin/profile'
+              ? 'border-[var(--edr-yellow)] text-[var(--edr-yellow)]'
+              : 'border-[var(--edr-border)] hover:bg-[var(--edr-surface-2)]'
+          }`}
+        >
+          Mi cuenta
+        </Link>
+
         <button
           onClick={async () => {
             await supabase.auth.signOut();

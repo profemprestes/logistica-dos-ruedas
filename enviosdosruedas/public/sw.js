@@ -11,7 +11,7 @@
  *  - NUNCA se mete con las llamadas a Supabase: los datos los maneja la cola
  *    de IndexedDB, y una respuesta cacheada de la API sería peor que un error.
  */
-const CACHE = 'dosruedas-repartidor-v2';
+const CACHE = 'dosruedas-repartidor-v3';
 
 const SHELL = ['/driver', '/driver/dashboard'];
 
@@ -44,16 +44,44 @@ self.addEventListener('fetch', (event) => {
   // Supabase (API, auth y storage) y cualquier otro dominio: derecho a la red.
   if (url.origin !== self.location.origin) return;
 
-  // Navegación: primero la red, y si no hay señal lo último que guardamos.
+  // Navegación: se le da 2,5 segundos a la red y si no contesta se sirve lo
+  // guardado. Con una antena saturada, esperar a la red dejaba la pantalla en
+  // blanco varios segundos aunque el armazón ya estuviera en el celular.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => caches.match(request).then((hit) => hit || caches.match('/driver/dashboard'))),
+      new Promise((resolve) => {
+        let resuelto = false;
+        const listo = (r) => {
+          if (!resuelto && r) {
+            resuelto = true;
+            resolve(r);
+          }
+        };
+
+        const desdeCache = () =>
+          caches
+            .match(request)
+            .then((hit) => hit || caches.match('/driver/dashboard'))
+            .then(listo);
+
+        const reloj = setTimeout(desdeCache, 2500);
+
+        fetch(request)
+          .then((response) => {
+            clearTimeout(reloj);
+            // Siempre se guarda la versión fresca para la próxima vez.
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+            listo(response);
+          })
+          .catch(() => {
+            clearTimeout(reloj);
+            desdeCache().then(() => {
+              // Ni red ni caché: que el navegador muestre su propio error.
+              if (!resuelto) resolve(Response.error());
+            });
+          });
+      }),
     );
     return;
   }

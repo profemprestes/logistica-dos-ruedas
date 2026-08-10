@@ -71,19 +71,25 @@ export default function DriverDashboardPage() {
 
   // --- sesión ------------------------------------------------------------
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       if (!user) {
         router.replace('/login');
         return;
       }
-      const { data: profile } = await supabase
+
+      // El id alcanza para pedir la hoja de ruta. Antes se esperaba también el
+      // nombre del perfil, y esa consulta de más retrasaba TODA la pantalla.
+      setDriver({ id: user.id, name: '' });
+
+      supabase
         .from('profiles')
         .select('full_name')
         .eq('id', user.id)
-        .maybeSingle();
-
-      setDriver({ id: user.id, name: profile?.full_name ?? '' });
+        .maybeSingle()
+        .then(({ data: profile }) =>
+          setDriver((prev) => (prev ? { ...prev, name: profile?.full_name ?? '' } : prev)),
+        );
     });
   }, [router]);
 

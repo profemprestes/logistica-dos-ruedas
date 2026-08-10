@@ -13,6 +13,24 @@ type Phase = 'pidiendo' | 'ok' | 'bloqueado';
 const YA_OK = 'edr-permisos-ok';
 
 /**
+ * Pregunta por los permisos sin activar nada. Devuelve 'ok' sólo si los dos
+ * están concedidos; en cualquier otro caso hay que hacer el chequeo completo.
+ */
+async function revisarBarato(): Promise<'ok' | 'revisar'> {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'revisar';
+  try {
+    const [cam, geo] = await Promise.all([
+      navigator.permissions.query({ name: 'camera' as PermissionName }),
+      navigator.permissions.query({ name: 'geolocation' }),
+    ]);
+    return cam.state === 'granted' && geo.state === 'granted' ? 'ok' : 'revisar';
+  } catch {
+    // Safari no soporta consultar 'camera': se cae al chequeo completo.
+    return 'revisar';
+  }
+}
+
+/**
  * Devuelve la lista de problemas (vacía = todo en orden).
  * No toca el estado de React: así se puede llamar desde un efecto sin cascadas.
  */
@@ -53,18 +71,32 @@ export default function PermissionGate({ children }: { children: ReactNode }) {
 
     // Si ya los había dado, entra derecho y la verificación corre por detrás.
     // (Va en un microtask para no llamar a setState en el cuerpo del efecto.)
-    if (sessionStorage.getItem(YA_OK) === '1') {
+    const yaEstaban = sessionStorage.getItem(YA_OK) === '1';
+    if (yaEstaban) {
       Promise.resolve().then(() => {
         if (!cancelled) apply([]);
       });
     }
 
-    collectProblems().then((found) => {
-      if (cancelled) return;
-      if (found.length === 0) sessionStorage.setItem(YA_OK, '1');
-      else sessionStorage.removeItem(YA_OK);
-      apply(found);
-    });
+    // Chequeo barato primero: preguntar por el permiso NO prende la cámara.
+    // `getUserMedia` sí la enciende un instante, y hacerlo en cada arranque
+    // costaba casi un segundo y gastaba batería al pedo.
+    revisarBarato()
+      .then((veredicto) => {
+        if (cancelled) return null;
+        if (veredicto === 'ok') {
+          sessionStorage.setItem(YA_OK, '1');
+          apply([]);
+          return null;
+        }
+        return collectProblems();
+      })
+      .then((found) => {
+        if (cancelled || found === null) return;
+        if (found.length === 0) sessionStorage.setItem(YA_OK, '1');
+        else sessionStorage.removeItem(YA_OK);
+        apply(found);
+      });
 
     return () => {
       cancelled = true;

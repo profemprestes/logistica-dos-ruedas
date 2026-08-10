@@ -18,6 +18,8 @@ export default function ShipmentSheet({
 }) {
   const cash = shipmentCash(shipment);
   const flex = Boolean(shipment.is_flex);
+  /** Sin retirar no hay nada que entregar: el paquete todavía está en el comercio. */
+  const sinRetirar = shipment.status === 'creado' || shipment.status === 'pendiente_retiro';
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     `${shipment.address_street}, ${shipment.city}`,
   )}`;
@@ -153,13 +155,18 @@ export default function ShipmentSheet({
 
       <div className="space-y-3 border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {/* Los pasos previos a entregar, en el orden en que pasan en la calle. */}
-        {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
-          <button
-            onClick={() => onEstado(shipment, 'retirado')}
-            className="w-full rounded-2xl bg-sky-600 px-6 py-4 text-lg font-black text-white active:scale-[0.99]"
-          >
-            📦 Ya lo retiré
-          </button>
+        {sinRetirar && (
+          <>
+            <button
+              onClick={() => onEstado(shipment, 'retirado')}
+              className="w-full rounded-2xl bg-sky-600 px-6 py-5 text-xl font-black text-white active:scale-[0.99]"
+            >
+              📦 Ya lo retiré
+            </button>
+            <p className="text-center text-sm font-semibold text-[var(--edr-muted)]">
+              Marcá el retiro para poder entregarlo.
+            </p>
+          </>
         )}
 
         {shipment.status === 'retirado' && (
@@ -171,20 +178,24 @@ export default function ShipmentSheet({
           </button>
         )}
 
-        <button
-          onClick={() => onResolve('entregado')}
-          className="w-full rounded-2xl bg-emerald-600 px-6 py-6 text-2xl font-black text-white active:scale-[0.99]"
-        >
-          ✅ Entregado
-        </button>
-        <button
-          onClick={() => onResolve('no_entregado')}
-          className={`w-full rounded-2xl bg-orange-600 font-black text-white active:scale-[0.99] ${
-            flex ? 'px-4 py-3 text-base' : 'px-6 py-5 text-xl'
-          }`}
-        >
-          ⚠️ No entregado
-        </button>
+        {!sinRetirar && (
+          <button
+            onClick={() => onResolve('entregado')}
+            className="w-full rounded-2xl bg-emerald-600 px-6 py-6 text-2xl font-black text-white active:scale-[0.99]"
+          >
+            ✅ Entregado
+          </button>
+        )}
+        {!sinRetirar && (
+          <button
+            onClick={() => onResolve('no_entregado')}
+            className={`w-full rounded-2xl bg-orange-600 font-black text-white active:scale-[0.99] ${
+              flex ? 'px-4 py-3 text-base' : 'px-6 py-5 text-xl'
+            }`}
+          >
+            ⚠️ No entregado
+          </button>
+        )}
       </div>
     </div>
   );

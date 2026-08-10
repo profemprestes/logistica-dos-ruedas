@@ -15,6 +15,7 @@ const TEXT: Record<string, string> = {
   SIN_SESION: 'Se venció la sesión. Volvé a entrar.',
   TIPO_INVALIDO: 'Tipo de cierre inválido.',
   ENVIO_YA_CERRADO: 'Ese envío ya está cerrado.',
+  FALTA_RETIRAR: 'Primero marcá "Ya lo retiré": no se puede entregar algo que no retiraste.',
   ESTADO_NO_PERMITIDO: 'Ese cambio de estado no está permitido.',
 };
 
@@ -28,6 +29,7 @@ const PERMANENT = new Set([
   'ASIGNADO_A_OTRO',
   'TIPO_INVALIDO',
   'ENVIO_YA_CERRADO',
+  'FALTA_RETIRAR',
   'ESTADO_NO_PERMITIDO',
 ]);
 

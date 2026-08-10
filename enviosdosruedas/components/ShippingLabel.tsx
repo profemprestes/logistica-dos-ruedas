@@ -38,7 +38,11 @@ export default function ShippingLabel({ shipment }: { shipment: Shipment }) {
       style={{
         width: '100mm',
         height: '150mm',
-        padding: '3mm',
+        // Recuadro para cortar: en una impresora común la hoja sale en A4 y sin
+        // esta línea no se sabe por dónde tijeretear. El borde entra DENTRO de
+        // los 100x150 (box-sizing), así que el tamaño final no cambia.
+        border: '0.5mm solid #000',
+        padding: '2.5mm',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',

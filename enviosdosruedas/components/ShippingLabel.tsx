@@ -1,175 +1,210 @@
 'use client';
 
 import QRCode from 'react-qr-code';
+import LabelLogo from '@/components/LabelLogo';
 import type { Shipment } from '@/lib/format';
-import { money, shipmentCash } from '@/lib/format';
+import { money } from '@/lib/format';
 
 /**
  * Etiqueta de 100mm x 150mm para impresora térmica.
- * Todas las medidas van en mm para que lo que ves en pantalla
- * sea exactamente lo que sale por la impresora.
  *
- * El QR contiene ÚNICAMENTE el ID interno del envío (ej: "1000"),
- * que es lo que la app del repartidor le pasa a scan_and_assign().
+ * Todas las medidas van en mm para que lo que se ve en pantalla sea exactamente
+ * lo que sale por la impresora.
+ *
+ * REGLAS DE LA TÉRMICA (por eso no hay ni un color acá):
+ *  - Es monocromo: quema el papel. Un gris sale reticulado y sucio.
+ *  - Los trazos finos se pierden; todo va macizo o con borde grueso.
+ *  - El contraste manda sobre la marca: por eso la etiqueta es blanco y negro
+ *    aunque el resto del sistema sea azul y amarillo.
+ *
+ * El QR contiene ÚNICAMENTE el id interno del envío (ej: "1000"), que es lo que
+ * la app del repartidor le pasa a scan_and_assign().
  */
 export default function ShippingLabel({ shipment }: { shipment: Shipment }) {
-  const cash = shipmentCash(shipment);
-  const hasToCollect = cash.total > 0;
+  /**
+   * El monto sale SÓLO si se cobra en la puerta. Si se cobra al retirar, esa
+   * plata ya la puso el comercio y que figure acá haría que el repartidor se la
+   * pida al destinatario por segunda vez.
+   */
+  const cobraEnPuerta = shipment.payment_mode === 'cobrar_destinatario';
+  const aCobrar = Number(shipment.amount_to_collect ?? 0);
+  const mostrarMonto = cobraEnPuerta && aCobrar > 0;
+
+  const adicionales = [shipment.product_detail, shipment.notes].filter(Boolean).join(' · ');
 
   return (
     <div
-      className="edr-label bg-white text-black"
+      className="edr-label"
       style={{
         width: '100mm',
         height: '150mm',
-        padding: '4mm',
+        padding: '3mm',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
+        background: '#fff',
+        color: '#000',
         fontFamily: 'Arial, Helvetica, sans-serif',
       }}
     >
-      {/* ---------- ENCABEZADO ---------- */}
+      {/* ================= ENCABEZADO ================= */}
       <div
         style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           borderBottom: '1mm solid #000',
-          paddingBottom: '2mm',
-          textAlign: 'center',
+          paddingBottom: '1.5mm',
         }}
       >
-        <div style={{ fontSize: '7.5mm', fontWeight: 900, lineHeight: 1, letterSpacing: '-0.3mm' }}>
-          Envíos DosRuedas
-        </div>
-        <div style={{ fontSize: '3mm', letterSpacing: '0.5mm', marginTop: '1mm' }}>
-          www.enviosdosruedas.com
+        <LabelLogo height={13} />
+        <div style={{ textAlign: 'right', fontSize: '2.6mm', lineHeight: 1.3 }}>
+          <div style={{ fontWeight: 700 }}>2236602699</div>
+          <div>enviosdosruedas.com</div>
         </div>
       </div>
 
-      {/* ---------- QR ---------- */}
+      {/* ================= REMITENTE ================= */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: '2mm',
+          borderBottom: '0.4mm solid #000',
+          padding: '1.5mm 0',
+        }}
+      >
+        <span style={{ fontSize: '2.6mm', letterSpacing: '0.4mm' }}>DE</span>
+        <span
+          style={{
+            fontSize: '4.2mm',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {shipment.client_name_raw || 'Envíos DosRuedas'}
+        </span>
+      </div>
+
+      {/* ================= QR + CÓDIGO ================= */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          padding: '3mm 0 2mm',
+          padding: '2.5mm 0 1.5mm',
+          borderBottom: '1mm solid #000',
         }}
       >
-        <QRCode
-          value={String(shipment.id)}
-          size={200}
-          level="M"
-          style={{ width: '48mm', height: '48mm' }}
-        />
+        <QRCode value={String(shipment.id)} size={256} level="M" style={{ width: '44mm', height: '44mm' }} />
         <div
           className="edr-mono"
-          style={{ fontSize: '5mm', fontWeight: 700, marginTop: '2mm', letterSpacing: '0.2mm' }}
+          style={{
+            fontSize: '5.6mm',
+            fontWeight: 700,
+            marginTop: '1.5mm',
+            letterSpacing: '0.3mm',
+          }}
         >
           {shipment.tracking_code}
         </div>
       </div>
 
-      {/* ---------- DATOS DE ENTREGA ---------- */}
-      <div style={{ borderTop: '0.4mm solid #000', paddingTop: '2mm', flex: 1, minHeight: 0 }}>
-        <div style={{ fontSize: '2.6mm', letterSpacing: '0.4mm', textTransform: 'uppercase' }}>
-          Entregar a
-        </div>
-        <div style={{ fontSize: '5mm', fontWeight: 800, lineHeight: 1.1 }}>
+      {/* ================= DESTINATARIO ================= */}
+      <div style={{ flex: 1, minHeight: 0, paddingTop: '2mm', overflow: 'hidden' }}>
+        <div style={{ fontSize: '2.6mm', letterSpacing: '0.5mm' }}>ENTREGAR A</div>
+
+        <div style={{ fontSize: '4.6mm', fontWeight: 800, lineHeight: 1.15 }}>
           {shipment.recipient_name}
         </div>
 
-        <div style={{ fontSize: '5.5mm', fontWeight: 700, lineHeight: 1.15, marginTop: '1.5mm' }}>
+        <div style={{ fontSize: '6mm', fontWeight: 900, lineHeight: 1.1, marginTop: '1mm' }}>
           {shipment.address_street}
-          {shipment.address_extra ? ` — ${shipment.address_extra}` : ''}
         </div>
+        {shipment.address_extra && (
+          <div style={{ fontSize: '4.4mm', fontWeight: 700, lineHeight: 1.15 }}>
+            {shipment.address_extra}
+          </div>
+        )}
 
         <div
           style={{
             display: 'inline-block',
             background: '#000',
             color: '#fff',
-            fontSize: '4.5mm',
+            fontSize: '4.4mm',
             fontWeight: 800,
-            padding: '1mm 2.5mm',
-            marginTop: '1.5mm',
+            padding: '0.8mm 2.5mm',
+            marginTop: '1.2mm',
             textTransform: 'uppercase',
           }}
         >
           {shipment.city}
         </div>
 
-        {shipment.recipient_phone && (
-          <div className="edr-mono" style={{ fontSize: '3.6mm', marginTop: '1.5mm' }}>
-            Tel: {shipment.recipient_phone}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '4mm', marginTop: '1.5mm', fontSize: '3.4mm' }}>
+          {shipment.recipient_phone && (
+            <span className="edr-mono">Tel {shipment.recipient_phone}</span>
+          )}
+          {shipment.delivery_window && (
+            <span>
+              Horario <strong>{shipment.delivery_window}</strong>
+            </span>
+          )}
+        </div>
 
-        {shipment.delivery_window && (
-          <div style={{ fontSize: '3.6mm', marginTop: '0.5mm' }}>
-            Horario: <strong>{shipment.delivery_window}</strong>
-          </div>
-        )}
-
-        {shipment.notes && (
+        {/* ---------- DATOS ADICIONALES (sólo si hay) ---------- */}
+        {adicionales && (
           <div
             style={{
-              fontSize: '3.2mm',
-              marginTop: '1.5mm',
-              lineHeight: 1.2,
-              maxHeight: '12mm',
+              border: '0.4mm solid #000',
+              marginTop: '1.8mm',
+              padding: '1.2mm 1.5mm',
+              maxHeight: '14mm',
               overflow: 'hidden',
             }}
           >
-            <strong>Notas:</strong> {shipment.notes}
+            <div style={{ fontSize: '2.4mm', letterSpacing: '0.4mm' }}>DATOS ADICIONALES</div>
+            <div style={{ fontSize: '3.2mm', lineHeight: 1.2, fontWeight: 600 }}>{adicionales}</div>
           </div>
         )}
       </div>
 
-      {/* ---------- PIE: PLATA ---------- */}
+      {/* ================= A COBRAR ================= */}
+      {/* Sólo cuando el cobro es contra entrega. Ver comentario de arriba. */}
+      {mostrarMonto && (
+        <div
+          style={{
+            border: '1.2mm solid #000',
+            background: '#000',
+            color: '#fff',
+            textAlign: 'center',
+            padding: '1.8mm 1mm',
+            marginTop: '1.5mm',
+          }}
+        >
+          <div style={{ fontSize: '3.2mm', letterSpacing: '1.2mm', fontWeight: 700 }}>
+            COBRAR AL ENTREGAR
+          </div>
+          <div className="edr-mono" style={{ fontSize: '11mm', fontWeight: 900, lineHeight: 1 }}>
+            {money(aCobrar)}
+          </div>
+        </div>
+      )}
+
+      {/* ================= PIE ================= */}
       <div
         style={{
-          border: '1.2mm solid #000',
-          background: hasToCollect ? '#000' : '#fff',
-          color: hasToCollect ? '#fff' : '#000',
-          textAlign: 'center',
-          padding: '2mm 1mm',
-          marginTop: '2mm',
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '2.6mm',
+          marginTop: '1.2mm',
         }}
       >
-        {cash.atDelivery > 0 ? (
-          <>
-            <div style={{ fontSize: '3.2mm', letterSpacing: '1mm', fontWeight: 700 }}>
-              A COBRAR EN LA PUERTA
-            </div>
-            <div className="edr-mono" style={{ fontSize: '9mm', fontWeight: 900, lineHeight: 1.05 }}>
-              {money(cash.atDelivery)}
-            </div>
-            {shipment.shipping_fee > 0 && shipment.merchandise_amount > 0 && (
-              <div className="edr-mono" style={{ fontSize: '3mm' }}>
-                (envío {money(shipment.shipping_fee)} + mercadería{' '}
-                {money(shipment.merchandise_amount)})
-              </div>
-            )}
-          </>
-        ) : cash.atPickup > 0 ? (
-          <>
-            <div style={{ fontSize: '3.2mm', letterSpacing: '1mm', fontWeight: 700 }}>
-              COBRAR AL RETIRAR — AL COMERCIO
-            </div>
-            <div className="edr-mono" style={{ fontSize: '9mm', fontWeight: 900, lineHeight: 1.05 }}>
-              {money(cash.atPickup)}
-            </div>
-            <div style={{ fontSize: '3mm', fontWeight: 700 }}>
-              NO SE LE COBRA NADA AL DESTINATARIO
-            </div>
-          </>
-        ) : (
-          <div style={{ fontSize: '8mm', fontWeight: 900, letterSpacing: '1mm' }}>PAGADO</div>
-        )}
-      </div>
-
-      {/* ---------- ORIGEN ---------- */}
-      <div style={{ fontSize: '2.8mm', marginTop: '1.5mm', display: 'flex', justifyContent: 'space-between' }}>
-        <span>De: {shipment.client_name_raw ?? '—'}</span>
+        <span>{shipment.is_flex ? 'ENVÍO FLEX' : 'Seguimiento en logisticadosruedas.com'}</span>
         <span className="edr-mono">{shipment.scheduled_date}</span>
       </div>
     </div>

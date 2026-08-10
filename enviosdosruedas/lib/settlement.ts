@@ -70,7 +70,14 @@ export interface DaySummary {
 
 export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   const delivered = logs.filter((l) => l.event === 'entregado');
-  const failed = logs.filter((l) => l.event === 'no_entregado');
+
+  // Un envío que se cerró como no entregado y después se corrigió deja los DOS
+  // movimientos en la base (el historial no se toca). Para las cuentas del día
+  // vale el final: si terminó entregado, no cuenta como fallido.
+  const entregados = new Set(delivered.map((l) => l.shipment?.id));
+  const failed = logs.filter(
+    (l) => l.event === 'no_entregado' && !entregados.has(l.shipment?.id),
+  );
 
   // "Cobrar al retirar": el repartidor le cobra al comercio cuando retira,
   // así que esa plata también entra en la rendición del día.

@@ -81,10 +81,35 @@ export default function SeguimientoPage() {
         </div>
 
         {data && (
-          <div className="mt-6">
+          <div className="mt-6 space-y-4">
             <ProofOfDelivery data={data} />
+
+            <button
+              onClick={() => {
+                setData(null);
+                setCode('');
+                setError('');
+              }}
+              className="w-full rounded-xl border-2 border-[var(--edr-yellow)] px-6 py-4 text-lg font-black hover:bg-[var(--edr-surface)]"
+            >
+              ← Buscar otro envío
+            </button>
           </div>
         )}
+
+        {/* La web principal es donde se cotiza y se contrata: se promociona
+            siempre, haya resultado o no. */}
+        <a
+          href="https://www.enviosdosruedas.com"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-6 block rounded-2xl bg-[var(--edr-yellow)] px-6 py-5 text-center text-black transition hover:brightness-95"
+        >
+          <span className="block text-lg font-black">¿Necesitás enviar algo?</span>
+          <span className="mt-1 block text-sm font-bold">
+            Cotizá tu envío y conocé todos nuestros servicios en enviosdosruedas.com →
+          </span>
+        </a>
 
         <p className="mt-8 text-center text-xs text-[var(--edr-muted)]">
           ¿Sos parte del equipo?{' '}

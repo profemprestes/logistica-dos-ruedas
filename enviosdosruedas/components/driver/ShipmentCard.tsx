@@ -38,6 +38,18 @@ export default function ShipmentCard({
         </span>
       </div>
 
+      {/* De qué comercio es: el repartidor lo necesita para saber dónde retirar
+          y para nombrarlo cuando llama al destinatario. */}
+      {shipment.client_name_raw && (
+        <div
+          className={`mt-1 text-sm font-black uppercase tracking-wide ${
+            cobra ? 'text-black/70' : 'text-[var(--edr-yellow)]'
+          }`}
+        >
+          {shipment.client_name_raw}
+        </div>
+      )}
+
       {flex && (
         <div className="mt-2 rounded-xl border-4 border-black bg-[var(--edr-yellow)] px-3 py-2 text-center text-black">
           <div className="text-xl font-black leading-none tracking-wide">ENVÍO FLEX</div>

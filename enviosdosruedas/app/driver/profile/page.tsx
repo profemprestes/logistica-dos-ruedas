@@ -7,9 +7,11 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/components/driver/Toast';
 import { countPending } from '@/lib/driver/db';
 import { useOnline } from '@/lib/driver/useOnline';
-import { money } from '@/lib/format';
+import { money, type Shipment } from '@/lib/format';
+import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import {
   dayRange,
+  logCash,
   summarizeLogs,
   today,
   weekRange,
@@ -24,13 +26,34 @@ const labelCls = 'mb-1 block text-sm font-bold uppercase tracking-wide text-[var
 
 type Modo = 'dia' | 'semana';
 
-/** Cierre de caja que cargó la oficina para ese día. */
+/** Cierre de caja que cargó la oficina. */
 interface Caja {
+  cash_total: number | null;
   actual_amount: number | null;
   shipping_total: number | null;
   earnings: number | null;
   notes: string | null;
   settled_at: string | null;
+  day?: string;
+}
+
+/** Suma de varios días, para el resumen semanal. */
+interface CajaSemana {
+  cobrado: number;
+  rendido: number;
+  envios: number;
+  aCobrar: number;
+  dias: Caja[];
+}
+
+function sumarSemana(filas: Caja[]): CajaSemana {
+  return {
+    cobrado: filas.reduce((a, c) => a + Number(c.cash_total ?? 0), 0),
+    rendido: filas.reduce((a, c) => a + Number(c.actual_amount ?? 0), 0),
+    envios: filas.reduce((a, c) => a + Number(c.shipping_total ?? 0), 0),
+    aCobrar: filas.reduce((a, c) => a + Number(c.earnings ?? 0), 0),
+    dias: filas,
+  };
 }
 
 /** Trae los movimientos del período, sin tocar el estado de React. */
@@ -56,6 +79,13 @@ export default function DriverProfilePage() {
   const [summaryError, setSummaryError] = useState('');
   const [pending, setPending] = useState(0);
   const [caja, setCaja] = useState<Caja | null>(null);
+  const [semana, setSemana] = useState<CajaSemana | null>(null);
+  /** Qué lista está abierta al tocar los cuadros de arriba. */
+  const [lista, setLista] = useState<'entregados' | 'fallidos' | null>(null);
+  /** Envío que se está reabriendo para marcarlo como entregado. */
+  const [corrigiendo, setCorrigiendo] = useState<Shipment | null>(null);
+  /** Se incrementa para forzar que el resumen se vuelva a pedir. */
+  const [refresco, setRefresco] = useState(0);
 
   const [abrirClave, setAbrirClave] = useState(false);
   const [pass1, setPass1] = useState('');
@@ -102,28 +132,66 @@ export default function DriverProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [driver, modo, day]);
+  }, [driver, modo, day, refresco]);
 
+  // Cierre de caja: de un día, o la suma de todos los días de la semana.
   useEffect(() => {
-    if (!driver || modo !== 'dia') {
-      return;
-    }
+    if (!driver) return;
     let cancelled = false;
+    const campos = 'day, cash_total, actual_amount, shipping_total, earnings, notes, settled_at';
 
-    supabase
-      .from('settlements')
-      .select('actual_amount, shipping_total, earnings, notes, settled_at')
-      .eq('driver_id', driver.id)
-      .eq('day', day)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setCaja((data ?? null) as Caja | null);
-      });
+    if (modo === 'dia') {
+      supabase
+        .from('settlements')
+        .select(campos)
+        .eq('driver_id', driver.id)
+        .eq('day', day)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (cancelled) return;
+          setCaja((data ?? null) as Caja | null);
+          setSemana(null);
+        });
+    } else {
+      const { desde, hasta } = weekRange(day);
+      supabase
+        .from('settlements')
+        .select(campos)
+        .eq('driver_id', driver.id)
+        .gte('day', desde)
+        .lte('day', hasta)
+        .order('day')
+        .then(({ data }) => {
+          if (cancelled) return;
+          const filas = (data ?? []) as unknown as Caja[];
+          setSemana(filas.length ? sumarSemana(filas) : null);
+          setCaja(null);
+        });
+    }
 
     return () => {
       cancelled = true;
     };
   }, [driver, modo, day]);
+
+  /**
+   * Abre el formulario de entrega para un envío que se había cerrado como no
+   * entregado. Sólo se ofrece el mismo día: corregir algo de ayer descuadra un
+   * cierre de caja que ya puede estar liquidado.
+   */
+  async function corregir(shipmentId: number) {
+    const { data, error } = await supabase
+      .from('shipments')
+      .select('*')
+      .eq('id', shipmentId)
+      .maybeSingle();
+
+    if (error || !data) {
+      toast('No se pudo abrir ese envío.', 'error');
+      return;
+    }
+    setCorrigiendo(data as Shipment);
+  }
 
   const refreshPending = useCallback(() => {
     countPending().then(setPending);
@@ -228,9 +296,65 @@ export default function DriverProfilePage() {
           ) : (
             <>
               <div className="mt-3 grid grid-cols-2 gap-2 text-center">
-                <Stat label="Entregados" value={String(summary.delivered.length)} tone="ok" />
-                <Stat label="No entregados" value={String(summary.failed.length)} tone="warn" />
+                <Stat
+                  label="Entregados"
+                  value={String(summary.delivered.length)}
+                  tone="ok"
+                  onClick={() => setLista(lista === 'entregados' ? null : 'entregados')}
+                  activo={lista === 'entregados'}
+                />
+                <Stat
+                  label="No entregados"
+                  value={String(summary.failed.length)}
+                  tone="warn"
+                  onClick={() => setLista(lista === 'fallidos' ? null : 'fallidos')}
+                  activo={lista === 'fallidos'}
+                />
               </div>
+
+              {lista && (
+                <ul className="mt-3 space-y-2">
+                  {(lista === 'entregados' ? summary.delivered : summary.failed).map((l) => {
+                    const hoy = l.happened_at.slice(0, 10) === today();
+                    return (
+                      <li
+                        key={l.id}
+                        className="rounded-xl border border-[var(--edr-border)] px-3 py-2 text-sm"
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="font-bold">{l.shipment?.address_street ?? '—'}</span>
+                          <span className="edr-mono shrink-0 text-xs text-[var(--edr-muted)]">
+                            {new Date(l.happened_at).toLocaleTimeString('es-AR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        <div className="text-xs text-[var(--edr-muted)]">
+                          {l.shipment?.recipient_name}
+                          {l.failure_reason ? ` · ${l.failure_reason.replace(/_/g, ' ')}` : ''}
+                          {logCash(l) > 0 ? ` · ${money(logCash(l))}` : ''}
+                        </div>
+
+                        {lista === 'fallidos' && hoy && l.shipment && (
+                          <button
+                            onClick={() => corregir(l.shipment!.id)}
+                            className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white"
+                          >
+                            ✅ En realidad lo entregué
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+
+                  {(lista === 'entregados' ? summary.delivered : summary.failed).length === 0 && (
+                    <li className="py-3 text-center text-sm text-[var(--edr-muted)]">
+                      No hay envíos en esta lista.
+                    </li>
+                  )}
+                </ul>
+              )}
 
               <div className="mt-4 rounded-xl border-4 border-black bg-[var(--edr-yellow)] px-4 py-4 text-center text-black">
                 <div className="text-sm font-black uppercase tracking-widest">Tenés que rendir</div>
@@ -323,6 +447,73 @@ export default function DriverProfilePage() {
                 </div>
               )}
 
+              {modo === 'semana' && semana && (
+                <div className="mt-4 rounded-xl border-2 border-[var(--edr-yellow)] px-4 py-3">
+                  <div className="mb-2 text-sm font-black uppercase tracking-wide">
+                    Cierre de la semana · {semana.dias.length} día(s) liquidado(s)
+                  </div>
+
+                  <dl className="space-y-1 text-base">
+                    <Line label="Efectivo cobrado" value={money(semana.cobrado)} />
+                    <Line label="Efectivo rendido / pagado" value={money(semana.rendido)} />
+                    <Line label="Envíos totales (sin comisión)" value={money(semana.envios)} />
+                    <Line label="Envíos a cobrar (comisión descontada)" value={money(semana.aCobrar)} />
+                  </dl>
+
+                  {(() => {
+                    const saldo = semana.cobrado - semana.rendido - semana.aCobrar;
+                    const debe = saldo >= 0;
+                    return (
+                      <div
+                        className={`mt-3 rounded-lg px-3 py-3 text-center ${
+                          debe ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
+                        }`}
+                      >
+                        <div className="text-[11px] font-black uppercase tracking-widest">
+                          {debe ? 'Total a rendir' : 'Total a cobrar'}
+                        </div>
+                        <div className="edr-mono text-3xl font-black leading-none">
+                          {money(Math.abs(saldo))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Detalle día por día, para poder revisar de dónde sale el total. */}
+                  <ul className="mt-3 space-y-1 text-sm">
+                    {semana.dias.map((d) => {
+                      const saldoDia =
+                        Number(d.cash_total ?? 0) -
+                        Number(d.actual_amount ?? 0) -
+                        Number(d.earnings ?? 0);
+                      return (
+                        <li
+                          key={d.day}
+                          className="flex items-center justify-between border-b border-[var(--edr-border)] pb-1"
+                        >
+                          <span className="font-semibold">
+                            {(d.day ?? '').split('-').reverse().slice(0, 2).join('/')}
+                          </span>
+                          <span
+                            className={`edr-mono font-bold ${
+                              saldoDia >= 0 ? 'text-red-400' : 'text-emerald-400'
+                            }`}
+                          >
+                            {money(Math.abs(saldoDia))}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {modo === 'semana' && !semana && (
+                <p className="mt-3 rounded-lg border border-[var(--edr-border)] px-3 py-2 text-center text-xs font-semibold text-[var(--edr-muted)]">
+                  Todavía no hay ningún día liquidado en esta semana.
+                </p>
+              )}
+
               {modo === 'dia' && !caja && (
                 <p className="mt-3 rounded-lg border border-[var(--edr-border)] px-3 py-2 text-center text-xs font-semibold text-[var(--edr-muted)]">
                   La oficina todavía no cargó el cierre de caja de este día.
@@ -393,11 +584,39 @@ export default function DriverProfilePage() {
           Salir de la cuenta
         </button>
       </main>
+
+      {corrigiendo && (
+        <ResolveDeliveryModal
+          shipment={corrigiendo}
+          kind="entregado"
+          onClose={() => setCorrigiendo(null)}
+          onResolved={() => setCorrigiendo(null)}
+          onSynced={() => {
+            setCorrigiendo(null);
+            // Vuelve a pedir el resumen para que el envío cambie de lista.
+            setLista(null);
+            setRefresco((n) => n + 1);
+            refreshPending();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'warn' }) {
+function Stat({
+  label,
+  value,
+  tone,
+  onClick,
+  activo,
+}: {
+  label: string;
+  value: string;
+  tone?: 'ok' | 'warn';
+  onClick?: () => void;
+  activo?: boolean;
+}) {
   const toneCls =
     tone === 'ok'
       ? 'bg-emerald-600 text-white'
@@ -405,10 +624,16 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'ok
         ? 'bg-orange-500 text-white'
         : 'bg-[var(--edr-surface-2)]';
   return (
-    <div className={`rounded-xl px-2 py-3 ${toneCls}`}>
+    <button
+      onClick={onClick}
+      className={`rounded-xl px-2 py-3 text-center ${toneCls} ${
+        activo ? 'ring-4 ring-[var(--edr-yellow)]' : ''
+      }`}
+    >
       <div className="edr-mono text-3xl font-black leading-none">{value}</div>
       <div className="mt-1 text-[11px] font-bold uppercase leading-tight">{label}</div>
-    </div>
+      {onClick && <div className="mt-1 text-[10px] opacity-80">tocá para ver</div>}
+    </button>
   );
 }
 

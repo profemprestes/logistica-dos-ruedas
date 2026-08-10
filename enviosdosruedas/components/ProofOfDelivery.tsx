@@ -186,9 +186,27 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
       <footer className="border-t-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-5 py-4 text-center">
         <p className="text-base font-black">Gracias por utilizar nuestros servicios</p>
         <p className="mt-1 text-sm font-bold text-[var(--edr-yellow)]">Envíos DosRuedas</p>
-        <p className="edr-mono mt-1 text-sm">2236602699</p>
-        <p className="mt-1 text-xs text-[var(--edr-muted)]">
-          www.enviosdosruedas.com · www.logisticadosruedas.com
+        <a href="tel:2236602699" className="edr-mono mt-1 block text-sm">
+          2236602699
+        </a>
+        <p className="mt-1 text-xs">
+          <a
+            href="https://www.enviosdosruedas.com"
+            target="_blank"
+            rel="noreferrer"
+            className="font-bold text-[var(--edr-yellow)] underline"
+          >
+            www.enviosdosruedas.com
+          </a>
+          <span className="text-[var(--edr-muted)]"> · </span>
+          <a
+            href="https://www.logisticadosruedas.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[var(--edr-muted)] underline"
+          >
+            www.logisticadosruedas.com
+          </a>
         </p>
       </footer>
     </article>

@@ -44,6 +44,9 @@ export default function ShipmentSheet({
       <header className="flex items-center justify-between bg-[var(--edr-surface-2)] px-4 py-3 text-white">
         <div className="min-w-0">
           <h2 className="truncate text-xl font-black">{shipment.address_street}</h2>
+          <p className="truncate text-xs font-bold uppercase text-[var(--edr-yellow)]">
+            {shipment.client_name_raw || 'Sin comercio'}
+          </p>
           <p className="edr-mono truncate text-xs opacity-80">{shipment.tracking_code}</p>
         </div>
         <button

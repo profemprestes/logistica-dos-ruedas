@@ -35,6 +35,18 @@ export default function Home() {
             </span>
           </Link>
         </div>
+
+        <a
+          href="https://www.enviosdosruedas.com"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-6 block rounded-2xl border border-[var(--edr-border)] px-6 py-4 text-base font-bold transition hover:bg-[var(--edr-surface)]"
+        >
+          Cotizá tu envío y conocé nuestros servicios
+          <span className="mt-1 block text-sm font-semibold text-[var(--edr-yellow)]">
+            enviosdosruedas.com →
+          </span>
+        </a>
       </main>
 
       <footer className="mt-12 text-center text-xs text-[var(--edr-muted)]">

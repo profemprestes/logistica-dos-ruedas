@@ -73,6 +73,8 @@ export default function BillingPage() {
   const [notes, setNotes] = useState('');
   const [actual, setActual] = useState('');
   const [earnings, setEarnings] = useState('');
+  const [cobrado, setCobrado] = useState('');
+  const [envios, setEnvios] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -111,8 +113,13 @@ export default function BillingPage() {
     setSettlement(saved);
     setNotes(saved?.notes ?? '');
     // Arranca con lo que calculó el sistema; el admin lo pisa si rindió otra cosa.
-    setActual(String(saved?.actual_amount ?? summarizeLogs(rows).cashTotal));
+    const calc = summarizeLogs(rows);
+    setActual(String(saved?.actual_amount ?? calc.cashTotal));
     setEarnings(saved?.earnings !== null && saved?.earnings !== undefined ? String(saved.earnings) : '');
+    // Estos dos salen de la cuenta del sistema, pero se pueden pisar a mano:
+    // si el repartidor olvidó cargar algo, el cierre no puede quedar trabado.
+    setCobrado(String(saved?.cash_total ?? calc.cashTotal));
+    setEnvios(String(saved?.shipping_total ?? calc.shippingTotal));
     setLoading(false);
   }, []);
 
@@ -140,8 +147,12 @@ export default function BillingPage() {
     summary;
   const driverName = drivers.find((d) => d.id === driverId)?.full_name ?? '';
 
-  // Lo que rindió de verdad, para el saldo final.
+  // Todos los renglones son editables: mandan los valores del formulario, y al
+  // lado se muestra lo que había calculado el sistema para poder comparar.
   const declared = Number(actual) || 0;
+  const cobradoNum = Number(cobrado) || 0;
+  const enviosNum = Number(envios) || 0;
+  const gananciaNum = Number(earnings) || 0;
 
   /* -------------------------------------------------------------- acciones */
   async function settle() {
@@ -155,10 +166,10 @@ export default function BillingPage() {
         day,
         delivered_count: delivered.length,
         failed_count: failed.length,
-        cash_total: cashTotal,
+        cash_total: cobradoNum,
         actual_amount: declared,
-        shipping_total: shippingTotal,
-        earnings: earnings.trim() === '' ? null : Number(earnings) || 0,
+        shipping_total: enviosNum,
+        earnings: earnings.trim() === '' ? null : gananciaNum,
         notes: notes || null,
         settled_at: new Date().toISOString(),
         settled_by: me.user?.id ?? null,
@@ -335,7 +346,18 @@ export default function BillingPage() {
               {/* Mismo orden y mismos nombres que ve el repartidor en su celular:
                   si los dos leen lo mismo, no hay discusión al rendir. */}
               <div className="mx-auto max-w-xl space-y-2">
-                <Renglon label="Efectivo cobrado" value={money(cashTotal)} />
+                <Renglon
+                  label="Efectivo cobrado"
+                  hint={cobradoNum !== cashTotal ? `el sistema calculó ${money(cashTotal)}` : undefined}
+                  input={
+                    <input
+                      type="number"
+                      value={cobrado}
+                      onChange={(e) => setCobrado(e.target.value)}
+                      className="edr-mono w-40 rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-3 py-1.5 text-right text-lg font-black outline-none"
+                    />
+                  }
+                />
 
                 <Renglon
                   label="Efectivo rendido / pagado"
@@ -351,8 +373,21 @@ export default function BillingPage() {
 
                 <Renglon
                   label="Envíos totales (sin comisión)"
-                  value={money(shippingTotal)}
-                  hint={shippingMissing > 0 ? `${shippingMissing} sin valor cargado` : undefined}
+                  hint={
+                    enviosNum !== shippingTotal
+                      ? `el sistema calculó ${money(shippingTotal)}`
+                      : shippingMissing > 0
+                        ? `${shippingMissing} envío(s) sin valor cargado`
+                        : undefined
+                  }
+                  input={
+                    <input
+                      type="number"
+                      value={envios}
+                      onChange={(e) => setEnvios(e.target.value)}
+                      className="edr-mono w-40 rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-3 py-1.5 text-right text-lg font-black outline-none"
+                    />
+                  }
                 />
 
                 <Renglon
@@ -370,7 +405,7 @@ export default function BillingPage() {
 
                 <div className="border-t-2 border-[var(--edr-yellow)] pt-3">
                   {(() => {
-                    const saldo = cashTotal - declared - (Number(earnings) || 0);
+                    const saldo = cobradoNum - declared - gananciaNum;
                     const debe = saldo >= 0;
                     return (
                       <div
@@ -402,7 +437,17 @@ export default function BillingPage() {
                 />
               </div>
 
-              <div className="text-right">
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setCobrado(String(cashTotal));
+                    setEnvios(String(shippingTotal));
+                    setActual(String(cashTotal));
+                  }}
+                  className="rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
+                >
+                  Volver a lo calculado
+                </button>
                 <button
                   onClick={settle}
                   disabled={!logs.length}

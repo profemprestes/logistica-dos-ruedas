@@ -28,12 +28,15 @@ export default function LabelLogo({ size = 16 }: { size?: number }) {
       {/* disco negro: el texto va calado en blanco */}
       <circle cx="50" cy="50" r="39" fill="#000" />
 
+      {/* Dos líneas, centradas en el disco. Los tamaños están calculados para
+          que "DosRuedas" (la palabra más larga) entre holgada: a más de 12 se
+          come el borde. */}
       <text
         x="50"
-        y="42"
+        y="46"
         textAnchor="middle"
         fontFamily="Arial Black, Arial, sans-serif"
-        fontSize="19"
+        fontSize="15"
         fontWeight="900"
         letterSpacing="0.5"
         fill="#fff"
@@ -42,27 +45,15 @@ export default function LabelLogo({ size = 16 }: { size?: number }) {
       </text>
       <text
         x="50"
-        y="62"
+        y="63"
         textAnchor="middle"
         fontFamily="Arial Black, Arial, sans-serif"
-        fontSize="16"
+        fontSize="11.5"
         fontWeight="900"
-        letterSpacing="-0.5"
+        letterSpacing="-0.3"
         fill="#fff"
       >
         DosRuedas
-      </text>
-      <text
-        x="50"
-        y="78"
-        textAnchor="middle"
-        fontFamily="Arial, sans-serif"
-        fontSize="11"
-        fontWeight="700"
-        letterSpacing="2"
-        fill="#fff"
-      >
-        MDQ
       </text>
     </svg>
   );

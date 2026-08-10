@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dosruedas-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "enviosdosruedas", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

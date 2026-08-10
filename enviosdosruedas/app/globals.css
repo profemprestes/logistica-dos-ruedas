@@ -1,0 +1,119 @@
+/* Tailwind v4 (el que instala Next.js hoy). 
+   Si usás Tailwind v3, reemplazá esta línea por:
+   @tailwind base; @tailwind components; @tailwind utilities; */
+@import 'tailwindcss';
+
+/* Identidad de Envíos DosRuedas, tomada de www.enviosdosruedas.com */
+:root {
+  --edr-blue: #0636a5; /* azul principal */
+  --edr-blue-dark: #00277c; /* azul de apoyo: hover y fondos densos */
+  --edr-blue-soft: #e6eefe; /* azul lavado: fondos suaves */
+  --edr-yellow: #ffec01; /* amarillo secundario */
+
+  /* Superficies: todo azul, como la web. El fondo es el azul principal y las
+     tarjetas van un tono más oscuro para despegarse sin usar blanco. */
+  --edr-paper: var(--edr-blue); /* fondo de página */
+  --edr-surface: #042c86; /* tarjetas y paneles */
+  --edr-surface-2: #072a72; /* encabezados de tabla, filas alternas */
+  --edr-border: #2a58c4; /* bordes sobre azul */
+  --edr-muted: #b7cbff; /* texto secundario legible sobre azul */
+
+  --edr-ink: var(--edr-yellow); /* color de texto por defecto */
+  --edr-line: var(--edr-border);
+
+  /* La plata a cobrar sigue teniendo su color propio, ahora el de la marca.
+     Ojo: el amarillo NO se usa en la etiqueta impresa; la térmica es
+     monocromo y cualquier color sale gris o directamente no sale. */
+  --edr-hiviz: var(--edr-yellow);
+  /* Relleno de bloques grandes: el amarillo puro a pantalla completa encandila
+     y "come" el texto. Este es el mismo tono pero apagado. */
+  --edr-fluo: #f0cf1f;
+}
+
+/* ==========================================================================
+   APP DEL REPARTIDOR (pantalla chica, a una mano, con guantes)
+   ========================================================================== */
+body:has(.edr-driver) {
+  /* Nada de "tirar para refrescar": se pierde el formulario a medio llenar. */
+  overscroll-behavior-y: contain;
+}
+
+.edr-driver button,
+.edr-driver a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body {
+  background: var(--edr-paper);
+  color: var(--edr-ink);
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Códigos y montos siempre en monoespaciada con números de ancho fijo:
+   así las columnas de plata quedan alineadas y se leen de un vistazo. */
+.edr-mono {
+  font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   IMPRESIÓN DE ETIQUETA 10 x 15 cm
+   El navegador imprime SOLO lo que esté dentro de #print-root.
+   ========================================================================== */
+@media screen {
+  #print-root {
+    display: none;
+  }
+}
+
+@media print {
+  @page {
+    size: 100mm 150mm;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 100mm;
+    height: 150mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff;
+  }
+
+  /* Oculta toda la aplicación menos la etiqueta.
+     #print-root se monta con un portal como hijo directo de <body>. */
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+
+  #print-root {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .edr-label {
+    width: 100mm;
+    height: 150mm;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+
+  .edr-label:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  /* Que la impresora térmica respete los negros llenos */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

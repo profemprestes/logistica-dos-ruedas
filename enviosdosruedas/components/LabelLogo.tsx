@@ -1,78 +1,69 @@
 /**
- * Marca vectorizada para la etiqueta térmica.
+ * Insignia redonda para la etiqueta térmica, en blanco y negro.
  *
- * Es un dibujo propio, no el .webp del logo: la impresora térmica es monocromo
- * y una imagen con colores y bordes suaves sale reticulada, gris y sucia. Un
- * SVG de trazos negros macizos imprime nítido a cualquier tamaño.
- *
- * Conserva lo reconocible de la marca: las dos ruedas (de MOTO) y el nombre en
- * dos líneas. La rueda va con cubierta gruesa, llanta y cinco rayos anchos:
- * a 13mm de alto, unos rayos finos tipo bicicleta se empastan y no se leen.
+ * Sigue la forma del logo real —círculo con borde a rayas y el nombre en dos
+ * líneas— pero dibujada en vectores: la impresora es monocromo y el .webp con
+ * colores sale reticulado y gris. Acá el negro es macizo y el texto va calado
+ * en blanco, que es lo que mejor imprime en papel térmico.
  */
-export default function LabelLogo({ height = 14 }: { height?: number }) {
+export default function LabelLogo({ size = 16 }: { size?: number }) {
   return (
     <svg
-      viewBox="0 0 200 56"
-      style={{ height: `${height}mm`, width: 'auto', display: 'block' }}
+      viewBox="0 0 100 100"
+      style={{ height: `${size}mm`, width: `${size}mm`, display: 'block' }}
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Envíos DosRuedas"
     >
-      <Rueda cx={26} cy={30} />
-      <Rueda cx={64} cy={30} />
+      {/* borde a rayas, como el del logo */}
+      <circle
+        cx="50"
+        cy="50"
+        r="46"
+        fill="none"
+        stroke="#000"
+        strokeWidth="7"
+        strokeDasharray="6 4"
+      />
+
+      {/* disco negro: el texto va calado en blanco */}
+      <circle cx="50" cy="50" r="39" fill="#000" />
 
       <text
-        x="96"
-        y="26"
+        x="50"
+        y="42"
+        textAnchor="middle"
         fontFamily="Arial Black, Arial, sans-serif"
-        fontSize="21"
+        fontSize="19"
         fontWeight="900"
-        letterSpacing="1"
-        fill="#000"
+        letterSpacing="0.5"
+        fill="#fff"
       >
         ENVÍOS
       </text>
       <text
-        x="96"
-        y="49"
+        x="50"
+        y="62"
+        textAnchor="middle"
         fontFamily="Arial Black, Arial, sans-serif"
-        fontSize="21"
+        fontSize="16"
         fontWeight="900"
         letterSpacing="-0.5"
-        fill="#000"
+        fill="#fff"
       >
         DosRuedas
       </text>
+      <text
+        x="50"
+        y="78"
+        textAnchor="middle"
+        fontFamily="Arial, sans-serif"
+        fontSize="11"
+        fontWeight="700"
+        letterSpacing="2"
+        fill="#fff"
+      >
+        MDQ
+      </text>
     </svg>
-  );
-}
-
-/** Rueda de moto: cubierta ancha, llanta, cinco rayos y maza con disco. */
-function Rueda({ cx, cy }: { cx: number; cy: number }) {
-  const rayos = [0, 72, 144, 216, 288];
-
-  return (
-    <g>
-      {/* cubierta: el anillo grueso es lo que la hace leer como moto */}
-      <circle cx={cx} cy={cy} r="19" fill="none" stroke="#000" strokeWidth="7" />
-      {/* llanta */}
-      <circle cx={cx} cy={cy} r="13" fill="none" stroke="#000" strokeWidth="2.5" />
-
-      {/* rayos anchos, tipo llanta de aleación */}
-      {rayos.map((grados) => (
-        <line
-          key={grados}
-          x1={cx}
-          y1={cy}
-          x2={cx + 13 * Math.cos((grados * Math.PI) / 180)}
-          y2={cy + 13 * Math.sin((grados * Math.PI) / 180)}
-          stroke="#000"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-      ))}
-
-      {/* maza */}
-      <circle cx={cx} cy={cy} r="4.5" fill="#000" />
-    </g>
   );
 }

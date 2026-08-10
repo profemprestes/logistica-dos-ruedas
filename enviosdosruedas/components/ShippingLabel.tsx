@@ -57,10 +57,10 @@ export default function ShippingLabel({ shipment }: { shipment: Shipment }) {
           paddingBottom: '1.5mm',
         }}
       >
-        <LabelLogo height={13} />
-        <div style={{ textAlign: 'right', fontSize: '2.6mm', lineHeight: 1.3 }}>
-          <div style={{ fontWeight: 700 }}>2236602699</div>
-          <div>enviosdosruedas.com</div>
+        <LabelLogo size={16} />
+        <div style={{ textAlign: 'right', fontSize: '2.7mm', lineHeight: 1.35 }}>
+          <div style={{ fontWeight: 700 }}>WhatsApp 2236602699</div>
+          <div>www.enviosdosruedas.com</div>
         </div>
       </div>
 

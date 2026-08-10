@@ -190,8 +190,8 @@ export default function BillingPage() {
       title: 'Se cerró tu caja del día',
       body:
         saldo >= 0
-          ? `Te queda por rendir ${money(saldo)}. Miralo en "Mi día".`
-          : `Se te debe ${money(Math.abs(saldo))}. Miralo en "Mi día".`,
+          ? `Te queda por rendir ${money(saldo)}. Miralo en "Mi perfil".`
+          : `Se te debe ${money(Math.abs(saldo))}. Miralo en "Mi perfil".`,
       url: '/driver/profile',
       tag: `caja-${day}`,
     });

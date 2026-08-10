@@ -267,7 +267,7 @@ export default function DriverProfilePage() {
     <div className="min-h-dvh pb-10">
       <header className="flex items-center justify-between bg-[var(--edr-surface-2)] px-4 py-3 text-white">
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-black leading-tight">{driver?.name || 'Mi día'}</h1>
+          <h1 className="truncate text-lg font-black leading-tight">{driver?.name || 'Mi perfil'}</h1>
           <p className="truncate text-xs opacity-75">{driver?.email}</p>
         </div>
         <Link

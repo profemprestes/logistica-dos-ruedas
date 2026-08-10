@@ -264,7 +264,7 @@ export default function DriverDashboardPage() {
             href="/driver/profile"
             className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
           >
-            Mi día
+            👤 Mi perfil
           </Link>
         </div>
 

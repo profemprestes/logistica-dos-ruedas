@@ -11,7 +11,7 @@
  *  - NUNCA se mete con las llamadas a Supabase: los datos los maneja la cola
  *    de IndexedDB, y una respuesta cacheada de la API sería peor que un error.
  */
-const CACHE = 'dosruedas-repartidor-v1';
+const CACHE = 'dosruedas-repartidor-v2';
 
 const SHELL = ['/driver', '/driver/dashboard'];
 
@@ -72,4 +72,51 @@ self.addEventListener('fetch', (event) => {
       ),
     );
   }
+});
+
+
+/* ==========================================================================
+   NOTIFICACIONES
+   El servidor manda un JSON con {title, body, url}. Esto corre aunque la app
+   esté cerrada: es el service worker, no la página.
+   ========================================================================== */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'Envíos DosRuedas', body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'Envíos DosRuedas';
+  const options = {
+    body: data.body || '',
+    icon: '/icon.png',
+    badge: '/icon.png',
+    vibrate: [120, 60, 120],
+    // `tag` evita que se apilen diez avisos iguales: el nuevo pisa al anterior.
+    tag: data.tag || 'edr',
+    renotify: true,
+    data: { url: data.url || '/driver/dashboard' },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const destino = (event.notification.data && event.notification.data.url) || '/driver/dashboard';
+
+  // Si la app ya está abierta, la trae al frente en vez de abrir otra pestaña.
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((lista) => {
+      for (const cliente of lista) {
+        if (cliente.url.includes('/driver') && 'focus' in cliente) {
+          cliente.navigate(destino);
+          return cliente.focus();
+        }
+      }
+      return self.clients.openWindow(destino);
+    }),
+  );
 });

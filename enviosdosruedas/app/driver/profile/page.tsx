@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/components/driver/Toast';
 import { countPending } from '@/lib/driver/db';
+import {
+  activarPush,
+  desactivarPush,
+  estadoPush,
+  type EstadoPush,
+} from '@/lib/driver/push';
 import { useOnline } from '@/lib/driver/useOnline';
 import { money, type Shipment } from '@/lib/format';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
@@ -86,6 +92,8 @@ export default function DriverProfilePage() {
   const [corrigiendo, setCorrigiendo] = useState<Shipment | null>(null);
   /** Se incrementa para forzar que el resumen se vuelva a pedir. */
   const [refresco, setRefresco] = useState(0);
+  const [push, setPush] = useState<EstadoPush | null>(null);
+  const [pushOcupado, setPushOcupado] = useState(false);
 
   const [abrirClave, setAbrirClave] = useState(false);
   const [pass1, setPass1] = useState('');
@@ -200,6 +208,31 @@ export default function DriverProfilePage() {
   useEffect(() => {
     refreshPending();
   }, [refreshPending]);
+
+  // Estado de las notificaciones de ESTE celular.
+  useEffect(() => {
+    let cancelado = false;
+    estadoPush().then((e) => {
+      if (!cancelado) setPush(e);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  async function alternarPush() {
+    if (!driver) return;
+    setPushOcupado(true);
+    try {
+      const nuevo = push === 'activo' ? await desactivarPush() : await activarPush(driver.id);
+      setPush(nuevo);
+      if (nuevo === 'activo') toast('Listo, vas a recibir avisos en este celular.', 'ok');
+      else if (nuevo === 'bloqueado')
+        toast('Bloqueaste las notificaciones. Habilitalas en los permisos del sitio.', 'error');
+    } finally {
+      setPushOcupado(false);
+    }
+  }
 
   // --- contraseña --------------------------------------------------------
   async function changePassword() {
@@ -527,6 +560,43 @@ export default function DriverProfilePage() {
                 </p>
               )}
             </>
+          )}
+        </section>
+
+        {/* ---------- Notificaciones ---------- */}
+        <section className="rounded-2xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] p-4">
+          <h2 className="text-lg font-black">Notificaciones</h2>
+          <p className="mt-1 text-sm text-[var(--edr-muted)]">
+            Te avisamos cuando la oficina te asigna un envío a mano y cuando te cierran la caja
+            del día.
+          </p>
+
+          {push === 'no-soportado' ? (
+            <p className="mt-3 rounded-lg border border-[var(--edr-border)] px-3 py-2 text-sm">
+              Este navegador no soporta notificaciones. En iPhone hay que instalar la app en la
+              pantalla de inicio primero.
+            </p>
+          ) : push === 'bloqueado' ? (
+            <p className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white">
+              Están bloqueadas. Tocá el candado al lado de la dirección → Permisos del sitio →
+              Notificaciones → Permitir.
+            </p>
+          ) : (
+            <button
+              onClick={alternarPush}
+              disabled={pushOcupado || push === null}
+              className={`mt-3 w-full rounded-xl px-6 py-5 text-lg font-black active:scale-[0.99] disabled:opacity-60 ${
+                push === 'activo'
+                  ? 'border-2 border-emerald-400 text-emerald-400'
+                  : 'bg-[var(--edr-yellow)] text-black'
+              }`}
+            >
+              {pushOcupado
+                ? 'Un momento…'
+                : push === 'activo'
+                  ? '🔔 Activadas · tocá para desactivar'
+                  : '🔔 Activar notificaciones'}
+            </button>
           )}
         </section>
 

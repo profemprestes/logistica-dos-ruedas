@@ -7,6 +7,7 @@ import AddShipmentModal from '@/components/AddShipmentModal';
 import ShippingLabel from '@/components/ShippingLabel';
 import PrintPortal from '@/components/PrintPortal';
 import AdminNav from '@/components/AdminNav';
+import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import {
   money,
@@ -123,8 +124,25 @@ export default function AdminPage() {
         status: driverId && s.status === 'creado' ? 'pendiente_retiro' : s.status,
       })
       .eq('id', s.id);
-    if (dbError) setError(dbError.message);
-    else void load();
+
+    if (dbError) {
+      setError(dbError.message);
+      return;
+    }
+
+    // Asignado a mano: el repartidor no lo escaneó, así que si no le avisamos
+    // no se entera hasta que abra la app por casualidad.
+    if (driverId) {
+      void notificarRepartidor({
+        driverId,
+        title: 'Te asignaron un envío',
+        body: `${s.address_street}${s.city ? `, ${s.city}` : ''} · ${s.tracking_code}`,
+        url: '/driver/dashboard',
+        tag: `envio-${s.id}`,
+      });
+    }
+
+    void load();
   }
 
   async function changeStatus(s: Shipment, status: ShipmentStatus) {

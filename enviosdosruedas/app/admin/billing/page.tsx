@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import AdminNav from '@/components/AdminNav';
+import { notificarRepartidor } from '@/lib/notify';
 import { money } from '@/lib/format';
 import {
   dayRange,
@@ -180,9 +181,22 @@ export default function BillingPage() {
     if (dbError) {
       console.error('[liquidación] no se pudo cerrar el día', dbError);
       setError(dbError.message);
-    } else {
-      await reload();
+      return;
     }
+
+    const saldo = cobradoNum - declared - gananciaNum;
+    void notificarRepartidor({
+      driverId,
+      title: 'Se cerró tu caja del día',
+      body:
+        saldo >= 0
+          ? `Te queda por rendir ${money(saldo)}. Miralo en "Mi día".`
+          : `Se te debe ${money(Math.abs(saldo))}. Miralo en "Mi día".`,
+      url: '/driver/profile',
+      tag: `caja-${day}`,
+    });
+
+    await reload();
   }
 
   async function reopen() {

@@ -6,6 +6,9 @@
  * cotiza y se contrata, así que va grande; logisticadosruedas.com es el dominio
  * de este sistema y va como dato secundario.
  */
+/** 2236602699 en formato internacional, que es lo que pide wa.me. */
+const WHATSAPP = '5492236602699';
+
 export default function SiteFooter({ compacto = false }: { compacto?: boolean }) {
   const anio = new Date().getFullYear();
 
@@ -22,8 +25,17 @@ export default function SiteFooter({ compacto = false }: { compacto?: boolean })
         www.enviosdosruedas.com
       </a>
 
-      <a href="tel:2236602699" className="edr-mono mt-2 block text-base font-bold">
-        2236602699
+      {/* El teléfono abre WhatsApp, no el marcador: es por donde llega la
+          consulta y queda la conversación escrita. */}
+      <a
+        href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
+          '¡Hola! Quiero consultar por un envío.',
+        )}`}
+        target="_blank"
+        rel="noreferrer"
+        className="edr-mono mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-base font-bold text-white"
+      >
+        💬 2236602699
       </a>
 
       <a

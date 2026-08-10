@@ -18,6 +18,7 @@ import {
   type DeliveryKind,
 } from '@/lib/driver/db';
 import { errorText } from '@/lib/driver/errors';
+import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
 import { useOnline } from '@/lib/driver/useOnline';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
@@ -190,13 +191,33 @@ export default function DriverDashboardPage() {
         return;
       }
 
-      const shipment = data as Shipment;
+      // Escanear significa que el paquete ya está en la moto: queda "retirado".
+      // El paso a "en camino" lo marca él cuando arranca el reparto.
+      const escaneado = data as Shipment;
+      const { shipment: actualizado } = await marcarEstado(escaneado.id, 'retirado');
+      const shipment = actualizado ?? escaneado;
+
       setRoute((prev) =>
         prev.some((s) => s.id === shipment.id)
           ? prev.map((s) => (s.id === shipment.id ? shipment : s))
           : [shipment, ...prev],
       );
-      toast(`Sumado: ${shipment.address_street}`, 'ok');
+      toast(`Retirado: ${shipment.address_street}`, 'ok');
+    },
+    [toast],
+  );
+
+  /** Marca retirado / en camino y refleja el cambio en la lista al instante. */
+  const cambiarEstado = useCallback(
+    async (s: Shipment, estado: EstadoIntermedio) => {
+      const { shipment, error } = await marcarEstado(s.id, estado);
+      if (error || !shipment) {
+        toast(error ?? 'No se pudo cambiar el estado.', 'error');
+        return;
+      }
+      setRoute((prev) => prev.map((x) => (x.id === shipment.id ? shipment : x)));
+      setSelected((prev) => (prev && prev.id === shipment.id ? shipment : prev));
+      toast(estado === 'retirado' ? 'Marcado como retirado.' : 'Marcado en camino.', 'ok');
     },
     [toast],
   );
@@ -312,7 +333,7 @@ export default function DriverDashboardPage() {
         )}
 
         {route.map((s) => (
-          <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} />
+          <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
         ))}
       </main>
 
@@ -336,6 +357,7 @@ export default function DriverDashboardPage() {
           shipment={selected}
           onClose={() => setSelected(null)}
           onResolve={setResolving}
+          onEstado={cambiarEstado}
         />
       )}
 

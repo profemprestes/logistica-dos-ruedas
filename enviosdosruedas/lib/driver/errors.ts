@@ -14,6 +14,8 @@ const TEXT: Record<string, string> = {
   CANCELADO: 'Ese envío está cancelado: no lo lleves.',
   SIN_SESION: 'Se venció la sesión. Volvé a entrar.',
   TIPO_INVALIDO: 'Tipo de cierre inválido.',
+  ENVIO_YA_CERRADO: 'Ese envío ya está cerrado.',
+  ESTADO_NO_PERMITIDO: 'Ese cambio de estado no está permitido.',
 };
 
 /**
@@ -25,6 +27,8 @@ const PERMANENT = new Set([
   'ENVIO_DE_OTRO',
   'ASIGNADO_A_OTRO',
   'TIPO_INVALIDO',
+  'ENVIO_YA_CERRADO',
+  'ESTADO_NO_PERMITIDO',
 ]);
 
 /** Códigos de Postgres que también son definitivos. */

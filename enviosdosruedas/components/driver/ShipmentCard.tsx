@@ -1,6 +1,7 @@
 'use client';
 
 import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
+import { dondeRetira } from '@/lib/pickup';
 
 /**
  * Tarjeta de la hoja de ruta.
@@ -12,23 +13,26 @@ import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
 export default function ShipmentCard({
   shipment,
   onOpen,
+  onEstado,
 }: {
   shipment: Shipment;
   onOpen: (shipment: Shipment) => void;
+  /** Marcar retirado / en camino sin tener que entrar al envío. */
+  onEstado: (shipment: Shipment, estado: 'retirado' | 'en_camino') => void;
 }) {
   const cash = shipmentCash(shipment);
   const cobra = cash.total > 0;
   const flex = Boolean(shipment.is_flex);
 
   return (
-    <button
-      onClick={() => onOpen(shipment)}
-      className={`w-full rounded-2xl px-4 py-4 text-left active:scale-[0.99] ${
+    <div
+      className={`w-full rounded-2xl px-4 py-4 text-left ${
         cobra
           ? 'border-4 border-black bg-[var(--edr-fluo)] text-black'
           : 'border-2 border-[var(--edr-border)] bg-[var(--edr-surface)]'
       }`}
     >
+      <button onClick={() => onOpen(shipment)} className="block w-full text-left">
       <div className="flex items-start justify-between gap-2">
         <span className={`edr-mono text-xs font-bold ${cobra ? 'text-black/70' : 'text-[var(--edr-muted)]'}`}>
           {shipment.tracking_code}
@@ -69,6 +73,17 @@ export default function ShipmentCard({
         {shipment.delivery_window ? ` · ${shipment.delivery_window}` : ''}
       </div>
 
+      {/* Dónde retirar: sin esto el repartidor no sabe adónde ir a buscarlo. */}
+      {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
+        <div
+          className={`mt-2 rounded-lg px-3 py-2 text-sm font-bold ${
+            cobra ? 'bg-black/10' : 'bg-[var(--edr-surface-2)]'
+          }`}
+        >
+          📦 Retirar en: {dondeRetira(shipment.pickup_address)}
+        </div>
+      )}
+
       {cobra && (
         <div className="mt-3 rounded-xl bg-black px-3 py-3 text-center text-white">
           <div className="text-sm font-black uppercase tracking-widest">
@@ -79,6 +94,26 @@ export default function ShipmentCard({
           </div>
         </div>
       )}
-    </button>
+      </button>
+
+      {/* El paso siguiente, a un toque, sin entrar al envío. */}
+      {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
+        <button
+          onClick={() => onEstado(shipment, 'retirado')}
+          className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+        >
+          📦 Ya lo retiré
+        </button>
+      )}
+
+      {shipment.status === 'retirado' && (
+        <button
+          onClick={() => onEstado(shipment, 'en_camino')}
+          className="mt-3 w-full rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+        >
+          🛵 Salgo en camino
+        </button>
+      )}
+    </div>
   );
 }

@@ -2,16 +2,19 @@
 
 import { money, shipmentCash, type Shipment } from '@/lib/format';
 import type { DeliveryKind } from '@/lib/driver/db';
+import { dondeRetira } from '@/lib/pickup';
 
 /** Detalle del envío con las dos únicas salidas posibles: entregado o no entregado. */
 export default function ShipmentSheet({
   shipment,
   onClose,
   onResolve,
+  onEstado,
 }: {
   shipment: Shipment;
   onClose: () => void;
   onResolve: (kind: DeliveryKind) => void;
+  onEstado: (shipment: Shipment, estado: 'retirado' | 'en_camino') => void;
 }) {
   const cash = shipmentCash(shipment);
   const flex = Boolean(shipment.is_flex);
@@ -88,6 +91,26 @@ export default function ShipmentSheet({
           </div>
         )}
 
+        <div className="rounded-xl border-2 border-sky-400 bg-[var(--edr-surface)] px-4 py-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-sky-400">Retirar en</div>
+          <div className="text-lg font-black leading-snug">
+            {dondeRetira(shipment.pickup_address)}
+          </div>
+          {shipment.pickup_notes && (
+            <div className="mt-1 text-sm text-[var(--edr-muted)]">{shipment.pickup_notes}</div>
+          )}
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+              dondeRetira(shipment.pickup_address),
+            )}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 block rounded-lg border border-sky-400 px-3 py-2 text-center text-sm font-black text-sky-400"
+          >
+            🗺️ Cómo llegar al retiro
+          </a>
+        </div>
+
         <Row label="Destinatario" value={shipment.recipient_name} />
         {shipment.address_extra && <Row label="Piso / depto" value={shipment.address_extra} />}
         <Row
@@ -129,6 +152,25 @@ export default function ShipmentSheet({
       </div>
 
       <div className="space-y-3 border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* Los pasos previos a entregar, en el orden en que pasan en la calle. */}
+        {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
+          <button
+            onClick={() => onEstado(shipment, 'retirado')}
+            className="w-full rounded-2xl bg-sky-600 px-6 py-4 text-lg font-black text-white active:scale-[0.99]"
+          >
+            📦 Ya lo retiré
+          </button>
+        )}
+
+        {shipment.status === 'retirado' && (
+          <button
+            onClick={() => onEstado(shipment, 'en_camino')}
+            className="w-full rounded-2xl bg-[var(--edr-blue)] px-6 py-4 text-lg font-black text-white active:scale-[0.99]"
+          >
+            🛵 Salgo en camino
+          </button>
+        )}
+
         <button
           onClick={() => onResolve('entregado')}
           className="w-full rounded-2xl bg-emerald-600 px-6 py-6 text-2xl font-black text-white active:scale-[0.99]"

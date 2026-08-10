@@ -11,6 +11,7 @@ import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import {
   money,
+  shipmentCash,
   STATUS_CLASS,
   STATUS_LABEL,
   type Shipment,
@@ -168,7 +169,15 @@ export default function AdminPage() {
     return okStatus && okSearch;
   });
 
-  const totalToCollect = visible.reduce((acc, s) => acc + Number(s.amount_to_collect ?? 0), 0);
+  // Suma las dos cobranzas: la de la puerta y la que se le cobra al comercio
+  // al retirar. Antes sólo contaba la primera y el total quedaba corto.
+  const totales = visible.reduce(
+    (acc, s) => {
+      const cash = shipmentCash(s);
+      return { puerta: acc.puerta + cash.atDelivery, retiro: acc.retiro + cash.atPickup };
+    },
+    { puerta: 0, retiro: 0 },
+  );
 
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
@@ -208,7 +217,12 @@ export default function AdminPage() {
           </select>
 
           <div className="ml-auto rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-black px-3 py-1.5 text-sm font-bold">
-            A cobrar: <span className="edr-mono">{money(totalToCollect)}</span>
+            A cobrar: <span className="edr-mono">{money(totales.puerta)}</span>
+            {totales.retiro > 0 && (
+              <span className="ml-2 rounded bg-orange-500 px-2 py-0.5 text-white">
+                al retirar <span className="edr-mono">{money(totales.retiro)}</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -295,13 +309,7 @@ export default function AdminPage() {
                     </select>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {Number(s.amount_to_collect) > 0 ? (
-                      <span className="edr-mono inline-block bg-[var(--edr-hiviz)] text-black px-2 py-1 font-bold">
-                        {money(s.amount_to_collect)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-[var(--edr-muted)]">—</span>
-                    )}
+                    <CashCell shipment={s} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     {HAS_PROOF.includes(s.status) && (
@@ -354,6 +362,33 @@ export default function AdminPage() {
         <PrintPortal>
           <ShippingLabel shipment={toPrint} />
         </PrintPortal>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Plata del envío, separada por MOMENTO de cobro:
+ *  - amarillo: se cobra en la puerta, al entregar
+ *  - naranja:  se le cobra al comercio al retirar
+ * Son dos momentos distintos y confundirlos hace que se cobre dos veces.
+ */
+function CashCell({ shipment }: { shipment: Shipment }) {
+  const cash = shipmentCash(shipment);
+  if (cash.total === 0) return <span className="text-xs text-[var(--edr-muted)]">—</span>;
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {cash.atDelivery > 0 && (
+        <span className="edr-mono inline-block bg-[var(--edr-hiviz)] px-2 py-1 font-bold text-black">
+          {money(cash.atDelivery)}
+        </span>
+      )}
+      {cash.atPickup > 0 && (
+        <span className="edr-mono inline-block bg-orange-500 px-2 py-1 font-bold text-white">
+          {money(cash.atPickup)}
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide">al retirar</span>
+        </span>
       )}
     </div>
   );

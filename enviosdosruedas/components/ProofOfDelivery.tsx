@@ -1,6 +1,7 @@
 'use client';
 
 import Logo from '@/components/Logo';
+import SiteFooter from '@/components/SiteFooter';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
 
 export interface TrackResult {
@@ -183,32 +184,13 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
       )}
 
       {/* ---------- Pie ---------- */}
-      <footer className="border-t-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-5 py-4 text-center">
-        <p className="text-base font-black">Gracias por utilizar nuestros servicios</p>
-        <p className="mt-1 text-sm font-bold text-[var(--edr-yellow)]">Envíos DosRuedas</p>
-        <a href="tel:2236602699" className="edr-mono mt-1 block text-sm">
-          2236602699
-        </a>
-        <p className="mt-1 text-xs">
-          <a
-            href="https://www.enviosdosruedas.com"
-            target="_blank"
-            rel="noreferrer"
-            className="font-bold text-[var(--edr-yellow)] underline"
-          >
-            www.enviosdosruedas.com
-          </a>
-          <span className="text-[var(--edr-muted)]"> · </span>
-          <a
-            href="https://www.logisticadosruedas.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[var(--edr-muted)] underline"
-          >
-            www.logisticadosruedas.com
-          </a>
+      <footer className="border-t-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-5 py-5">
+        <p className="mb-3 text-center text-base font-black">
+          Gracias por utilizar nuestros servicios
         </p>
+        <SiteFooter compacto />
       </footer>
+
     </article>
   );
 }

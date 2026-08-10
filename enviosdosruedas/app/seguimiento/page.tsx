@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import ProofOfDelivery, { type TrackResult } from '@/components/ProofOfDelivery';
+import SiteFooter from '@/components/SiteFooter';
 
 export default function SeguimientoPage() {
   const [code, setCode] = useState('');
@@ -111,12 +112,15 @@ export default function SeguimientoPage() {
           </span>
         </a>
 
-        <p className="mt-8 text-center text-xs text-[var(--edr-muted)]">
-          ¿Sos parte del equipo?{' '}
-          <Link href="/login" className="font-bold text-[var(--edr-yellow)] underline">
-            Entrá al sistema
-          </Link>
-        </p>
+        <footer className="mt-10 border-t border-[var(--edr-border)] pt-6">
+          <SiteFooter />
+          <p className="mt-4 text-center text-xs text-[var(--edr-muted)]">
+            ¿Sos parte del equipo?{' '}
+            <Link href="/login" className="font-bold text-[var(--edr-yellow)] underline">
+              Entrá al sistema
+            </Link>
+          </p>
+        </footer>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Logo from '@/components/Logo';
+import SiteFooter from '@/components/SiteFooter';
 
 export default function Home() {
   return (
@@ -49,10 +50,8 @@ export default function Home() {
         </a>
       </main>
 
-      <footer className="mt-12 text-center text-xs text-[var(--edr-muted)]">
-        <p className="font-bold text-[var(--edr-yellow)]">Envíos DosRuedas</p>
-        <p className="edr-mono mt-1">2236602699</p>
-        <p className="mt-1">www.enviosdosruedas.com · www.logisticadosruedas.com</p>
+      <footer className="mt-12 w-full max-w-lg">
+        <SiteFooter />
       </footer>
     </div>
   );

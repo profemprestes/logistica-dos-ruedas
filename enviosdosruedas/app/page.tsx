@@ -35,6 +35,18 @@ export default function Home() {
               Con el código que empieza con EDR
             </span>
           </Link>
+
+          {/* Puerta de los comercios que nos dejan mercadería en depósito.
+              Va al mismo login: el usuario del comercio cae directo en /stock. */}
+          <Link
+            href="/login"
+            className="block rounded-2xl border-2 border-[var(--edr-border)] px-6 py-6 text-xl font-black transition hover:bg-[var(--edr-surface)]"
+          >
+            Consultá tu stock en depósito
+            <span className="mt-1 block text-sm font-semibold text-[var(--edr-muted)]">
+              Para comercios que guardan mercadería con nosotros
+            </span>
+          </Link>
         </div>
 
         <a

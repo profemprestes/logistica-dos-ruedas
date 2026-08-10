@@ -46,7 +46,9 @@ export default function LoginPage() {
       .single();
 
     setLoading(false);
-    router.replace(profile?.role === 'admin' ? '/admin' : '/driver');
+    const destino =
+      profile?.role === 'admin' ? '/admin' : profile?.role === 'comercio' ? '/stock' : '/driver';
+    router.replace(destino);
   }
 
   return (

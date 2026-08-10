@@ -280,7 +280,9 @@ export default function BillingPage() {
             </div>
             <div className="edr-mono text-2xl font-black">{money(cashFromPickups)}</div>
           </div>
-          <div className="rounded-lg border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] p-4">
+          {/* Fondo amarillo: el texto va negro sí o sí. Con el color heredado
+              del cuerpo (que es amarillo) quedaba invisible. */}
+          <div className="rounded-lg border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] p-4 text-black">
             <div className="text-[11px] font-semibold uppercase tracking-wide">
               Efectivo a rendir
             </div>

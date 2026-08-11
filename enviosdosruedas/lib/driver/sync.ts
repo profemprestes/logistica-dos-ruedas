@@ -161,6 +161,9 @@ async function pushOne(item: PendingDelivery): Promise<void> {
     p_lng: item.lng,
     p_accuracy_m: item.accuracy,
     p_photo_path: path,
+    // Las entregas que quedaron en la cola de antes del paso 15 no traen el
+    // campo: `?? null` evita que salgan como "undefined" al servidor.
+    p_comment: item.comment ?? null,
   });
 
   if (rpcError) {

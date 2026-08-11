@@ -1,14 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
 import AddShipmentModal from '@/components/AddShipmentModal';
 import ShippingLabel from '@/components/ShippingLabel';
 import PrintPortal from '@/components/PrintPortal';
 import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
+import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
 import {
   money,
   shipmentCash,
@@ -44,8 +45,8 @@ function fetchDrivers() {
 }
 
 export default function AdminPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
+  /** Sólo admin: un repartidor logueado no tiene que poder mirar acá. */
+  const ready = useAdminGuard();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,13 +57,6 @@ export default function AdminPage() {
   const [toPrint, setToPrint] = useState<Shipment | null>(null);
   const [proof, setProof] = useState<Shipment | null>(null);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/login');
-      else setReady(true);
-    });
-  }, [router]);
 
   const applyShipments = useCallback(
     ({ data, error: dbError }: Awaited<ReturnType<typeof fetchShipments>>) => {
@@ -185,14 +179,16 @@ export default function AdminPage() {
     <div className="min-h-screen">
       <AdminNav />
 
-      <main className="mx-auto max-w-7xl px-6 py-6">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
+      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* En el teléfono el botón va ancho completo y primero: cargar un
+              envío desde la calle es la razón principal para entrar acá. */}
           <button
             onClick={() => {
               setEditing(null);
               setModalOpen(true);
             }}
-            className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-black hover:brightness-95"
+            className="w-full rounded bg-[var(--edr-yellow)] px-4 py-3 text-base font-black text-black hover:brightness-95 sm:w-auto sm:py-2 sm:text-sm"
           >
             + Nuevo envío
           </button>
@@ -201,12 +197,12 @@ export default function AdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código, destinatario, dirección o comercio"
-            className="w-full max-w-sm rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]"
+            className="w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)] sm:max-w-sm"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'todos' | ShipmentStatus)}
-            className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm"
+            className="flex-1 rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm sm:flex-none"
           >
             <option value="todos">Todos los estados</option>
             {Object.entries(STATUS_LABEL).map(([v, l]) => (
@@ -232,7 +228,38 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded border border-[var(--edr-border)] bg-[var(--edr-surface)]">
+        {/* Teléfono: una tarjeta por envío. La tabla de abajo tiene siete
+            columnas y en un celular obliga a arrastrar de costado para llegar
+            a los botones, que es justo lo que se necesita desde la calle. */}
+        <div className="space-y-2 lg:hidden">
+          {loading && (
+            <p className="py-8 text-center text-sm text-[var(--edr-muted)]">Cargando envíos…</p>
+          )}
+          {!loading && visible.length === 0 && (
+            <p className="py-10 text-center text-sm text-[var(--edr-muted)]">
+              No hay envíos que coincidan. Cargá el primero con “+ Nuevo envío”.
+            </p>
+          )}
+          {visible.map((s) => (
+            <ShipmentMobileCard
+              key={s.id}
+              shipment={s}
+              drivers={drivers}
+              hasProof={HAS_PROOF.includes(s.status)}
+              onProof={setProof}
+              onEdit={(x) => {
+                setEditing(x);
+                setModalOpen(true);
+              }}
+              onPrint={print}
+              onDelete={remove}
+              onStatus={changeStatus}
+              onAssign={assignDriver}
+            />
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] lg:block">
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--edr-border)] bg-[var(--edr-surface-2)] text-left text-[11px] uppercase tracking-wide text-[var(--edr-muted)]">
               <tr>

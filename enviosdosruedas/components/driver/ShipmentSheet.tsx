@@ -3,6 +3,7 @@
 import { money, shipmentCash, type Shipment } from '@/lib/format';
 import type { DeliveryKind } from '@/lib/driver/db';
 import { dondeRetira } from '@/lib/pickup';
+import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 
 /** Detalle del envío con las dos únicas salidas posibles: entregado o no entregado. */
 export default function ShipmentSheet({
@@ -18,6 +19,8 @@ export default function ShipmentSheet({
 }) {
   const cash = shipmentCash(shipment);
   const flex = Boolean(shipment.is_flex);
+  /** Cargado para otro día: se mira, no se toca. */
+  const programado = esProgramado(shipment);
   /** Sin retirar no hay nada que entregar: el paquete todavía está en el comercio. */
   const sinRetirar = shipment.status === 'creado' || shipment.status === 'pendiente_retiro';
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -154,8 +157,19 @@ export default function ShipmentSheet({
       </div>
 
       <div className="space-y-3 border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* Programado para otro día: puede mirar la dirección y el teléfono,
+            pero ningún botón de acción. La base lo rechazaría igual. */}
+        {programado && (
+          <div className="rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-4 py-5 text-center">
+            <div className="text-lg font-black">🗓️ Se reparte {cuandoSeHace(shipment.scheduled_date)}</div>
+            <p className="mt-1 text-sm font-semibold text-[var(--edr-muted)]">
+              Hasta ese día no se puede retirar ni entregar. Está acá para que sepas lo que viene.
+            </p>
+          </div>
+        )}
+
         {/* Los pasos previos a entregar, en el orden en que pasan en la calle. */}
-        {sinRetirar && (
+        {!programado && sinRetirar && (
           <>
             <button
               onClick={() => onEstado(shipment, 'retirado')}
@@ -169,7 +183,7 @@ export default function ShipmentSheet({
           </>
         )}
 
-        {shipment.status === 'retirado' && (
+        {!programado && shipment.status === 'retirado' && (
           <button
             onClick={() => onEstado(shipment, 'en_camino')}
             className="w-full rounded-2xl bg-[var(--edr-blue)] px-6 py-4 text-lg font-black text-white active:scale-[0.99]"
@@ -178,7 +192,7 @@ export default function ShipmentSheet({
           </button>
         )}
 
-        {!sinRetirar && (
+        {!programado && !sinRetirar && (
           <button
             onClick={() => onResolve('entregado')}
             className="w-full rounded-2xl bg-emerald-600 px-6 py-6 text-2xl font-black text-white active:scale-[0.99]"
@@ -186,7 +200,7 @@ export default function ShipmentSheet({
             ✅ Entregado
           </button>
         )}
-        {!sinRetirar && (
+        {!programado && !sinRetirar && (
           <button
             onClick={() => onResolve('no_entregado')}
             className={`w-full rounded-2xl bg-orange-600 font-black text-white active:scale-[0.99] ${

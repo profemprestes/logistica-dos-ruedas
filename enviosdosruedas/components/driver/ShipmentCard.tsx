@@ -2,6 +2,7 @@
 
 import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
 import { dondeRetira } from '@/lib/pickup';
+import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 
 /**
  * Tarjeta de la hoja de ruta.
@@ -20,8 +21,11 @@ export default function ShipmentCard({
   /** Marcar retirado / en camino sin tener que entrar al envío. */
   onEstado: (shipment: Shipment, estado: 'retirado' | 'en_camino') => void;
 }) {
+  const programado = esProgramado(shipment);
   const cash = shipmentCash(shipment);
-  const cobra = cash.total > 0;
+  // Un envío de mañana no se cobra hoy: apagamos el amarillo flúor para que la
+  // hoja de ruta de hoy se siga leyendo de un vistazo.
+  const cobra = cash.total > 0 && !programado;
   const flex = Boolean(shipment.is_flex);
 
   return (
@@ -29,7 +33,9 @@ export default function ShipmentCard({
       className={`w-full rounded-2xl px-4 py-4 text-left ${
         cobra
           ? 'border-4 border-black bg-[var(--edr-fluo)] text-black'
-          : 'border-2 border-[var(--edr-border)] bg-[var(--edr-surface)]'
+          : programado
+            ? 'border-2 border-dashed border-[var(--edr-border)] bg-[var(--edr-surface)] opacity-75'
+            : 'border-2 border-[var(--edr-border)] bg-[var(--edr-surface)]'
       }`}
     >
       <button onClick={() => onOpen(shipment)} className="block w-full text-left">
@@ -38,7 +44,7 @@ export default function ShipmentCard({
           {shipment.tracking_code}
         </span>
         <span className="rounded-full bg-black/10 px-2 py-0.5 text-[11px] font-bold uppercase">
-          {STATUS_LABEL[shipment.status]}
+          {programado ? `Para ${cuandoSeHace(shipment.scheduled_date)}` : STATUS_LABEL[shipment.status]}
         </span>
       </div>
 
@@ -96,23 +102,33 @@ export default function ShipmentCard({
       )}
       </button>
 
-      {/* El paso siguiente, a un toque, sin entrar al envío. */}
-      {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
-        <button
-          onClick={() => onEstado(shipment, 'retirado')}
-          className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-3 text-base font-black text-white active:scale-[0.99]"
-        >
-          📦 Ya lo retiré
-        </button>
-      )}
+      {/* Programado: se ve para que sepa lo que le viene, pero no se toca.
+          El botón se reemplaza por el motivo, así no busca dónde apretar. */}
+      {programado ? (
+        <div className="mt-3 rounded-xl border-2 border-dashed border-[var(--edr-border)] px-4 py-3 text-center text-sm font-bold text-[var(--edr-muted)]">
+          🗓️ Se hace {cuandoSeHace(shipment.scheduled_date)} · todavía no se puede tocar
+        </div>
+      ) : (
+        <>
+          {/* El paso siguiente, a un toque, sin entrar al envío. */}
+          {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
+            <button
+              onClick={() => onEstado(shipment, 'retirado')}
+              className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+            >
+              📦 Ya lo retiré
+            </button>
+          )}
 
-      {shipment.status === 'retirado' && (
-        <button
-          onClick={() => onEstado(shipment, 'en_camino')}
-          className="mt-3 w-full rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-base font-black text-white active:scale-[0.99]"
-        >
-          🛵 Salgo en camino
-        </button>
+          {shipment.status === 'retirado' && (
+            <button
+              onClick={() => onEstado(shipment, 'en_camino')}
+              className="mt-3 w-full rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+            >
+              🛵 Salgo en camino
+            </button>
+          )}
+        </>
       )}
     </div>
   );

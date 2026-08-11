@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
 import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import { money } from '@/lib/format';
@@ -62,8 +62,8 @@ async function fetchDay(driverId: string, day: string) {
 }
 
 export default function BillingPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
+  /** Sólo admin: un repartidor logueado no tiene que poder mirar acá. */
+  const ready = useAdminGuard();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [driverId, setDriverId] = useState('');
   const [day, setDay] = useState(today());
@@ -76,13 +76,6 @@ export default function BillingPage() {
   const [earnings, setEarnings] = useState('');
   const [cobrado, setCobrado] = useState('');
   const [envios, setEnvios] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/login');
-      else setReady(true);
-    });
-  }, [router]);
 
   useEffect(() => {
     if (!ready) return;

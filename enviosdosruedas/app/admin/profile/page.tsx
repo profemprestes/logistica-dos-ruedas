@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminNav from '@/components/AdminNav';
 import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
 
 /**
  * Mi cuenta: los datos del admin y el cambio de su propia contraseña.
@@ -51,6 +52,8 @@ async function fetchCuenta(): Promise<Cuenta | null> {
 
 export default function AdminProfilePage() {
   const router = useRouter();
+  /** Sólo admin: acá se cambia la contraseña de la cuenta que maneja todo. */
+  const esAdmin = useAdminGuard();
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [cargando, setCargando] = useState(true);
 
@@ -81,6 +84,7 @@ export default function AdminProfilePage() {
   );
 
   useEffect(() => {
+    if (!esAdmin) return;
     let cancelled = false;
     fetchCuenta()
       .then((c) => !cancelled && aplicar(c))
@@ -92,7 +96,7 @@ export default function AdminProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [aplicar]);
+  }, [esAdmin, aplicar]);
 
   const avisar = (msg: string) => {
     setNotice(msg);

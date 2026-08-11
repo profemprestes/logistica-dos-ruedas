@@ -38,6 +38,7 @@ export default function ResolveDeliveryModal({
   const toast = useToast();
   const [receiverName, setReceiverName] = useState('');
   const [receiverDni, setReceiverDni] = useState('');
+  const [comment, setComment] = useState('');
   const [reason, setReason] = useState('');
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [fix, setFix] = useState<Fix | null>(null);
@@ -91,6 +92,7 @@ export default function ResolveDeliveryModal({
         reason: entregado ? null : reason,
         receiverName: entregado ? receiverName.trim() : null,
         receiverDni: entregado ? receiverDni.trim() : null,
+        comment: comment.trim() || null,
         lat: position?.lat ?? null,
         lng: position?.lng ?? null,
         accuracy: position?.accuracy ?? null,
@@ -222,6 +224,39 @@ export default function ResolveDeliveryModal({
             </select>
           </div>
         )}
+
+        {/* Lo que la foto sola no cuenta: quién era el que abrió la puerta,
+            dónde quedó el paquete. Es lo que después zanja una discusión con
+            el comercio, así que va en el comprobante que se le manda. */}
+        <div>
+          <label className={labelCls}>Comentario (opcional)</label>
+          <textarea
+            className={inputCls}
+            rows={2}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={
+              entregado
+                ? 'Recibió el encargado del edificio'
+                : 'Toqué timbre tres veces, nadie contestó'
+            }
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(entregado
+              ? ['Recibió el encargado', 'Dejado en portería', 'Recibió un vecino']
+              : ['Nadie contestó', 'No vive más ahí', 'No quiso recibirlo']
+            ).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setComment(s)}
+                className="rounded-lg border-2 border-[var(--edr-border)] px-3 py-2 text-sm font-bold text-[var(--edr-muted)] active:scale-[0.98]"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {!soloRegistro && (
           <div>

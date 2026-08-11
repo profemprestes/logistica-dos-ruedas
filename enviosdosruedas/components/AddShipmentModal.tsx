@@ -7,6 +7,13 @@ import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } 
 
 type Mode = 'manual' | 'pegar';
 
+/** Hoy + N días, en hora local. En UTC, de noche ya estaríamos en mañana. */
+const fechaEn = (dias: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+
 /** Formulario en blanco. Es función para que la fecha sea la de hoy, no la del día que se abrió la pestaña. */
 const emptyForm = () => ({
   client_name_raw: '',
@@ -117,6 +124,8 @@ function ShipmentForm({
   );
   const [raw, setRaw] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
+  /** Para qué día es la tanda que se está pegando. */
+  const [fechaLote, setFechaLote] = useState(() => fechaEn(0));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -125,6 +134,12 @@ function ShipmentForm({
 
   const updateRow = (tempId: string, patch: Partial<ParsedRow>) =>
     setRows((rs) => rs.map((r) => (r.tempId === tempId ? { ...r, ...patch } : r)));
+
+  /** Cambiar la fecha del lote mueve todo lo que ya está en pantalla. */
+  const cambiarFechaLote = (fecha: string) => {
+    setFechaLote(fecha);
+    setRows((rs) => rs.map((r) => ({ ...r, scheduledDate: fecha })));
+  };
 
   async function saveManual() {
     if (!form.recipient_name.trim() || !form.address_street.trim()) {
@@ -173,6 +188,10 @@ function ShipmentForm({
       shipping_fee: r.shippingFee,
       merchandise_amount: r.merchandiseAmount,
       amount_to_collect: r.paymentMode === 'cobrar_destinatario' ? r.amountToCollect : 0,
+      // Va SIEMPRE explícita. Antes no se mandaba y quedaba la fecha por defecto
+      // de la base, que es UTC: una tanda cargada de noche nacía con la fecha de
+      // mañana y, desde el paso 14, el repartidor no la podía tocar.
+      scheduled_date: r.scheduledDate,
     }));
     const { error: dbError } = await supabase.from('shipments').insert(payload);
     setSaving(false);
@@ -264,6 +283,37 @@ function ShipmentForm({
               </Field>
               <Field label="Fecha de reparto">
                 <input type="date" className={field} value={form.scheduled_date} onChange={(e) => set('scheduled_date', e.target.value)} />
+                {/* Cargar la tanda de mañana es lo más habitual después de
+                    "hoy", y en el teléfono elegirla en el calendario es un
+                    parto. Los dos atajos evitan abrirlo. */}
+                <div className="mt-1 flex gap-1">
+                  {[
+                    { label: 'Hoy', dias: 0 },
+                    { label: 'Mañana', dias: 1 },
+                  ].map((a) => {
+                    const valor = fechaEn(a.dias);
+                    const activo = form.scheduled_date === valor;
+                    return (
+                      <button
+                        key={a.label}
+                        type="button"
+                        onClick={() => set('scheduled_date', valor)}
+                        className={`rounded px-2 py-1 text-xs font-bold ${
+                          activo
+                            ? 'bg-[var(--edr-yellow)] text-black'
+                            : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    );
+                  })}
+                  {form.scheduled_date > fechaEn(0) && (
+                    <span className="self-center px-1 text-xs font-semibold text-[var(--edr-yellow)]">
+                      El repartidor lo va a ver, pero no lo puede hacer hasta ese día.
+                    </span>
+                  )}
+                </div>
               </Field>
               <Field label="Producto">
                 <input className={field} value={form.product_detail} onChange={(e) => set('product_detail', e.target.value)} />
@@ -352,6 +402,46 @@ function ShipmentForm({
           {/* ============================ PEGAR ============================= */}
           {mode === 'pegar' && (
             <div>
+              {/* La fecha va ANTES del texto a propósito: es la decisión que hay
+                  que tomar mirando el mensaje, no después de interpretarlo. */}
+              <div className="mb-4 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-4 py-3">
+                <label className={labelCls}>¿Para qué día es esta tanda?</label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    className={`${field} max-w-[180px]`}
+                    value={fechaLote}
+                    onChange={(e) => cambiarFechaLote(e.target.value)}
+                  />
+                  {[
+                    { label: 'Hoy', dias: 0 },
+                    { label: 'Mañana', dias: 1 },
+                  ].map((a) => {
+                    const valor = fechaEn(a.dias);
+                    const activo = fechaLote === valor;
+                    return (
+                      <button
+                        key={a.label}
+                        type="button"
+                        onClick={() => cambiarFechaLote(valor)}
+                        className={`rounded px-3 py-1.5 text-xs font-bold ${
+                          activo
+                            ? 'bg-[var(--edr-yellow)] text-black'
+                            : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface)]'
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-[var(--edr-muted)]">
+                  {fechaLote > fechaEn(0)
+                    ? 'El repartidor los va a ver en "Próximos días", pero no los puede retirar ni entregar hasta esa fecha. Cada envío se puede mover por separado más abajo.'
+                    : 'Se aplica a todos los envíos de esta tanda. Después podés cambiar alguno suelto.'}
+                </p>
+              </div>
+
               <Field label="Pegá acá el mensaje tal cual te llega">
                 <textarea
                   className={`${field} font-mono text-xs`}
@@ -364,7 +454,7 @@ function ShipmentForm({
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
-                  onClick={() => setRows(parseWhatsappText(raw))}
+                  onClick={() => setRows(parseWhatsappText(raw, 'Mar del Plata', fechaLote))}
                   className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-black hover:brightness-95"
                 >
                   Interpretar texto
@@ -411,6 +501,18 @@ function ShipmentForm({
                             <code className="block truncate text-[11px] text-[var(--edr-muted)]">{r.rawLine}</code>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
+                            {/* Mover un envío suelto a otro día sin sacarlo de la tanda. */}
+                            <input
+                              type="date"
+                              value={r.scheduledDate}
+                              onChange={(e) => updateRow(r.tempId, { scheduledDate: e.target.value })}
+                              title="Día en que se reparte"
+                              className={`rounded border px-2 py-1 text-xs ${
+                                r.scheduledDate !== fechaLote
+                                  ? 'border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] text-[var(--edr-yellow)]'
+                                  : 'border-[var(--edr-border)] bg-[var(--edr-surface)] text-[var(--edr-muted)]'
+                              }`}
+                            />
                             {cash.atDelivery > 0 && (
                               <span className="edr-mono bg-[var(--edr-hiviz)] text-black px-2 py-1 text-sm font-bold">
                                 {money(cash.atDelivery)}

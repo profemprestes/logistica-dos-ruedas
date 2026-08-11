@@ -20,6 +20,8 @@ export interface PendingDelivery {
   reason: string | null;
   receiverName: string | null;
   receiverDni: string | null;
+  /** "Recibió el encargado del edificio". Lo que la foto sola no cuenta. */
+  comment: string | null;
   lat: number | null;
   lng: number | null;
   accuracy: number | null;

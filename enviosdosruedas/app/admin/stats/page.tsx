@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
 import AdminNav from '@/components/AdminNav';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
 import { today } from '@/lib/settlement';
@@ -66,21 +66,14 @@ function acumular(f: Fila, s: Shipment) {
 }
 
 export default function StatsPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
+  /** Sólo admin: un repartidor logueado no tiene que poder mirar acá. */
+  const ready = useAdminGuard();
   const [rango, setRango] = useState<RangoId>('7');
   const [general, setGeneral] = useState<Fila>(VACIA('General'));
   const [porChofer, setPorChofer] = useState<Fila[]>([]);
   const [porEstado, setPorEstado] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/login');
-      else setReady(true);
-    });
-  }, [router]);
 
   const apply = useCallback(({ data, error: dbError }: Awaited<ReturnType<typeof fetchShipments>>) => {
     if (dbError) {

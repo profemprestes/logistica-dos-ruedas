@@ -22,6 +22,7 @@ import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
 import { useOnline } from '@/lib/driver/useOnline';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
+import { partirRuta } from '@/lib/scheduled';
 
 /**
  * Todo lo que todavía tiene abierto, sin importar cómo llegó a su hoja de ruta.
@@ -236,7 +237,10 @@ export default function DriverDashboardPage() {
     refreshPending();
   }
 
-  const totalCash = route.reduce((acc, s) => acc + shipmentCash(s).total, 0);
+  const { deHoy, proximos } = partirRuta(route);
+  // El total del día no cuenta lo que todavía no se reparte: si lo sumara, el
+  // repartidor rendiría de más y el cierre de caja no daría.
+  const totalCash = deHoy.reduce((acc, s) => acc + shipmentCash(s).total, 0);
 
   return (
     <div className="min-h-dvh pb-32">
@@ -249,7 +253,9 @@ export default function DriverDashboardPage() {
               {driver?.name || 'Hoja de ruta'}
             </h1>
             <p className="text-xs text-white/70">
-              {route.length} envío(s) · {online ? 'con señal' : 'sin señal'}
+              {deHoy.length} envío(s) hoy
+              {proximos.length > 0 && ` · ${proximos.length} para después`} ·{' '}
+              {online ? 'con señal' : 'sin señal'}
             </p>
           </div>
           {/* Actualiza los datos SIN recargar la página: una recarga volvería a
@@ -338,9 +344,31 @@ export default function DriverDashboardPage() {
           </div>
         )}
 
-        {route.map((s) => (
+        {!loading && deHoy.length === 0 && proximos.length > 0 && (
+          <div className="rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-6 py-8 text-center">
+            <p className="text-xl font-black">Por hoy no te queda nada</p>
+            <p className="mt-1 text-base text-[var(--edr-muted)]">
+              Abajo están los que ya te cargaron para los próximos días.
+            </p>
+          </div>
+        )}
+
+        {deHoy.map((s) => (
           <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
         ))}
+
+        {/* Programados: se ven para poder organizarse, pero no se tocan hasta
+            el día. El candado real está en la base (paso 14). */}
+        {proximos.length > 0 && (
+          <>
+            <h2 className="px-1 pt-4 text-sm font-black uppercase tracking-widest text-[var(--edr-muted)]">
+              Próximos días · {proximos.length}
+            </h2>
+            {proximos.map((s) => (
+              <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
+            ))}
+          </>
+        )}
       </main>
 
       {/* ---------- Botón gigante ---------- */}

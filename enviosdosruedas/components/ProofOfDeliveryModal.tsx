@@ -3,44 +3,17 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { money, type Shipment } from '@/lib/format';
-
-interface Log {
-  id: string;
-  event: string;
-  receiver_name: string | null;
-  receiver_dni: string | null;
-  failure_reason: string | null;
-  comment: string | null;
-  photo_path: string | null;
-  lat: number | null;
-  lng: number | null;
-  gps_accuracy: number | null;
-  amount_collected: number | null;
-  happened_at: string;
-  created_at: string;
-  synced_offline: boolean;
-  driver?: { full_name: string } | null;
-}
-
-const EVENT_LABEL: Record<string, string> = {
-  creado: 'Creado',
-  asignado: 'Asignado',
-  retirado: 'Retirado',
-  en_camino: 'En camino',
-  entregado: 'Entregado',
-  no_entregado: 'No entregado',
-  reprogramado: 'Reprogramado',
-  cancelado: 'Cancelado',
-};
-
-const REASON_LABEL: Record<string, string> = {
-  ausente: 'Cliente ausente',
-  intransitable: 'Zona intransitable',
-  direccion_incorrecta: 'Dirección incorrecta',
-  telefono_incorrecto: 'Teléfono incorrecto',
-  rechazado: 'Paquete rechazado',
-  otro: 'Otro motivo',
-};
+import {
+  EVENT_LABEL,
+  REASON_LABEL,
+  downloadPhoto,
+  fechaHora,
+  photoAsDataUrl,
+  photoFileName,
+  saveBlob,
+  signedPhotoUrl,
+  type ProofLog,
+} from '@/lib/proof';
 
 export default function ProofOfDeliveryModal({
   shipment,
@@ -49,10 +22,13 @@ export default function ProofOfDeliveryModal({
   shipment: Shipment | null;
   onClose: () => void;
 }) {
-  const [logs, setLogs] = useState<Log[]>([]);
+  const [logs, setLogs] = useState<ProofLog[]>([]);
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  /** Id del log cuya foto se está bajando, o 'pdf' mientras se arma el archivo. */
+  const [bajando, setBajando] = useState('');
 
   useEffect(() => {
     if (!shipment) return;
@@ -61,6 +37,7 @@ export default function ProofOfDeliveryModal({
     (async () => {
       setLoading(true);
       setError('');
+      setNotice('');
       setPhotos({});
 
       const { data, error: dbError } = await supabase
@@ -76,19 +53,14 @@ export default function ProofOfDeliveryModal({
         return;
       }
 
-      const list = (data ?? []) as Log[];
+      const list = (data ?? []) as ProofLog[];
       setLogs(list);
       setLoading(false);
 
-      // Las fotos están en un bucket privado: hay que pedir un link temporal
-      const withPhoto = list.filter((l) => l.photo_path);
-      for (const log of withPhoto) {
-        const { data: signed } = await supabase.storage
-          .from('delivery-photos')
-          .createSignedUrl(log.photo_path as string, 3600);
-        if (alive && signed?.signedUrl) {
-          setPhotos((p) => ({ ...p, [log.id]: signed.signedUrl }));
-        }
+      // Las fotos están en un bucket privado: hay que pedir un link temporal.
+      for (const log of list.filter((l) => l.photo_path)) {
+        const url = await signedPhotoUrl(log.photo_path as string);
+        if (alive && url) setPhotos((p) => ({ ...p, [log.id]: url }));
       }
     })();
 
@@ -99,24 +71,121 @@ export default function ProofOfDeliveryModal({
 
   if (!shipment) return null;
 
+  const avisar = (msg: string) => {
+    setNotice(msg);
+    setTimeout(() => setNotice(''), 4000);
+  };
+
+  async function bajarFoto(log: ProofLog) {
+    if (!log.photo_path || !shipment) return;
+    setBajando(log.id);
+    setError('');
+    try {
+      await downloadPhoto(log.photo_path, photoFileName(shipment.tracking_code, log));
+      avisar('Foto descargada.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo bajar la foto.');
+    }
+    setBajando('');
+  }
+
+  /**
+   * Los datos en texto plano, para pegarlos en la app del cliente cuando hay
+   * que cerrar el envío de su lado a mano.
+   */
+  async function copiarDatos(log: ProofLog) {
+    if (!shipment) return;
+    const partes = [
+      `Envío: ${shipment.tracking_code}`,
+      `Destinatario: ${shipment.recipient_name}`,
+      `Dirección: ${shipment.address_street}${shipment.address_extra ? ` ${shipment.address_extra}` : ''}, ${shipment.city}`,
+      `Estado: ${EVENT_LABEL[log.event] ?? log.event}`,
+      `Fecha y hora: ${fechaHora(log.happened_at)}`,
+      log.receiver_name ? `Recibió: ${log.receiver_name}` : '',
+      log.receiver_dni ? `DNI: ${log.receiver_dni}` : '',
+      log.failure_reason
+        ? `Motivo: ${REASON_LABEL[log.failure_reason] ?? log.failure_reason}`
+        : '',
+      log.comment ? `Comentario: ${log.comment}` : '',
+      log.amount_collected !== null ? `Cobrado: ${money(log.amount_collected)}` : '',
+      log.lat != null && log.lng != null ? `Ubicación: ${log.lat}, ${log.lng}` : '',
+    ].filter(Boolean);
+
+    try {
+      await navigator.clipboard.writeText(partes.join('\n'));
+      avisar('Datos copiados: pegalos en la app del cliente.');
+    } catch {
+      setError('El navegador no dejó copiar. Seleccioná el texto a mano.');
+    }
+  }
+
+  /** Arma el PDF en el navegador y lo baja como archivo. */
+  async function bajarPDF() {
+    if (!shipment) return;
+    setBajando('pdf');
+    setError('');
+    try {
+      // La librería pesa: se carga recién cuando se aprieta el botón, así no
+      // suma medio mega a la carga del panel.
+      const [{ pdf }, { default: ProofPdfDocument }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/proof/ProofPdfDocument'),
+      ]);
+
+      // Las fotos van embebidas: el link firmado vence en una hora y el PDF no.
+      const fotos: Record<string, string> = {};
+      for (const log of logs.filter((l) => l.photo_path)) {
+        const dataUrl = await photoAsDataUrl(log.photo_path as string);
+        if (dataUrl) fotos[log.id] = dataUrl;
+      }
+
+      const blob = await pdf(
+        <ProofPdfDocument
+          shipment={shipment}
+          logs={logs}
+          fotos={fotos}
+          generadoEl={new Date()}
+        />
+      ).toBlob();
+
+      saveBlob(blob, `${shipment.tracking_code}-comprobante.pdf`);
+      avisar('Comprobante descargado.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo generar el PDF.');
+    }
+    setBajando('');
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-6 w-full max-w-3xl rounded-lg bg-[var(--edr-surface)] shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--edr-border)] px-5 py-4">
-          <div>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-4">
+      <div className="my-2 w-full max-w-3xl rounded-lg bg-[var(--edr-surface)] shadow-xl sm:my-6">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--edr-border)] px-4 py-3 sm:px-5 sm:py-4">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold">Prueba de entrega</h2>
-            <p className="edr-mono text-xs text-[var(--edr-muted)]">{shipment.tracking_code}</p>
+            <p className="edr-mono truncate text-xs text-[var(--edr-muted)]">
+              {shipment.tracking_code}
+            </p>
           </div>
+
+          <button
+            onClick={bajarPDF}
+            disabled={bajando === 'pdf' || loading}
+            className="ml-auto shrink-0 rounded bg-[var(--edr-yellow)] px-3 py-2 text-sm font-black text-black hover:brightness-95 disabled:opacity-50"
+          >
+            {bajando === 'pdf' ? 'Armando…' : '⬇ PDF'}
+          </button>
+
           <button
             onClick={onClose}
-            className="rounded px-2 py-1 text-2xl leading-none text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
+            aria-label="Cerrar"
+            className="shrink-0 rounded px-2 py-1 text-2xl leading-none text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
           >
             ×
           </button>
         </div>
 
-        <div className="px-5 py-5">
-          <div className="mb-5 rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-3 text-sm">
+        <div className="px-4 py-4 sm:px-5 sm:py-5">
+          <div className="mb-4 rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-3 text-sm">
             <div className="font-semibold">{shipment.recipient_name}</div>
             <div className="text-[var(--edr-muted)]">
               {shipment.address_street}
@@ -124,13 +193,18 @@ export default function ProofOfDeliveryModal({
             </div>
           </div>
 
-          {loading && <p className="py-6 text-center text-[var(--edr-muted)]">Cargando…</p>}
-
+          {notice && (
+            <div className="mb-4 rounded border border-emerald-400 bg-emerald-950 px-3 py-2 text-sm text-emerald-100">
+              {notice}
+            </div>
+          )}
           {error && (
-            <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div className="mb-4 rounded border border-red-400 bg-red-950 px-3 py-2 text-sm text-red-100">
               {error}
             </div>
           )}
+
+          {loading && <p className="py-6 text-center text-[var(--edr-muted)]">Cargando…</p>}
 
           {!loading && logs.length === 0 && (
             <p className="py-8 text-center text-[var(--edr-muted)]">
@@ -144,8 +218,10 @@ export default function ProofOfDeliveryModal({
               return (
                 <div
                   key={log.id}
-                  className={`rounded-lg border p-4 ${
-                    isFailure ? 'border-orange-300 bg-orange-50/60' : 'border-[var(--edr-border)] bg-[var(--edr-surface)]'
+                  className={`rounded-lg border p-3 sm:p-4 ${
+                    isFailure
+                      ? 'border-orange-400 bg-orange-950/40'
+                      : 'border-[var(--edr-border)] bg-[var(--edr-surface)]'
                   }`}
                 >
                   <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -153,7 +229,7 @@ export default function ProofOfDeliveryModal({
                       {EVENT_LABEL[log.event] ?? log.event}
                     </span>
                     <span className="text-sm text-[var(--edr-muted)]">
-                      {new Date(log.happened_at).toLocaleString('es-AR')}
+                      {fechaHora(log.happened_at)}
                     </span>
                     {log.driver?.full_name && (
                       <span className="rounded bg-[var(--edr-surface-2)] px-2 py-0.5 text-xs font-semibold">
@@ -161,10 +237,17 @@ export default function ProofOfDeliveryModal({
                       </span>
                     )}
                     {log.synced_offline && (
-                      <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">
+                      <span className="rounded bg-sky-900 px-2 py-0.5 text-xs font-semibold text-sky-100">
                         Registrado sin señal
                       </span>
                     )}
+
+                    <button
+                      onClick={() => copiarDatos(log)}
+                      className="ml-auto rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
+                    >
+                      Copiar datos
+                    </button>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
@@ -172,17 +255,23 @@ export default function ProofOfDeliveryModal({
                     <div>
                       {log.photo_path ? (
                         photos[log.id] ? (
-                          <a href={photos[log.id]} target="_blank" rel="noreferrer">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={photos[log.id]}
-                              alt="Comprobante"
-                              className="w-full rounded border border-[var(--edr-border)] object-cover"
-                            />
-                            <span className="mt-1 block text-center text-xs text-[var(--edr-muted)]">
-                              Tocá para ampliar
-                            </span>
-                          </a>
+                          <>
+                            <a href={photos[log.id]} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={photos[log.id]}
+                                alt="Comprobante"
+                                className="w-full rounded border border-[var(--edr-border)] object-cover"
+                              />
+                            </a>
+                            <button
+                              onClick={() => bajarFoto(log)}
+                              disabled={bajando === log.id}
+                              className="mt-1 w-full rounded border border-[var(--edr-border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
+                            >
+                              {bajando === log.id ? 'Bajando…' : '⬇ Bajar foto'}
+                            </button>
+                          </>
                         ) : (
                           <div className="flex h-32 items-center justify-center rounded border border-dashed border-[var(--edr-border)] text-xs text-[var(--edr-muted)]">
                             Cargando foto…
@@ -213,7 +302,7 @@ export default function ProofOfDeliveryModal({
                       {isFailure && (
                         <div>
                           <dt className="inline font-semibold">Motivo: </dt>
-                          <dd className="inline font-bold text-orange-900">
+                          <dd className="inline font-bold text-orange-200">
                             {REASON_LABEL[log.failure_reason ?? ''] ?? log.failure_reason ?? '—'}
                           </dd>
                         </div>
@@ -240,7 +329,7 @@ export default function ProofOfDeliveryModal({
                         <dd className="inline">
                           {log.lat != null && log.lng != null ? (
                             <a
-                              className="font-semibold text-blue-700 underline"
+                              className="font-semibold text-sky-300 underline"
                               href={`https://www.google.com/maps/search/?api=1&query=${log.lat},${log.lng}`}
                               target="_blank"
                               rel="noreferrer"
@@ -260,7 +349,7 @@ export default function ProofOfDeliveryModal({
 
                       {log.synced_offline && (
                         <div className="text-xs text-[var(--edr-muted)]">
-                          Subido a las {new Date(log.created_at).toLocaleString('es-AR')}
+                          Subido a las {fechaHora(log.created_at)}
                         </div>
                       )}
                     </dl>
@@ -271,7 +360,7 @@ export default function ProofOfDeliveryModal({
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-[var(--edr-border)] px-5 py-4">
+        <div className="flex justify-end border-t border-[var(--edr-border)] px-4 py-3 sm:px-5 sm:py-4">
           <button
             onClick={onClose}
             className="rounded border border-[var(--edr-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"

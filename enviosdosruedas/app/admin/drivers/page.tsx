@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
 import AdminNav from '@/components/AdminNav';
 
 interface Driver {
@@ -27,8 +27,8 @@ function fetchProfiles() {
 }
 
 export default function DriversPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
+  /** Sólo admin: un repartidor logueado no tiene que poder mirar acá. */
+  const ready = useAdminGuard();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
@@ -37,13 +37,6 @@ export default function DriversPage() {
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState<Driver | null>(null);
   const [newPassword, setNewPassword] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/login');
-      else setReady(true);
-    });
-  }, [router]);
 
   const apply = useCallback(
     ({ data, error: dbError }: Awaited<ReturnType<typeof fetchProfiles>>) => {

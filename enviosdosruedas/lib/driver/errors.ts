@@ -17,6 +17,8 @@ const TEXT: Record<string, string> = {
   ENVIO_YA_CERRADO: 'Ese envío ya está cerrado.',
   FALTA_RETIRAR: 'Primero marcá "Ya lo retiré": no se puede entregar algo que no retiraste.',
   ESTADO_NO_PERMITIDO: 'Ese cambio de estado no está permitido.',
+  ENVIO_PROGRAMADO:
+    'Ese envío está cargado para más adelante: no se puede tocar hasta el día que le toca.',
 };
 
 /**
@@ -31,6 +33,9 @@ const PERMANENT = new Set([
   'ENVIO_YA_CERRADO',
   'FALTA_RETIRAR',
   'ESTADO_NO_PERMITIDO',
+  // Reintentar no sirve HOY, y mañana serviría: la entrega entraría con fecha
+  // vieja y descuadraría el cierre de caja del día. Mejor que salte a la vista.
+  'ENVIO_PROGRAMADO',
 ]);
 
 /** Códigos de Postgres que también son definitivos. */

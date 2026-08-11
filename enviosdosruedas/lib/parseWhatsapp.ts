@@ -32,6 +32,8 @@ export interface ParsedRow {
   addressStreet: string;
   addressExtra: string;
   city: string;
+  /** Día en que se reparte. Se elige al pegar la tanda y se puede mover fila por fila. */
+  scheduledDate: string;
   deliveryWindow: string;
   productDetail: string;
   paymentMode: PaymentMode;
@@ -144,7 +146,18 @@ function takeAddress(segment: string): { street: string; extra: string; rest: st
 
 /* -------------------------------------------------------------- principal */
 
-export function parseWhatsappText(text: string, defaultCity = 'Mar del Plata'): ParsedRow[] {
+/** Hoy en hora local. En UTC, de noche ya estaríamos en el día siguiente. */
+function hoyLocal(): string {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+export function parseWhatsappText(
+  text: string,
+  defaultCity = 'Mar del Plata',
+  /** Para qué día es la tanda. Por defecto hoy. */
+  scheduledDate = hoyLocal(),
+): ParsedRow[] {
   const lines = text
     .split('\n')
     .map((l) => l.replace(/\u00a0/g, ' ').trim())
@@ -316,6 +329,7 @@ export function parseWhatsappText(text: string, defaultCity = 'Mar del Plata'): 
         addressStreet: stop,
         addressExtra: second ? '' : addr.extra,
         city: defaultCity,
+        scheduledDate,
         deliveryWindow,
         productDetail,
         paymentMode: second ? 'no_cobrar' : paymentMode,

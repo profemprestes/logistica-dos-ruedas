@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import AdminNav from '@/components/AdminNav';
 import ClientesTab from '@/components/stock/ClientesTab';
 import DescargaTab from '@/components/stock/DescargaTab';
@@ -10,6 +9,7 @@ import StockTab from '@/components/stock/StockTab';
 import { fetchClients, fetchMovements, fetchStock } from '@/lib/stock/db';
 import type { MovementRow, StockClient, StockRow } from '@/lib/stock/types';
 import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
 import { field } from '@/components/stock/ui';
 
 /**
@@ -58,8 +58,8 @@ function fetchClientData(id: string): Promise<ClientDataPayload> {
 }
 
 export default function AdminStockPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
+  /** Sólo admin: un repartidor logueado no tiene que poder mirar acá. */
+  const ready = useAdminGuard();
   const [tab, setTab] = useState<Tab>('stock');
 
   const [clientes, setClientes] = useState<StockClient[]>([]);
@@ -71,13 +71,6 @@ export default function AdminStockPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/login');
-      else setReady(true);
-    });
-  }, [router]);
 
   /** Los resultados de `fetchAll` ya aplicados al estado de la pantalla. */
   const applyClients = useCallback(({ lista, cuenta }: ClientsPayload) => {

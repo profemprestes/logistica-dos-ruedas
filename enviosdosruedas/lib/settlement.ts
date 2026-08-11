@@ -140,6 +140,28 @@ export function dayRange(day: string) {
   };
 }
 
+/**
+ * Un rango cualquiera, de la mañana del primer día a la noche del último.
+ * Si vienen al revés los da vuelta: elegir "del 20 al 10" es un error de dedo,
+ * no un pedido de que no aparezca nada.
+ */
+export function customRange(desde: string, hasta: string) {
+  const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
+  return {
+    from: new Date(`${a}T00:00:00`).toISOString(),
+    to: new Date(`${b}T23:59:59.999`).toISOString(),
+    desde: a,
+    hasta: b,
+  };
+}
+
+/** Hoy más `dias` (negativo para atrás), en formato `YYYY-MM-DD` y hora local. */
+export function dayShift(day: string, dias: number): string {
+  const d = new Date(`${day}T12:00:00`);
+  d.setDate(d.getDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Hoy en formato `YYYY-MM-DD`, en hora local. */
 export function today(): string {
   const now = new Date();

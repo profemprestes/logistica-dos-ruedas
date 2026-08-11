@@ -5,23 +5,30 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import AdminNav from '@/components/AdminNav';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
-import { today } from '@/lib/settlement';
+import { dayShift, today } from '@/lib/settlement';
 
-/** Rangos que se miran en el día a día de una operación de última milla. */
-const RANGOS = [
-  { id: 'hoy', label: 'Hoy', dias: 0 },
-  { id: '7', label: 'Últimos 7 días', dias: 6 },
-  { id: '30', label: 'Últimos 30 días', dias: 29 },
+const campo =
+  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]';
+const labelCls =
+  'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
+
+/**
+ * Los atajos no son un modo aparte: sólo completan las dos fechas. Así el
+ * período es siempre "de tal día a tal otro" y elegir un día suelto es poner
+ * la misma fecha en los dos lados, sin una pantalla distinta para eso.
+ */
+const ATAJOS = [
+  { label: 'Hoy', desde: 0, hasta: 0 },
+  { label: 'Ayer', desde: -1, hasta: -1 },
+  { label: 'Últimos 7 días', desde: -6, hasta: 0 },
+  { label: 'Últimos 30 días', desde: -29, hasta: 0 },
 ] as const;
 
-type RangoId = (typeof RANGOS)[number]['id'];
-
-function desdeHasta(rango: RangoId) {
-  const hasta = today();
-  const dias = RANGOS.find((r) => r.id === rango)?.dias ?? 0;
-  const d = new Date(`${hasta}T12:00:00`);
-  d.setDate(d.getDate() - dias);
-  return { desde: d.toISOString().slice(0, 10), hasta };
+/** Cómo se lee el período elegido, para el encabezado. */
+function titulo(desde: string, hasta: string): string {
+  const dm = (f: string) => f.split('-').reverse().slice(0, 2).join('/');
+  if (desde === hasta) return desde === today() ? 'Hoy' : dm(desde);
+  return `${dm(desde)} al ${dm(hasta)}`;
 }
 
 function fetchShipments(desde: string, hasta: string) {
@@ -68,7 +75,8 @@ function acumular(f: Fila, s: Shipment) {
 export default function StatsPage() {
   /** Sólo admin: un repartidor logueado no tiene que poder mirar acá. */
   const ready = useAdminGuard();
-  const [rango, setRango] = useState<RangoId>('7');
+  const [desde, setDesde] = useState(() => dayShift(today(), -6));
+  const [hasta, setHasta] = useState(() => today());
   const [general, setGeneral] = useState<Fila>(VACIA('General'));
   const [porChofer, setPorChofer] = useState<Fila[]>([]);
   const [porEstado, setPorEstado] = useState<Record<string, number>>({});
@@ -108,14 +116,23 @@ export default function StatsPage() {
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
-    const { desde, hasta } = desdeHasta(rango);
-    fetchShipments(desde, hasta).then((res) => {
+    // Al revés se dan vuelta: "del 20 al 10" es un error de dedo, no un pedido
+    // de que no aparezca nada.
+    const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
+    fetchShipments(a, b).then((res) => {
       if (!cancelled) apply(res);
     });
     return () => {
       cancelled = true;
     };
-  }, [ready, rango, apply]);
+  }, [ready, desde, hasta, apply]);
+
+  /** Un atajo sólo completa las dos fechas. */
+  const aplicarAtajo = (a: (typeof ATAJOS)[number]) => {
+    setLoading(true);
+    setDesde(dayShift(today(), a.desde));
+    setHasta(dayShift(today(), a.hasta));
+  };
 
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
@@ -127,26 +144,71 @@ export default function StatsPage() {
       <AdminNav />
 
       <main className="mx-auto max-w-7xl px-6 py-6">
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          {RANGOS.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => {
-                setLoading(true);
-                setRango(r.id);
-              }}
-              className={`rounded px-4 py-2 text-sm font-black ${
-                rango === r.id
-                  ? 'bg-[var(--edr-yellow)] text-black'
-                  : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-          <span className="ml-auto text-xs text-[var(--edr-muted)]">
-            Por fecha de reparto · {desdeHasta(rango).desde} a {desdeHasta(rango).hasta}
-          </span>
+        <div className="mb-6 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className={labelCls}>Desde</label>
+              <input
+                type="date"
+                value={desde}
+                max={hasta}
+                onChange={(e) => {
+                  setLoading(true);
+                  setDesde(e.target.value);
+                }}
+                className={campo}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Hasta</label>
+              <input
+                type="date"
+                value={hasta}
+                min={desde}
+                onChange={(e) => {
+                  setLoading(true);
+                  setHasta(e.target.value);
+                }}
+                className={campo}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {ATAJOS.map((a) => {
+                const activo =
+                  desde === dayShift(today(), a.desde) && hasta === dayShift(today(), a.hasta);
+                return (
+                  <button
+                    key={a.label}
+                    onClick={() => aplicarAtajo(a)}
+                    className={`rounded px-3 py-2 text-sm font-black ${
+                      activo
+                        ? 'bg-[var(--edr-yellow)] text-black'
+                        : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <span className="ml-auto text-xs text-[var(--edr-muted)]">
+              Por fecha de reparto
+            </span>
+          </div>
+
+          <h2 className="mt-3 text-lg font-black">
+            {titulo(desde, hasta)}
+            {desde !== hasta && (
+              <span className="ml-2 text-sm font-semibold text-[var(--edr-muted)]">
+                {Math.round(
+                  (Date.parse(`${hasta}T00:00:00`) - Date.parse(`${desde}T00:00:00`)) / 86_400_000,
+                ) + 1}{' '}
+                días
+              </span>
+            )}
+          </h2>
         </div>
 
         {error && (

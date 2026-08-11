@@ -16,7 +16,8 @@ import { useOnline } from '@/lib/driver/useOnline';
 import { money, type Shipment } from '@/lib/format';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import {
-  dayRange,
+  customRange,
+  dayShift,
   logCash,
   summarizeLogs,
   today,
@@ -30,7 +31,16 @@ const inputCls =
   'w-full rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 text-lg outline-none focus:border-[var(--edr-yellow)]';
 const labelCls = 'mb-1 block text-sm font-bold uppercase tracking-wide text-[var(--edr-muted)]';
 
-type Modo = 'dia' | 'semana';
+/**
+ * El período es siempre "de tal día a tal otro". Ver un día suelto es tener la
+ * misma fecha de los dos lados: así no hay dos modos distintos que aprender.
+ */
+const ATAJOS = [
+  { label: 'Hoy', desde: 0, hasta: 0 },
+  { label: 'Ayer', desde: -1, hasta: -1 },
+  { label: 'Esta semana', semana: true },
+  { label: 'Últimos 15 días', desde: -14, hasta: 0 },
+] as const;
 
 /** Cierre de caja que cargó la oficina. */
 interface Caja {
@@ -43,7 +53,7 @@ interface Caja {
   day?: string;
 }
 
-/** Suma de varios días, para el resumen semanal. */
+/** Suma de varios días, para el resumen de un período. */
 interface CajaSemana {
   cobrado: number;
   rendido: number;
@@ -79,8 +89,10 @@ export default function DriverProfilePage() {
   const online = useOnline();
 
   const [driver, setDriver] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [modo, setModo] = useState<Modo>('dia');
-  const [day, setDay] = useState(today());
+  const [desde, setDesde] = useState(today());
+  const [hasta, setHasta] = useState(today());
+  /** Un solo día: el cierre de caja de ese día se muestra completo. */
+  const unDia = desde === hasta;
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [summaryError, setSummaryError] = useState('');
   const [pending, setPending] = useState(0);
@@ -124,7 +136,7 @@ export default function DriverProfilePage() {
   useEffect(() => {
     if (!driver) return;
     let cancelled = false;
-    const rango = modo === 'dia' ? dayRange(day) : weekRange(day);
+    const rango = customRange(desde, hasta);
 
     fetchLogs(driver.id, rango.from, rango.to).then(({ data, error }) => {
       if (cancelled) return;
@@ -140,7 +152,7 @@ export default function DriverProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [driver, modo, day, refresco]);
+  }, [driver, desde, hasta, refresco]);
 
   // Cierre de caja: de un día, o la suma de todos los días de la semana.
   useEffect(() => {
@@ -148,12 +160,12 @@ export default function DriverProfilePage() {
     let cancelled = false;
     const campos = 'day, cash_total, actual_amount, shipping_total, earnings, notes, settled_at';
 
-    if (modo === 'dia') {
+    if (unDia) {
       supabase
         .from('settlements')
         .select(campos)
         .eq('driver_id', driver.id)
-        .eq('day', day)
+        .eq('day', desde)
         .maybeSingle()
         .then(({ data }) => {
           if (cancelled) return;
@@ -161,13 +173,13 @@ export default function DriverProfilePage() {
           setSemana(null);
         });
     } else {
-      const { desde, hasta } = weekRange(day);
+      const r = customRange(desde, hasta);
       supabase
         .from('settlements')
         .select(campos)
         .eq('driver_id', driver.id)
-        .gte('day', desde)
-        .lte('day', hasta)
+        .gte('day', r.desde)
+        .lte('day', r.hasta)
         .order('day')
         .then(({ data }) => {
           if (cancelled) return;
@@ -180,7 +192,7 @@ export default function DriverProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [driver, modo, day]);
+  }, [driver, desde, hasta, unDia]);
 
   /**
    * Abre el formulario de entrega para un envío que se había cerrado como no
@@ -256,12 +268,14 @@ export default function DriverProfilePage() {
     toast('Listo, contraseña cambiada.', 'ok');
   }
 
-  const titulo =
-    modo === 'dia'
-      ? day === today()
-        ? 'Hoy'
-        : day.split('-').reverse().join('/')
-      : `Semana del ${weekRange(day).desde.split('-').reverse().join('/')}`;
+  const dm = (f: string) => f.split('-').reverse().slice(0, 2).join('/');
+  const titulo = unDia
+    ? desde === today()
+      ? 'Hoy'
+      : desde === dayShift(today(), -1)
+        ? 'Ayer'
+        : dm(desde)
+    : `Del ${dm(desde)} al ${dm(hasta)}`;
 
   return (
     <div className="min-h-dvh pb-10">
@@ -282,35 +296,61 @@ export default function DriverProfilePage() {
         {/* ---------- Período ---------- */}
         <section className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            {(['dia', 'semana'] as Modo[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setModo(m)}
-                className={`rounded-xl px-4 py-3 text-base font-black ${
-                  modo === m
-                    ? 'bg-[var(--edr-yellow)] text-black'
-                    : 'border-2 border-[var(--edr-border)] text-[var(--edr-muted)]'
-                }`}
-              >
-                {m === 'dia' ? 'Por día' : 'Semana'}
-              </button>
-            ))}
+            {ATAJOS.map((a) => {
+              const r =
+                'semana' in a
+                  ? weekRange(today())
+                  : { desde: dayShift(today(), a.desde), hasta: dayShift(today(), a.hasta) };
+              const activo = desde === r.desde && hasta === r.hasta;
+              return (
+                <button
+                  key={a.label}
+                  onClick={() => {
+                    setDesde(r.desde);
+                    setHasta(r.hasta);
+                  }}
+                  className={`rounded-xl px-4 py-3 text-base font-black ${
+                    activo
+                      ? 'bg-[var(--edr-yellow)] text-black'
+                      : 'border-2 border-[var(--edr-border)] text-[var(--edr-muted)]'
+                  }`}
+                >
+                  {a.label}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={day}
-              max={today()}
-              onChange={(e) => setDay(e.target.value)}
-              className="flex-1 rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-3 text-base"
-            />
-            <button
-              onClick={() => setDay(today())}
-              className="rounded-xl border-2 border-[var(--edr-border)] px-4 py-3 text-base font-bold"
-            >
-              Hoy
-            </button>
+          {/* Cualquier otro período: dos fechas. Poniendo la misma de los dos
+              lados se mira un solo día. */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelCls}>Desde</label>
+              <input
+                type="date"
+                value={desde}
+                max={today()}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDesde(v);
+                  // Elegir un desde posterior al hasta dejaría la pantalla vacía
+                  // sin explicar por qué: se arrastra el otro extremo.
+                  if (v > hasta) setHasta(v);
+                }}
+                className="w-full rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-3 text-base"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Hasta</label>
+              <input
+                type="date"
+                value={hasta}
+                min={desde}
+                max={today()}
+                onChange={(e) => setHasta(e.target.value)}
+                className="w-full rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-3 text-base"
+              />
+            </div>
           </div>
         </section>
 
@@ -419,7 +459,7 @@ export default function DriverProfilePage() {
                 )}
               </div>
 
-              {modo === 'dia' && caja && (
+              {unDia && caja && (
                 <div className="mt-4 rounded-xl border-2 border-[var(--edr-yellow)] px-4 py-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-black uppercase tracking-wide">
@@ -480,10 +520,10 @@ export default function DriverProfilePage() {
                 </div>
               )}
 
-              {modo === 'semana' && semana && (
+              {!unDia && semana && (
                 <div className="mt-4 rounded-xl border-2 border-[var(--edr-yellow)] px-4 py-3">
                   <div className="mb-2 text-sm font-black uppercase tracking-wide">
-                    Cierre de la semana · {semana.dias.length} día(s) liquidado(s)
+                    Cierre del período · {semana.dias.length} día(s) liquidado(s)
                   </div>
 
                   <dl className="space-y-1 text-base">
@@ -541,13 +581,13 @@ export default function DriverProfilePage() {
                 </div>
               )}
 
-              {modo === 'semana' && !semana && (
+              {!unDia && !semana && (
                 <p className="mt-3 rounded-lg border border-[var(--edr-border)] px-3 py-2 text-center text-xs font-semibold text-[var(--edr-muted)]">
-                  Todavía no hay ningún día liquidado en esta semana.
+                  Todavía no hay ningún día liquidado en este período.
                 </p>
               )}
 
-              {modo === 'dia' && !caja && (
+              {unDia && !caja && (
                 <p className="mt-3 rounded-lg border border-[var(--edr-border)] px-3 py-2 text-center text-xs font-semibold text-[var(--edr-muted)]">
                   La oficina todavía no cargó el cierre de caja de este día.
                 </p>

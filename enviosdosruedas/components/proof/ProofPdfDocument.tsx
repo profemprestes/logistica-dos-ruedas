@@ -174,8 +174,17 @@ export default function ProofPdfDocument({
   generadoEl,
   logoSrc = '/icon.png',
 }: ProofPdfProps) {
+  /**
+   * Sólo la entrega y los intentos fallidos.
+   *
+   * Los pasos de adentro de la operación —retirado, en camino— no van: a quien
+   * recibe este papel le importa si el paquete llegó y quién lo recibió, no la
+   * logística nuestra. El historial completo queda en el panel.
+   */
+  const intentos = logs.filter((l) => l.event === 'entregado' || l.event === 'no_entregado');
+
   // El movimiento que define el estado del papel: la entrega o el intento fallido.
-  const cierre = logs.find((l) => l.event === 'entregado' || l.event === 'no_entregado') ?? null;
+  const cierre = intentos[0] ?? null;
   const entregado = cierre?.event === 'entregado';
 
   const colorSello = entregado ? '#047857' : cierre ? '#c2410c' : AZUL;
@@ -244,13 +253,14 @@ export default function ProofPdfDocument({
         {/* ---------- Movimientos ---------- */}
         <Text style={styles.seccion}>PRUEBA DE ENTREGA</Text>
 
-        {logs.length === 0 && (
+        {intentos.length === 0 && (
           <Text style={{ color: GRIS, marginBottom: 10 }}>
-            Todavía no hay movimientos registrados para este envío.
+            Este envío todavía no se cerró: el comprobante se completa cuando el repartidor
+            registre la entrega o el intento fallido.
           </Text>
         )}
 
-        {logs.map((log) => {
+        {intentos.map((log) => {
           const fallido = log.event === 'no_entregado';
           return (
             <View key={log.id} style={styles.prueba} wrap={false}>

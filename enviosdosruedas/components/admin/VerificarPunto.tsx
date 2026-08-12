@@ -1,7 +1,19 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { dentroDeLaCaja, parsearPunto, textoPunto, type Punto } from '@/lib/punto';
+
+/** Leaflet toca `window` al cargar: nunca en el servidor. */
+const MapaElegible = dynamic(() => import('@/components/admin/MapaElegible'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-72 items-center justify-center rounded border border-dashed border-[var(--edr-border)] text-xs text-[var(--edr-muted)]">
+      Abriendo el mapa…
+    </div>
+  ),
+});
 
 /**
  * Ver el punto en el mapa antes de guardar el envío.
@@ -18,6 +30,10 @@ import { supabase } from '@/lib/supabaseClient';
  * Es más permisivo que la búsqueda automática —acepta cualquier texto y no
  * exige altura— porque acá hay alguien mirando el mapa. La regla estricta es
  * para cuando nadie mira.
+ *
+ * Y cuando no lo encuentra ni buscándolo, está el modo a mano: hay direcciones
+ * que no existen en ningún buscador (esquinas sin altura, barrios nuevos) y la
+ * única fuente confiable es alguien que sabe dónde queda.
  */
 export default function VerificarPunto({
   direccion,
@@ -30,7 +46,7 @@ export default function VerificarPunto({
   ciudad: string;
   lat: number | null;
   lng: number | null;
-  onPunto: (p: { lat: number; lng: number } | null) => void;
+  onPunto: (p: Punto | null) => void;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [texto, setTexto] = useState('');
@@ -42,10 +58,29 @@ export default function VerificarPunto({
     exacta: boolean;
   } | null>(null);
   const [aviso, setAviso] = useState('');
+  /** Modo a mano: el mapa de verdad, donde se toca para poner el punto. */
+  const [aMano, setAMano] = useState(false);
+  const [elegido, setElegido] = useState<Punto | null>(null);
 
   async function buscar() {
     const consulta = (texto.trim() || direccion).trim();
     if (consulta.length < 3) return setAviso('Escribí algo para buscar.');
+
+    // Coordenadas pegadas, o un link de Google Maps: no hay nada que buscar,
+    // el punto ya vino escrito.
+    const pegado = parsearPunto(consulta);
+    if (pegado) {
+      setEncontrado({
+        ...pegado,
+        etiqueta: `Coordenadas: ${textoPunto(pegado)}`,
+        exacta: true,
+      });
+      setElegido(pegado);
+      setAviso(
+        dentroDeLaCaja(pegado) ? '' : 'Ojo: ese punto cae lejos de Mar del Plata. Miralo en el mapa.',
+      );
+      return;
+    }
 
     setBuscando(true);
     setAviso('');
@@ -65,10 +100,13 @@ export default function VerificarPunto({
       if (!res.ok) throw new Error(json.error ?? 'No se pudo buscar.');
 
       if (!json.punto) {
-        setAviso('No lo encontré. Probá con la calle y la altura sueltas, o con una referencia conocida.');
+        setAviso(
+          'No lo encontré. Probá con una referencia conocida, o ponelo a mano tocando el mapa.',
+        );
         return;
       }
       setEncontrado(json.punto);
+      setElegido({ lat: json.punto.lat, lng: json.punto.lng });
     } catch (e) {
       setAviso(e instanceof Error ? e.message : 'No se pudo buscar.');
     } finally {
@@ -76,7 +114,10 @@ export default function VerificarPunto({
     }
   }
 
-  const punto = encontrado ?? (lat != null && lng != null ? { lat, lng, etiqueta: '' } : null);
+  /** El que se va a usar: lo elegido a mano manda sobre lo buscado. */
+  const punto: Punto | null =
+    elegido ?? encontrado ?? (lat != null && lng != null ? { lat, lng } : null);
+
   const d = 0.004;
 
   return (
@@ -117,7 +158,7 @@ export default function VerificarPunto({
                   void buscar();
                 }
               }}
-              placeholder={direccion || 'calle y altura, o una referencia'}
+              placeholder={direccion || 'calle y altura, referencia, o coordenadas'}
               className="min-w-0 flex-1 rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)]"
             />
             <button
@@ -128,11 +169,22 @@ export default function VerificarPunto({
             >
               {buscando ? 'Buscando…' : 'Buscar'}
             </button>
+            <button
+              type="button"
+              onClick={() => setAMano((v) => !v)}
+              className={`rounded px-3 py-1.5 text-xs font-bold ${
+                aMano
+                  ? 'bg-[var(--edr-yellow)] text-black'
+                  : 'border border-[var(--edr-border)] hover:bg-[var(--edr-surface)]'
+              }`}
+            >
+              ✏️ {aMano ? 'Listo, cerrar el mapa' : 'Ponerlo a mano'}
+            </button>
           </div>
 
           <p className="text-[11px] text-[var(--edr-muted)]">
-            Vacío busca la dirección del envío. Este texto no se guarda: sirve sólo para
-            encontrar el punto.
+            Vacío busca la dirección del envío. También podés pegar coordenadas o un link de
+            Google Maps. Este texto no se guarda: sirve sólo para encontrar el punto.
           </p>
 
           {aviso && (
@@ -141,60 +193,80 @@ export default function VerificarPunto({
             </p>
           )}
 
-          {punto && (
+          {aMano ? (
             <>
-              {encontrado?.etiqueta && (
-                <p className="text-xs text-[var(--edr-muted)]">
-                  Encontró: <span className="font-semibold">{encontrado.etiqueta}</span>
+              <p className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2 py-1.5 text-xs">
+                Tocá el mapa donde está la puerta, o arrastrá el punto amarillo. Movelo y
+                agrandalo como en cualquier mapa hasta encontrar el lugar.
+              </p>
+
+              <MapaElegible punto={punto} onElegir={setElegido} />
+
+              {elegido && (
+                <p className="edr-mono text-[11px] text-[var(--edr-muted)]">
+                  {textoPunto(elegido)}
                 </p>
               )}
-
-              {/* Sin altura el pin cae en cualquier punto de la calle. Leyendo
-                  la etiqueta no se nota, y en una avenida larga son kilómetros. */}
-              {encontrado && !encontrado.exacta && (
-                <p className="rounded border border-amber-400 bg-amber-950 px-2 py-1.5 text-xs text-amber-100">
-                  Ubicó la calle pero <strong>no la altura</strong>: el punto es aproximado y
-                  puede estar a varias cuadras. Mirá el mapa antes de usarlo.
-                </p>
-              )}
-              <iframe
-                title="Punto de entrega"
-                loading="lazy"
-                src={
-                  `https://www.openstreetmap.org/export/embed.html` +
-                  `?bbox=${punto.lng - d}%2C${punto.lat - d}%2C${punto.lng + d}%2C${punto.lat + d}` +
-                  `&layer=mapnik&marker=${punto.lat}%2C${punto.lng}`
-                }
-                className="h-56 w-full rounded border border-[var(--edr-border)]"
-              />
-
-              <div className="flex flex-wrap gap-2">
-                {encontrado && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onPunto({ lat: encontrado.lat, lng: encontrado.lng });
-                      setAviso('');
-                    }}
-                    className="rounded bg-[var(--edr-yellow)] px-3 py-1.5 text-xs font-black text-black hover:brightness-95"
-                  >
-                    ✓ Usar este punto
-                  </button>
-                )}
-                {lat != null && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onPunto(null);
-                      setEncontrado(null);
-                    }}
-                    className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface)]"
-                  >
-                    Borrar el punto
-                  </button>
-                )}
-              </div>
             </>
+          ) : (
+            punto && (
+              <>
+                {encontrado?.etiqueta && (
+                  <p className="text-xs text-[var(--edr-muted)]">
+                    Encontró: <span className="font-semibold">{encontrado.etiqueta}</span>
+                  </p>
+                )}
+
+                {/* Sin altura el pin cae en cualquier punto de la calle. Leyendo
+                    la etiqueta no se nota, y en una avenida larga son kilómetros. */}
+                {encontrado && !encontrado.exacta && (
+                  <p className="rounded border border-amber-400 bg-amber-950 px-2 py-1.5 text-xs text-amber-100">
+                    Ubicó la calle pero <strong>no la altura</strong>: el punto es aproximado y
+                    puede estar a varias cuadras. Mirá el mapa antes de usarlo.
+                  </p>
+                )}
+                <iframe
+                  title="Punto de entrega"
+                  loading="lazy"
+                  src={
+                    `https://www.openstreetmap.org/export/embed.html` +
+                    `?bbox=${punto.lng - d}%2C${punto.lat - d}%2C${punto.lng + d}%2C${punto.lat + d}` +
+                    `&layer=mapnik&marker=${punto.lat}%2C${punto.lng}`
+                  }
+                  className="h-56 w-full rounded border border-[var(--edr-border)]"
+                />
+              </>
+            )
+          )}
+
+          {(punto || lat != null) && (
+            <div className="flex flex-wrap gap-2">
+              {punto && (punto.lat !== lat || punto.lng !== lng) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPunto(punto);
+                    setAviso('');
+                  }}
+                  className="rounded bg-[var(--edr-yellow)] px-3 py-1.5 text-xs font-black text-black hover:brightness-95"
+                >
+                  ✓ Usar este punto
+                </button>
+              )}
+              {lat != null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPunto(null);
+                    setEncontrado(null);
+                    setElegido(null);
+                  }}
+                  className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface)]"
+                >
+                  Borrar el punto
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

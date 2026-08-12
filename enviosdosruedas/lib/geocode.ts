@@ -13,21 +13,14 @@
  * que es lo que hoy funciona bien.
  */
 
+import { CAJA, type Punto } from '@/lib/punto';
+
+export type { Punto };
+
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 
 /** Nominatim pide identificarse. Si esto falta, contesta 403. */
 const USER_AGENT = 'EnviosDosRuedas/1.0 (+https://www.logisticadosruedas.com)';
-
-/**
- * Marco de Mar del Plata y alrededores, con margen.
- * Cualquier resultado afuera de esta caja es un error del buscador: se descarta.
- */
-const CAJA = { oeste: -58.1, sur: -38.25, este: -57.3, norte: -37.75 };
-
-export interface Punto {
-  lat: number;
-  lng: number;
-}
 
 /**
  * Separa "AV DORREGO 172 PLANTA YPF" en calle y altura.
@@ -117,6 +110,40 @@ export async function buscarPunto(
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
+ * Palabras que no nombran a nadie.
+ *
+ * "CALLE 20 Y CALLE 491" se partía como calle "CALLE", altura "20". Cinco
+ * letras, así que pasaba el filtro de las tres, y Nominatim contestaba con una
+ * "Calle 20" cualquiera —con número de puerta, que era el único control real
+ * que teníamos— a seis kilómetros del destino. El envío quedaba con un pin
+ * equivocado y, como pin tenía, tampoco figuraba entre los "sin ubicar": lo
+ * peor de los dos mundos.
+ *
+ * Sacando estas palabras queda el nombre de verdad. "AV COLÓN 2749" deja
+ * "colon" y se busca igual; "RUTA 88 KM 7" no deja nada y se descarta, que es
+ * lo correcto: un kilómetro de ruta no es una puerta.
+ */
+const GENERICAS =
+  /\b(calle|av|avda|avenida|ruta|camino|cno|diagonal|diag|barrio|manzana|mza|lote|km|esquina|esq|entre|casi|altura|sn)\b/g;
+
+function nombrePropio(calle: string): string {
+  return sinAcentos(calle)
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(GENERICAS, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/*
+ * Acá hubo un filtro de esquinas, que descartaba cualquier dirección con " y "
+ * en el medio. Duró lo que tardó en probarse contra las direcciones reales:
+ * "ARANA Y GOIRI 6008" es una calle de Mar del Plata, no una esquina, y se
+ * quedaba sin punto. Las esquinas de verdad ya caen solas: "20 y 491" no deja
+ * nombre propio, e "Independencia y Luro" no tiene altura.
+ */
+
+/**
  * Busca la dirección. Devuelve `null` cuando no hay una respuesta confiable.
  *
  * Prueba con la calle tal cual y, si no da, sin acentos.
@@ -131,9 +158,9 @@ export async function geocodificar(
   // Sin altura no hay nada que buscar: ver el comentario de `consultar`.
   if (!partes.altura) return null;
 
-  // "3", "S/N", un número suelto: no es una calle. Probado con datos reales,
+  // "3", "S/N", "CALLE": no nombran ninguna calle. Probado con datos reales,
   // una dirección así devolvía igual un punto, en cualquier lado.
-  if (partes.calle.replace(/[^a-zA-ZñÑ]/g, '').length < 3) return null;
+  if (nombrePropio(partes.calle).replace(/\s/g, '').length < 3) return null;
 
   return (
     (await consultar(partes.calle, partes.altura, ciudad)) ??

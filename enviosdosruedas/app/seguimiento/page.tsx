@@ -2,39 +2,27 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
-import ProofOfDelivery, { type TrackResult } from '@/components/ProofOfDelivery';
 import SiteFooter from '@/components/SiteFooter';
 
 export default function SeguimientoPage() {
+  const router = useRouter();
   const [code, setCode] = useState('');
-  const [data, setData] = useState<TrackResult | null>(null);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function buscar() {
+  /**
+   * Buscar es ir a `/seguimiento/CODIGO`, no traer el dato acá.
+   *
+   * Así el resultado queda en la dirección del navegador y se puede compartir
+   * o guardar en favoritos: es el mismo link que le pasás al cliente. La
+   * pantalla de destino se encarga también de los códigos que no existen.
+   */
+  function buscar() {
     const limpio = code.trim().toUpperCase();
     if (!limpio) return;
-
     setLoading(true);
-    setError('');
-    setData(null);
-
-    try {
-      const res = await fetch('/api/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: limpio }),
-      });
-      const json = await res.json();
-
-      if (!res.ok) setError(json.error ?? 'No pudimos consultar el envío.');
-      else setData(json as TrackResult);
-    } catch {
-      setError('No hay conexión. Revisá tu internet y probá de nuevo.');
-    } finally {
-      setLoading(false);
-    }
+    router.push(`/seguimiento/${encodeURIComponent(limpio)}`);
   }
 
   return (
@@ -73,30 +61,7 @@ export default function SeguimientoPage() {
               {loading ? 'Buscando…' : 'Buscar'}
             </button>
           </div>
-
-          {error && (
-            <p className="mt-4 rounded-xl bg-red-600 px-4 py-3 text-center text-base font-bold text-white">
-              {error}
-            </p>
-          )}
         </div>
-
-        {data && (
-          <div className="mt-6 space-y-4">
-            <ProofOfDelivery data={data} />
-
-            <button
-              onClick={() => {
-                setData(null);
-                setCode('');
-                setError('');
-              }}
-              className="w-full rounded-xl border-2 border-[var(--edr-yellow)] px-6 py-4 text-lg font-black hover:bg-[var(--edr-surface)]"
-            >
-              ← Buscar otro envío
-            </button>
-          </div>
-        )}
 
         {/* La web principal es donde se cotiza y se contrata: se promociona
             siempre, haya resultado o no. */}

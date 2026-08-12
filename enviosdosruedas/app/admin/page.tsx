@@ -10,6 +10,7 @@ import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
+import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import {
   money,
   shipmentCash,
@@ -339,6 +340,7 @@ export default function AdminPage() {
                     <CashCell shipment={s} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <CopyTrackLink trackingCode={s.tracking_code} className="mr-1" />
                     {HAS_PROOF.includes(s.status) && (
                       <button
                         onClick={() => setProof(s)}

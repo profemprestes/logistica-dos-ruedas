@@ -9,6 +9,7 @@ import {
   type ShipmentStatus,
 } from '@/lib/format';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
+import CopyTrackLink from '@/components/admin/CopyTrackLink';
 
 /**
  * El mismo envío que muestra la tabla, pero apilado para el teléfono.
@@ -117,6 +118,7 @@ export default function ShipmentMobileCard({
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">
+        <CopyTrackLink trackingCode={shipment.tracking_code} className="flex-1 py-2" />
         {hasProof && (
           <button
             onClick={() => onProof(shipment)}

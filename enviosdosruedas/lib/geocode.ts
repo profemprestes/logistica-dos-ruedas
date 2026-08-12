@@ -56,6 +56,63 @@ interface FilaNominatim {
   address?: { house_number?: string; road?: string };
 }
 
+/**
+ * Búsqueda libre, para que una persona verifique el punto antes de guardar.
+ *
+ * Es a propósito MÁS PERMISIVA que `geocodificar`: acepta cualquier texto
+ * ("YPF Dorrego", "Plaza Mitre") y no exige número de puerta. Puede hacerlo
+ * porque del otro lado hay alguien mirando el mapa: la regla estricta existe
+ * para cuando nadie mira, no para cuando sí.
+ *
+ * Devuelve también cómo entendió la dirección, que es lo que le permite al que
+ * carga darse cuenta de si el buscador se fue a cualquier lado.
+ */
+export async function buscarPunto(
+  texto: string,
+  ciudad: string,
+): Promise<(Punto & { etiqueta: string; exacta: boolean }) | null> {
+  const consulta = String(texto ?? '').trim();
+  if (consulta.length < 3) return null;
+
+  const params = new URLSearchParams({
+    q: `${consulta}, ${ciudad || 'Mar del Plata'}, Argentina`,
+    format: 'jsonv2',
+    addressdetails: '1',
+    limit: '1',
+    viewbox: `${CAJA.oeste},${CAJA.norte},${CAJA.este},${CAJA.sur}`,
+    bounded: '1',
+  });
+
+  try {
+    const res = await fetch(`${NOMINATIM}?${params}`, {
+      headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'es' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+
+    const filas = (await res.json()) as (FilaNominatim & { display_name?: string })[];
+    const fila = filas?.[0];
+    if (!fila) return null;
+
+    const lat = Number(fila.lat);
+    const lng = Number(fila.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < CAJA.sur || lat > CAJA.norte || lng < CAJA.oeste || lng > CAJA.este) return null;
+
+    return {
+      lat,
+      lng,
+      etiqueta: fila.display_name ?? consulta,
+      // Sin número de puerta el punto cae en algún lugar de la calle. Se avisa
+      // en pantalla: leyendo sólo la etiqueta no se nota, y en una avenida
+      // larga la diferencia son kilómetros.
+      exacta: Boolean(fila.address?.house_number),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Saca acentos: en OSM "González Chaves" figura sin ellos la mitad de las veces. */
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 

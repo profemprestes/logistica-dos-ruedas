@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { geocodificar } from '@/lib/geocode';
+import { buscarPunto, geocodificar } from '@/lib/geocode';
 
 /**
  * Le pone coordenadas a los envíos que no las tienen.
@@ -76,7 +76,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Solo un administrador.' }, { status: 403 });
   }
 
-  const { ids } = (await request.json().catch(() => ({}))) as { ids?: number[] };
+  const { ids, consulta, ciudad } = (await request.json().catch(() => ({}))) as {
+    ids?: number[];
+    consulta?: string;
+    ciudad?: string;
+  };
+
+  // Modo verificación: busca y devuelve el punto sin guardar nada. Lo usa el
+  // formulario para que el que carga lo vea en el mapa antes de confirmar.
+  if (consulta) {
+    const punto = await buscarPunto(consulta, ciudad ?? 'Mar del Plata');
+    return NextResponse.json({ punto });
+  }
 
   // Sólo los que no tienen punto: geocodificar dos veces lo mismo es gastar
   // el cupo de Nominatim al pedo.

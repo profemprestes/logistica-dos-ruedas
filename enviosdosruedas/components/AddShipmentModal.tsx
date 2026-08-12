@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
+import VerificarPunto from '@/components/admin/VerificarPunto';
 
 type Mode = 'manual' | 'pegar';
 
@@ -59,6 +60,9 @@ const emptyForm = () => ({
   merchandise_amount: 0,
   amount_to_collect: 0,
   scheduled_date: new Date().toISOString().slice(0, 10),
+  /** Punto confirmado a mano en el mapa. Null = que lo busque el servidor. */
+  lat: null as number | null,
+  lng: null as number | null,
 });
 
 type FormState = ReturnType<typeof emptyForm>;
@@ -105,6 +109,8 @@ function formFromShipment(s: Shipment): FormState {
     merchandise_amount: Number(s.merchandise_amount),
     amount_to_collect: Number(s.amount_to_collect ?? 0),
     scheduled_date: s.scheduled_date,
+    lat: s.lat ?? null,
+    lng: s.lng ?? null,
   };
 }
 
@@ -181,25 +187,32 @@ function ShipmentForm({
       amount_to_collect:
         form.payment_mode === 'cobrar_destinatario' ? Number(form.amount_to_collect) || 0 : 0,
     };
-    // Al editar se pide de nuevo el punto sólo si cambió la dirección: si no,
-    // sería gastar el cupo de Nominatim para llegar al mismo lugar.
+    /**
+     * Si confirmaste el punto en el mapa, manda el tuyo y no se busca nada.
+     * Vos viste dónde cae; el buscador automático, no.
+     */
+    const puntoManual = form.lat != null && form.lng != null;
+
+    // Sin punto manual, sólo se vuelve a buscar cuando cambió la dirección: si
+    // no, sería gastar el cupo de Nominatim para llegar al mismo lugar.
     const cambioDireccion =
       !editing ||
       editing.address_street !== payload.address_street ||
       editing.city !== payload.city;
 
+    const aGuardar =
+      !puntoManual && cambioDireccion ? { ...payload, lat: null, lng: null } : payload;
+
     const { data: guardado, error: dbError } = editing
-      ? await supabase
-          .from('shipments')
-          .update(cambioDireccion ? { ...payload, lat: null, lng: null } : payload)
-          .eq('id', editing.id)
-          .select('id')
-      : await supabase.from('shipments').insert(payload).select('id');
+      ? await supabase.from('shipments').update(aGuardar).eq('id', editing.id).select('id')
+      : await supabase.from('shipments').insert(aGuardar).select('id');
 
     setSaving(false);
     if (dbError) return setError(dbError.message);
 
-    if (cambioDireccion) void ubicarEnElMapa((guardado ?? []).map((s) => s.id));
+    if (!puntoManual && cambioDireccion) {
+      void ubicarEnElMapa((guardado ?? []).map((s) => s.id));
+    }
 
     onSaved();
     onClose();
@@ -317,8 +330,20 @@ function ShipmentForm({
               <Field label="Teléfono">
                 <input className={field} value={form.recipient_phone} onChange={(e) => set('recipient_phone', e.target.value)} />
               </Field>
-              <Field label="Dirección de entrega *">
+              <Field label="Dirección de entrega *" className="sm:col-span-2">
                 <input className={field} value={form.address_street} onChange={(e) => set('address_street', e.target.value)} placeholder="Alberti 2791" />
+                <div className="mt-1.5">
+                  <VerificarPunto
+                    direccion={form.address_street}
+                    ciudad={form.city}
+                    lat={form.lat}
+                    lng={form.lng}
+                    onPunto={(p) => {
+                      set('lat', p?.lat ?? null);
+                      set('lng', p?.lng ?? null);
+                    }}
+                  />
+                </div>
               </Field>
               <Field label="Piso / depto">
                 <input className={field} value={form.address_extra} onChange={(e) => set('address_extra', e.target.value)} />

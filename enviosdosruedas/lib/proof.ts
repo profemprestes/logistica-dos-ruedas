@@ -14,6 +14,8 @@ export interface ProofLog {
   failure_reason: string | null;
   comment: string | null;
   photo_path: string | null;
+  /** Segunda foto, opcional. Desde el paso 18. */
+  photo_path_2: string | null;
   lat: number | null;
   lng: number | null;
   gps_accuracy: number | null;
@@ -50,11 +52,20 @@ export async function signedPhotoUrl(path: string, segundos = 3600): Promise<str
   return data?.signedUrl ?? null;
 }
 
+/** Las fotos de un movimiento, en orden. Pueden ser cero, una o dos. */
+export function photoPaths(log: ProofLog): string[] {
+  return [log.photo_path, log.photo_path_2].filter((p): p is string => Boolean(p));
+}
+
 /** `EDR-1234-entregado-2026-08-10.jpg`, para que el archivo se entienda solo. */
-export function photoFileName(trackingCode: string, log: ProofLog): string {
+export function photoFileName(trackingCode: string, log: ProofLog, indice = 0): string {
   const fecha = log.happened_at.slice(0, 10);
-  const ext = (log.photo_path?.split('.').pop() ?? 'jpg').split('?')[0].toLowerCase();
-  return `${trackingCode}-${log.event}-${fecha}.${ext}`;
+  const path = photoPaths(log)[indice];
+  const ext = (path?.split('.').pop() ?? 'jpg').split('?')[0].toLowerCase();
+  // La primera se sigue llamando como siempre: los archivos ya bajados no
+  // tienen por qué dejar de coincidir con los nuevos.
+  const sufijo = indice > 0 ? `-${indice + 1}` : '';
+  return `${trackingCode}-${log.event}-${fecha}${sufijo}.${ext}`;
 }
 
 /**

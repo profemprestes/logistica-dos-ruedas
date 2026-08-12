@@ -27,8 +27,17 @@ export interface PendingDelivery {
   accuracy: number | null;
   /** Momento real de la entrega, no el de la sincronización. */
   happenedAt: string;
-  /** Los FLEX no llevan comprobante: va en null. */
-  photo: Blob | null;
+  /** Una foto obligatoria y una segunda opcional. Nunca más de dos. */
+  photos: Blob[];
+  /**
+   * Cómo se guardaba la foto antes del paso 18: una sola, o `null` en los FLEX.
+   *
+   * Queda leído —nunca escrito— porque en el celular de un repartidor puede
+   * haber entregas encoladas de la versión anterior esperando señal. Si el
+   * campo nuevo no está, la foto vieja sigue estando acá y hay que subirla
+   * igual: es la única copia del comprobante.
+   */
+  photo?: Blob | null;
   tries: number;
   lastError: string | null;
   /**
@@ -72,6 +81,19 @@ function getDB() {
 }
 
 /* ------------------------------------------------------------ cola de envíos */
+
+/**
+ * Las fotos de una entrega encolada, venga del formato nuevo o del viejo.
+ *
+ * `photos` puede faltar de verdad aunque el tipo lo dé por seguro: los registros
+ * que ya estaban en IndexedDB cuando el repartidor actualizó la app se
+ * guardaron con el campo `photo`, en singular.
+ */
+export function pendingPhotos(item: PendingDelivery): Blob[] {
+  const nuevas = item.photos as Blob[] | undefined;
+  if (nuevas?.length) return nuevas;
+  return item.photo ? [item.photo] : [];
+}
 
 export async function queueDelivery(item: PendingDelivery): Promise<void> {
   const db = await getDB();

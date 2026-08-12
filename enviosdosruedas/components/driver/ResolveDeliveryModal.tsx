@@ -40,7 +40,7 @@ export default function ResolveDeliveryModal({
   const [receiverDni, setReceiverDni] = useState('');
   const [comment, setComment] = useState('');
   const [reason, setReason] = useState('');
-  const [photo, setPhoto] = useState<Blob | null>(null);
+  const [photos, setPhotos] = useState<Blob[]>([]);
   const [fix, setFix] = useState<Fix | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -62,14 +62,20 @@ export default function ResolveDeliveryModal({
   const flex = Boolean(shipment.is_flex);
 
   /**
-   * Un FLEX entregado no pide nada: la constancia la genera la app de Mercado
-   * Libre. Acá sólo dejamos registro de que lo entregó, con hora y ubicación.
-   * Si NO se entregó sí pedimos foto, que es la única prueba que nos queda.
+   * Un FLEX entregado no pide nombre ni DNI: esos datos los toma la app de
+   * Mercado Libre. La foto sí, y desde el paso 18 es obligatoria igual que en
+   * cualquier otro envío: es la única prueba que queda de nuestro lado si
+   * después el comercio reclama que el paquete no llegó.
    */
-  const soloRegistro = flex && entregado;
+  const flexEntregado = flex && entregado;
 
   async function submit() {
-    if (!soloRegistro && !photo) return setError('Falta la foto del comprobante.');
+    if (photos.length === 0)
+      return setError(
+        flexEntregado
+          ? 'Falta la foto del paquete con la fachada de fondo.'
+          : 'Falta la foto del comprobante.',
+      );
     if (entregado && !flex && !receiverName.trim())
       return setError('Poné el nombre de quien recibe.');
     if (entregado && !flex && !receiverDni.trim()) return setError('Poné el DNI de quien recibe.');
@@ -97,7 +103,7 @@ export default function ResolveDeliveryModal({
         lng: position?.lng ?? null,
         accuracy: position?.accuracy ?? null,
         happenedAt: new Date().toISOString(),
-        photo,
+        photos,
         tries: 0,
         lastError: null,
       });
@@ -174,15 +180,16 @@ export default function ResolveDeliveryModal({
           </div>
         )}
 
-        {soloRegistro ? (
-          <div className="rounded-2xl border-4 border-black bg-[var(--edr-yellow)] text-black px-4 py-5 text-center text-black">
+        {flexEntregado ? (
+          <div className="rounded-2xl border-4 border-black bg-[var(--edr-yellow)] px-4 py-5 text-center text-black">
             <div className="text-3xl font-black leading-none">ENVÍO FLEX</div>
             <div className="mt-2 text-lg font-black leading-tight">
               COMPLETAR EN LA APP DE ENVÍOS FLEX
             </div>
             <p className="mt-3 text-sm font-bold leading-snug">
               Cerrá la entrega en la app de Envíos Flex y recién después confirmá acá.
-              No hace falta foto ni datos: sólo queda registrada la hora y el lugar.
+              No hacen falta nombre ni DNI, pero la foto sí: sacá el paquete con la
+              fachada de fondo.
             </p>
           </div>
         ) : entregado ? (
@@ -258,12 +265,18 @@ export default function ResolveDeliveryModal({
           </div>
         </div>
 
-        {!soloRegistro && (
-          <div>
-            <label className={labelCls}>Comprobante *</label>
-            <PhotoInput photo={photo} onPhoto={setPhoto} />
-          </div>
-        )}
+        <div>
+          <label className={labelCls}>
+            {flexEntregado ? 'Foto del paquete con la fachada de fondo *' : 'Comprobante *'}
+          </label>
+          <PhotoInput
+            photos={photos}
+            onPhotos={setPhotos}
+            etiquetaPrimera={
+              flexEntregado ? '📷 Sacar foto del paquete y la fachada' : '📷 Sacar foto (obligatoria)'
+            }
+          />
+        </div>
 
         <p className="text-center text-sm font-semibold text-[var(--edr-muted)]">
           {fix
@@ -286,13 +299,7 @@ export default function ResolveDeliveryModal({
             entregado ? 'bg-emerald-600' : 'bg-orange-600'
           }`}
         >
-          {saving
-            ? 'Guardando…'
-            : soloRegistro
-              ? 'Ya lo cerré en Envíos Flex'
-              : entregado
-                ? 'Confirmar entrega'
-                : 'Confirmar no entregado'}
+          {saving ? 'Guardando…' : entregado ? 'Confirmar entrega' : 'Confirmar no entregado'}
         </button>
       </div>
     </div>

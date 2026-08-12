@@ -10,10 +10,14 @@ import {
   fechaHora,
   photoAsDataUrl,
   photoFileName,
+  photoPaths,
   saveBlob,
   signedPhotoUrl,
   type ProofLog,
 } from '@/lib/proof';
+
+/** Una entrega puede tener dos fotos: la clave lleva cuál de las dos es. */
+const fotoKey = (logId: string, indice: number) => `${logId}:${indice}`;
 
 export default function ProofOfDeliveryModal({
   shipment,
@@ -58,9 +62,13 @@ export default function ProofOfDeliveryModal({
       setLoading(false);
 
       // Las fotos están en un bucket privado: hay que pedir un link temporal.
-      for (const log of list.filter((l) => l.photo_path)) {
-        const url = await signedPhotoUrl(log.photo_path as string);
-        if (alive && url) setPhotos((p) => ({ ...p, [log.id]: url }));
+      for (const log of list) {
+        const paths = photoPaths(log);
+        for (let i = 0; i < paths.length; i++) {
+          const url = await signedPhotoUrl(paths[i]);
+          if (!alive) return;
+          if (url) setPhotos((p) => ({ ...p, [fotoKey(log.id, i)]: url }));
+        }
       }
     })();
 
@@ -76,12 +84,13 @@ export default function ProofOfDeliveryModal({
     setTimeout(() => setNotice(''), 4000);
   };
 
-  async function bajarFoto(log: ProofLog) {
-    if (!log.photo_path || !shipment) return;
-    setBajando(log.id);
+  async function bajarFoto(log: ProofLog, indice: number) {
+    const path = photoPaths(log)[indice];
+    if (!path || !shipment) return;
+    setBajando(fotoKey(log.id, indice));
     setError('');
     try {
-      await downloadPhoto(log.photo_path, photoFileName(shipment.tracking_code, log));
+      await downloadPhoto(path, photoFileName(shipment.tracking_code, log, indice));
       avisar('Foto descargada.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo bajar la foto.');
@@ -133,10 +142,14 @@ export default function ProofOfDeliveryModal({
       ]);
 
       // Las fotos van embebidas: el link firmado vence en una hora y el PDF no.
-      const fotos: Record<string, string> = {};
-      for (const log of logs.filter((l) => l.photo_path)) {
-        const dataUrl = await photoAsDataUrl(log.photo_path as string);
-        if (dataUrl) fotos[log.id] = dataUrl;
+      const fotos: Record<string, string[]> = {};
+      for (const log of logs) {
+        const urls: string[] = [];
+        for (const path of photoPaths(log)) {
+          const dataUrl = await photoAsDataUrl(path);
+          if (dataUrl) urls.push(dataUrl);
+        }
+        if (urls.length > 0) fotos[log.id] = urls;
       }
 
       const blob = await pdf(
@@ -215,6 +228,7 @@ export default function ProofOfDeliveryModal({
           <div className="space-y-4">
             {logs.map((log) => {
               const isFailure = log.event === 'no_entregado';
+              const paths = photoPaths(log);
               return (
                 <div
                   key={log.id}
@@ -251,37 +265,53 @@ export default function ProofOfDeliveryModal({
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
-                    {/* Foto */}
-                    <div>
-                      {log.photo_path ? (
-                        photos[log.id] ? (
-                          <>
-                            <a href={photos[log.id]} target="_blank" rel="noreferrer">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={photos[log.id]}
-                                alt="Comprobante"
-                                className="w-full rounded border border-[var(--edr-border)] object-cover"
-                              />
-                            </a>
-                            <button
-                              onClick={() => bajarFoto(log)}
-                              disabled={bajando === log.id}
-                              className="mt-1 w-full rounded border border-[var(--edr-border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
-                            >
-                              {bajando === log.id ? 'Bajando…' : '⬇ Bajar foto'}
-                            </button>
-                          </>
-                        ) : (
-                          <div className="flex h-32 items-center justify-center rounded border border-dashed border-[var(--edr-border)] text-xs text-[var(--edr-muted)]">
-                            Cargando foto…
-                          </div>
-                        )
-                      ) : (
+                    {/* Fotos: una obligatoria y, si el repartidor la sacó, una segunda. */}
+                    <div className="space-y-3">
+                      {paths.length === 0 && (
                         <div className="flex h-32 items-center justify-center rounded border border-dashed border-[var(--edr-border)] text-xs text-[var(--edr-muted)]">
                           Sin foto
                         </div>
                       )}
+
+                      {paths.map((_, i) => {
+                        const url = photos[fotoKey(log.id, i)];
+                        const cargando = bajando === fotoKey(log.id, i);
+
+                        if (!url) {
+                          return (
+                            <div
+                              key={i}
+                              className="flex h-32 items-center justify-center rounded border border-dashed border-[var(--edr-border)] text-xs text-[var(--edr-muted)]"
+                            >
+                              Cargando foto…
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={i}>
+                            <a href={url} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt={`Comprobante ${i + 1}`}
+                                className="w-full rounded border border-[var(--edr-border)] object-cover"
+                              />
+                            </a>
+                            <button
+                              onClick={() => bajarFoto(log, i)}
+                              disabled={cargando}
+                              className="mt-1 w-full rounded border border-[var(--edr-border)] px-2 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
+                            >
+                              {cargando
+                                ? 'Bajando…'
+                                : paths.length > 1
+                                  ? `⬇ Bajar foto ${i + 1}`
+                                  : '⬇ Bajar foto'}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Datos */}

@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   pruebaCuerpo: { flexDirection: 'row' },
+  fotos: { width: 150, marginRight: 10 },
   foto: {
     width: 150,
     height: 150,
@@ -118,7 +119,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 0.7,
     borderColor: LINEA,
-    marginRight: 10,
+  },
+  /** Con dos fotos van una arriba de la otra, sin pasarse del alto del bloque. */
+  fotoDoble: {
+    width: 150,
+    height: 104,
+    objectFit: 'cover',
+    borderRadius: 4,
+    borderWidth: 0.7,
+    borderColor: LINEA,
+    marginBottom: 4,
   },
   sinFoto: {
     width: 150,
@@ -154,8 +164,11 @@ const styles = StyleSheet.create({
 export interface ProofPdfProps {
   shipment: Shipment;
   logs: ProofLog[];
-  /** Foto de cada movimiento, ya embebida como data URL (id del log -> imagen). */
-  fotos: Record<string, string>;
+  /**
+   * Fotos de cada movimiento, ya embebidas como data URL
+   * (id del log -> una o dos imágenes).
+   */
+  fotos: Record<string, string[]>;
   /** Cuándo se generó el papel, para que se sepa qué tan fresco es. */
   generadoEl: Date;
   /**
@@ -262,6 +275,7 @@ export default function ProofPdfDocument({
 
         {intentos.map((log) => {
           const fallido = log.event === 'no_entregado';
+          const imagenes = fotos[log.id] ?? [];
           return (
             <View key={log.id} style={styles.prueba} wrap={false}>
               <View style={styles.pruebaCabecera}>
@@ -278,9 +292,17 @@ export default function ProofPdfDocument({
               </View>
 
               <View style={styles.pruebaCuerpo}>
-                {fotos[log.id] ? (
-                  // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf no acepta alt
-                  <Image style={styles.foto} src={fotos[log.id]} />
+                {imagenes.length > 0 ? (
+                  <View style={styles.fotos}>
+                    {imagenes.map((src, i) => (
+                      // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf no acepta alt
+                      <Image
+                        key={i}
+                        style={imagenes.length > 1 ? styles.fotoDoble : styles.foto}
+                        src={src}
+                      />
+                    ))}
+                  </View>
                 ) : (
                   <View style={styles.sinFoto}>
                     <Text style={{ fontSize: 8, color: GRIS }}>Sin foto</Text>

@@ -17,6 +17,7 @@ import {
   listSendable,
   markPendingBlocked,
   markPendingError,
+  pendingPhotos,
   type PendingDelivery,
 } from '@/lib/driver/db';
 import { errorText, isPermanentError } from '@/lib/driver/errors';
@@ -132,21 +133,24 @@ export async function flushPending(): Promise<SyncOutcome> {
 }
 
 async function pushOne(item: PendingDelivery): Promise<void> {
-  // Los FLEX no llevan comprobante: se cierran en la app de Mercado Libre y acá
-  // sólo queda el registro con la ubicación. Sin foto no hay nada que subir.
-  let path: string | null = null;
+  // Hasta dos fotos. La ruta se arma con el número de foto, así el reintento
+  // pisa exactamente la misma (upsert) y no quedan copias sueltas en el bucket.
+  const fotos = pendingPhotos(item);
+  const paths: string[] = [];
 
-  if (item.photo) {
-    path = `${item.shipmentId}/${item.clientEventId}.jpg`;
+  for (let i = 0; i < fotos.length; i++) {
+    const path = `${item.shipmentId}/${item.clientEventId}${i > 0 ? `-${i + 1}` : ''}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(path, item.photo, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, fotos[i], { contentType: 'image/jpeg', upsert: true });
 
     if (uploadError) {
       console.error('[sync] falló la subida de la foto', { path, uploadError });
       throw uploadError;
     }
+
+    paths.push(path);
   }
 
   const { error: rpcError } = await supabase.rpc('resolve_delivery', {
@@ -160,7 +164,8 @@ async function pushOne(item: PendingDelivery): Promise<void> {
     p_lat: item.lat,
     p_lng: item.lng,
     p_accuracy_m: item.accuracy,
-    p_photo_path: path,
+    p_photo_path: paths[0] ?? null,
+    p_photo_path_2: paths[1] ?? null,
     // Las entregas que quedaron en la cola de antes del paso 15 no traen el
     // campo: `?? null` evita que salgan como "undefined" al servidor.
     p_comment: item.comment ?? null,

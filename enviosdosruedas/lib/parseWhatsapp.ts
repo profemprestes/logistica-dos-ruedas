@@ -67,6 +67,27 @@ function clean(s: string): string {
 
 const hhmm = (h: string, m?: string) => (m ? `${h}:${m}` : `${h}`);
 
+/**
+ * Saca las marcas de formato de WhatsApp: *negrita*, _cursiva_, ~tachado~, `mono`.
+ *
+ * ¡OJO CON EL ASTERISCO! Es la misma marca que se usa para las viñetas, y ahí
+ * estaba el bug: `*TOYPIOLA*` (el comercio en negrita) entraba por la regla de
+ * "línea que empieza con *" y se leía como una entrega. El comercio se perdía y
+ * todo lo de abajo salía mal.
+ *
+ * Por eso se sacan sólo los asteriscos DE A PARES y sin espacio adentro, que es
+ * como los escribe WhatsApp. Una viñeta de verdad ("* Alberti 2791") no tiene
+ * el asterisco de cierre, así que no se toca y se sigue detectando como entrega.
+ */
+function sinFormatoWhatsapp(texto: string): string {
+  return texto
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1')
+    .replace(/~([^~\n]+)~/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .trim();
+}
+
 /* ---------------------------------------------------------------- regexes */
 
 const RE_RANGE =
@@ -167,8 +188,17 @@ export function parseWhatsappText(
   let client = '';
   let pickupAddress = '';
   let pickupNotes = '';
+  /**
+   * FLEX declarado arriba, en la línea de RETIRA, y no en cada entrega.
+   * Hay comercios que lo escriben una sola vez para toda la tanda.
+   */
+  let flexDelComercio = false;
 
-  for (const original of lines) {
+  for (const crudo of lines) {
+    // El formato se saca ANTES de mirar si es viñeta: si no, el comercio en
+    // negrita (`*TOYPIOLA*`) pasa por línea de entrega y se pierde.
+    const original = sinFormatoWhatsapp(crudo);
+
     const isDeliveryLine = /^[-•*·]/.test(original);
     let line = original.replace(/^[-•*·]\s*/, '').trim();
 
@@ -180,12 +210,16 @@ export function parseWhatsappText(
       );
       pickupAddress = previous?.pickupAddress ?? '';
       pickupNotes = previous?.pickupNotes ?? '';
+      // Otro comercio, otra tanda: lo del anterior no se arrastra.
+      flexDelComercio = false;
       continue;
     }
 
     // ---------- Línea de retiro suelta ----------
     if (!isDeliveryLine && /^retira/i.test(line)) {
-      let rest = line.replace(/^retira\s*/i, ' ');
+      // "RETIRA EN INDEPENDENCIA 2684 (FLEX)": vale para todo lo que sigue.
+      if (RE_FLAG_FLEX.test(line)) flexDelComercio = true;
+      let rest = line.replace(/\(([^)]*flex[^)]*)\)/gi, ' ').replace(/^retira\s*/i, ' ');
       const w = takeWindow(rest);
       rest = w.rest.replace(/^\s*en\s+/i, ' ').replace(/\s+en\s+/i, ' ');
       const addr = takeAddress(rest);
@@ -216,7 +250,7 @@ export function parseWhatsappText(
     });
 
     const flagText = flags.join(' ');
-    const isReminder = RE_FLAG_FLEX.test(flagText) || RE_FLAG_FLEX.test(line);
+    const isReminder = flexDelComercio || RE_FLAG_FLEX.test(flagText) || RE_FLAG_FLEX.test(line);
     if (isReminder) line = line.replace(/\bflex\b/gi, ' ');
 
     // Producto y contacto del destinatario

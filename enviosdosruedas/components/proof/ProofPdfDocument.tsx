@@ -271,7 +271,10 @@ export default function ProofPdfDocument({
                 <Text style={{ fontSize: 8, color: GRIS, marginLeft: 8 }}>
                   {fechaHora(log.happened_at)}
                 </Text>
-                {log.driver?.full_name && <Text style={styles.pastilla}>{log.driver.full_name}</Text>}
+                {/* Ni el nombre del repartidor ni cómo se sincronizó: este papel
+                    va al comercio y a su cliente, y quién manejó la moto o si el
+                    celular tenía señal es asunto interno nuestro. Los dos datos
+                    siguen estando en el panel. */}
               </View>
 
               <View style={styles.pruebaCuerpo}>
@@ -317,11 +320,6 @@ export default function ProofPdfDocument({
                     }
                   />
 
-                  {log.synced_offline && (
-                    <Text style={{ fontSize: 7, color: GRIS, marginTop: 3 }}>
-                      Registrado sin señal y subido el {fechaHora(log.created_at)}.
-                    </Text>
-                  )}
                 </View>
               </View>
             </View>

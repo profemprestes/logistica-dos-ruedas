@@ -43,7 +43,7 @@ export default function MiniMapa({
         className="w-full rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface-2)]"
       />
       <p className="mt-1 text-center text-xs font-semibold text-[var(--edr-muted)]">
-        Referencia aproximada · para navegar usá &ldquo;Cómo llegar&rdquo;
+        Referencia aproximada · para navegar usá &ldquo;Cómo llegar a destino&rdquo;
       </p>
     </div>
   );

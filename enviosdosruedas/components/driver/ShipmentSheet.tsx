@@ -156,7 +156,7 @@ export default function ShipmentSheet({
             rel="noreferrer"
             className="col-span-2 rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-4 text-center text-lg font-black"
           >
-            🗺️ Cómo llegar
+            🗺️ Cómo llegar a destino
           </a>
         </div>
       </div>

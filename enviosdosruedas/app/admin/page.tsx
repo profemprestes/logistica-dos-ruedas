@@ -11,6 +11,8 @@ import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
+import { hoyLocal } from '@/lib/scheduled';
+import { dayShift } from '@/lib/settlement';
 import {
   money,
   shipmentCash,
@@ -25,16 +27,59 @@ interface Driver {
   full_name: string;
 }
 
+const campo =
+  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]';
+const labelCls =
+  'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
+
+/** Un número del resumen del período. */
+function Contador({ label, valor, clase = '' }: { label: string; valor: number; clase?: string }) {
+  return (
+    <span className="text-xs text-[var(--edr-muted)]">
+      <span className={`edr-mono text-base font-black ${clase}`}>{valor}</span> {label}
+    </span>
+  );
+}
+
 /** Estados en los que ya existe una prueba de entrega para mirar */
 const HAS_PROOF: ShipmentStatus[] = ['entregado', 'pendiente_entrega'];
 
-/** Consultas sueltas, sin estado adentro: se pueden disparar desde un efecto. */
-function fetchShipments() {
-  return supabase
-    .from('shipments')
-    .select('*, driver:assigned_driver(full_name)')
-    .order('id', { ascending: false })
-    .limit(300);
+/** Mismo criterio que en Estadísticas: los atajos sólo completan las fechas. */
+const ATAJOS = [
+  { label: 'Hoy', desde: 0, hasta: 0 },
+  { label: 'Mañana', desde: 1, hasta: 1 },
+  { label: 'Ayer', desde: -1, hasta: -1 },
+  { label: 'Últimos 7 días', desde: -6, hasta: 0 },
+] as const;
+
+interface Filtros {
+  desde: string;
+  hasta: string;
+  /** '' = todos · 'sin_asignar' = los que todavía no tienen repartidor. */
+  driver: string;
+  /** Con texto se busca en TODAS las fechas: ver más abajo por qué. */
+  search: string;
+}
+
+/**
+ * Consulta suelta, sin estado adentro: se puede disparar desde un efecto.
+ *
+ * Cuando hay algo escrito en el buscador se ignoran las fechas y se busca en
+ * todo. Si no, buscar un código que resultó ser de la semana pasada no
+ * devolvería nada y parecería que el envío no existe.
+ */
+function fetchShipments(f: Filtros) {
+  let q = supabase.from('shipments').select('*, driver:assigned_driver(full_name)');
+
+  if (!f.search.trim()) {
+    const [a, b] = f.desde <= f.hasta ? [f.desde, f.hasta] : [f.hasta, f.desde];
+    q = q.gte('scheduled_date', a).lte('scheduled_date', b);
+  }
+
+  if (f.driver === 'sin_asignar') q = q.is('assigned_driver', null);
+  else if (f.driver) q = q.eq('assigned_driver', f.driver);
+
+  return q.order('id', { ascending: false }).limit(300);
 }
 
 function fetchDrivers() {
@@ -52,6 +97,11 @@ export default function AdminPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  /** Lo que realmente se le pide al servidor: se aplica al soltar el teclado. */
+  const [searchAplicada, setSearchAplicada] = useState('');
+  const [desde, setDesde] = useState(() => hoyLocal());
+  const [hasta, setHasta] = useState(() => hoyLocal());
+  const [driverFilter, setDriverFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | ShipmentStatus>('todos');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shipment | null>(null);
@@ -71,25 +121,40 @@ export default function AdminPage() {
   /** Refresco a mano, después de guardar, borrar o cambiar un envío. */
   const load = useCallback(() => {
     setLoading(true);
-    return fetchShipments().then(applyShipments);
-  }, [applyShipments]);
+    return fetchShipments({ desde, hasta, driver: driverFilter, search: searchAplicada }).then(
+      applyShipments,
+    );
+  }, [applyShipments, desde, hasta, driverFilter, searchAplicada]);
 
-  // Primera carga: el spinner ya arranca prendido, sólo hay que pedir los datos.
+  // Se espera a que deje de tipear: si no, cada tecla dispara una consulta.
+  useEffect(() => {
+    const t = setTimeout(() => setSearchAplicada(search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
 
-    fetchShipments().then((res) => {
+    fetchShipments({ desde, hasta, driver: driverFilter, search: searchAplicada }).then((res) => {
       if (!cancelled) applyShipments(res);
-    });
-    fetchDrivers().then(({ data }) => {
-      if (!cancelled) setDrivers((data ?? []) as Driver[]);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [ready, applyShipments]);
+  }, [ready, desde, hasta, driverFilter, searchAplicada, applyShipments]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    fetchDrivers().then(({ data }) => {
+      if (!cancelled) setDrivers((data ?? []) as Driver[]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready]);
 
   async function remove(s: Shipment) {
     // Borrar un envío que ya está en la calle deja al repartidor con una entrega
@@ -174,6 +239,27 @@ export default function AdminPage() {
     { puerta: 0, retiro: 0 },
   );
 
+  /** Cómo viene el período: lo primero que se mira al abrir el panel. */
+  const resumen = {
+    total: visible.length,
+    entregados: visible.filter((s) => s.status === 'entregado').length,
+    fallidos: visible.filter((s) => s.status === 'pendiente_entrega').length,
+    enCalle: visible.filter((s) => s.status === 'retirado' || s.status === 'en_camino').length,
+    sinSalir: visible.filter((s) => s.status === 'creado' || s.status === 'pendiente_retiro').length,
+  };
+
+  const buscando = Boolean(search.trim());
+  const periodo =
+    desde === hasta
+      ? desde === hoyLocal()
+        ? 'Hoy'
+        : desde.split('-').reverse().slice(0, 2).join('/')
+      : `${desde.split('-').reverse().slice(0, 2).join('/')} al ${hasta
+          .split('-')
+          .reverse()
+          .slice(0, 2)
+          .join('/')}`;
+
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
   return (
@@ -223,6 +309,103 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* ---------- Qué día y de quién ---------- */}
+        <section className="mb-4 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-3 sm:p-4">
+          <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+            <div>
+              <label className={labelCls}>Desde</label>
+              <input
+                type="date"
+                value={desde}
+                onChange={(e) => {
+                  setLoading(true);
+                  setDesde(e.target.value);
+                  if (e.target.value > hasta) setHasta(e.target.value);
+                }}
+                className={campo}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Hasta</label>
+              <input
+                type="date"
+                value={hasta}
+                min={desde}
+                onChange={(e) => {
+                  setLoading(true);
+                  setHasta(e.target.value);
+                }}
+                className={campo}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {ATAJOS.map((a) => {
+                const d = dayShift(hoyLocal(), a.desde);
+                const h = dayShift(hoyLocal(), a.hasta);
+                const activo = desde === d && hasta === h;
+                return (
+                  <button
+                    key={a.label}
+                    onClick={() => {
+                      setLoading(true);
+                      setDesde(d);
+                      setHasta(h);
+                    }}
+                    className={`rounded px-3 py-2 text-xs font-black ${
+                      activo
+                        ? 'bg-[var(--edr-yellow)] text-black'
+                        : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="min-w-[180px] flex-1 sm:flex-none">
+              <label className={labelCls}>Repartidor</label>
+              <select
+                value={driverFilter}
+                onChange={(e) => {
+                  setLoading(true);
+                  setDriverFilter(e.target.value);
+                }}
+                className={`${campo} w-full`}
+              >
+                <option value="">Todos los repartidores</option>
+                <option value="sin_asignar">Sin asignar</option>
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* ---------- Cómo viene el día ---------- */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--edr-border)] pt-3 text-sm">
+            <span className="font-black">
+              {buscando ? `Resultados de "${search.trim()}"` : periodo}
+            </span>
+            {buscando ? (
+              <span className="text-xs text-[var(--edr-muted)]">
+                Buscando en todas las fechas. Borrá el texto para volver al período.
+              </span>
+            ) : (
+              <>
+                <Contador label="envíos" valor={resumen.total} />
+                <Contador label="entregados" valor={resumen.entregados} clase="text-emerald-400" />
+                <Contador label="en la calle" valor={resumen.enCalle} clase="text-sky-300" />
+                <Contador label="sin salir" valor={resumen.sinSalir} />
+                <Contador label="no entregados" valor={resumen.fallidos} clase="text-orange-400" />
+              </>
+            )}
+          </div>
+        </section>
+
         {error && (
           <div className="mb-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
             {error}
@@ -238,7 +421,11 @@ export default function AdminPage() {
           )}
           {!loading && visible.length === 0 && (
             <p className="py-10 text-center text-sm text-[var(--edr-muted)]">
-              No hay envíos que coincidan. Cargá el primero con “+ Nuevo envío”.
+              {buscando
+                      ? `Ningún envío coincide con "${search.trim()}".`
+                      : driverFilter
+                        ? `Ese repartidor no tiene envíos en ${periodo.toLowerCase()}.`
+                        : `No hay envíos para ${periodo.toLowerCase()}. Probá otra fecha o cargá el primero con “+ Nuevo envío”.`}
             </p>
           )}
           {visible.map((s) => (
@@ -247,6 +434,7 @@ export default function AdminPage() {
               shipment={s}
               drivers={drivers}
               hasProof={HAS_PROOF.includes(s.status)}
+              mostrarFecha={buscando || desde !== hasta}
               onProof={setProof}
               onEdit={(x) => {
                 setEditing(x);
@@ -285,7 +473,11 @@ export default function AdminPage() {
               {!loading && visible.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-10 text-center text-[var(--edr-muted)]">
-                    No hay envíos que coincidan. Cargá el primero con “+ Nuevo envío”.
+                    {buscando
+                      ? `Ningún envío coincide con "${search.trim()}".`
+                      : driverFilter
+                        ? `Ese repartidor no tiene envíos en ${periodo.toLowerCase()}.`
+                        : `No hay envíos para ${periodo.toLowerCase()}. Probá otra fecha o cargá el primero con “+ Nuevo envío”.`}
                   </td>
                 </tr>
               )}
@@ -307,6 +499,13 @@ export default function AdminPage() {
                     <div className="text-xs text-[var(--edr-muted)]">
                       {s.city}
                       {s.delivery_window ? ` · ${s.delivery_window}` : ''}
+                      {/* La fecha sólo cuando el listado mezcla días: si se está
+                          viendo un día suelto, repetirla en cada fila es ruido. */}
+                      {(buscando || desde !== hasta) && (
+                        <span className="edr-mono ml-1 text-[var(--edr-yellow)]">
+                          {s.scheduled_date.split('-').reverse().slice(0, 2).join('/')}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2">

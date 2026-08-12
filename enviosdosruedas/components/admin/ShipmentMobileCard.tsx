@@ -25,6 +25,7 @@ export default function ShipmentMobileCard({
   shipment,
   drivers,
   hasProof,
+  mostrarFecha = false,
   onProof,
   onEdit,
   onPrint,
@@ -35,6 +36,8 @@ export default function ShipmentMobileCard({
   shipment: Shipment;
   drivers: { id: string; full_name: string }[];
   hasProof: boolean;
+  /** Sólo cuando el listado mezcla días: si no, es ruido en cada tarjeta. */
+  mostrarFecha?: boolean;
   onProof: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
   onPrint: (s: Shipment) => void;
@@ -65,6 +68,11 @@ export default function ShipmentMobileCard({
       <div className="text-sm text-[var(--edr-muted)]">
         {shipment.recipient_name} · {shipment.city}
         {shipment.delivery_window ? ` · ${shipment.delivery_window}` : ''}
+        {mostrarFecha && (
+          <span className="edr-mono ml-1 text-[var(--edr-yellow)]">
+            {shipment.scheduled_date.split('-').reverse().slice(0, 2).join('/')}
+          </span>
+        )}
       </div>
       {shipment.client_name_raw && (
         <div className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--edr-yellow)]">

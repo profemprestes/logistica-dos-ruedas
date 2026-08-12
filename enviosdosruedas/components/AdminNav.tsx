@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/admin', label: 'Envíos' },
   { href: '/admin/drivers', label: 'Repartidores' },
   { href: '/admin/billing', label: 'Cierre de caja' },
+  { href: '/admin/resumenes', label: 'Resúmenes' },
   { href: '/admin/stock', label: 'Stock' },
   { href: '/admin/stats', label: 'Estadísticas' },
 ];

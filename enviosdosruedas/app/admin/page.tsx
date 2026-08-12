@@ -124,6 +124,7 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState<'todos' | ShipmentStatus>('todos');
   /** Los FLEX se cierran en la app de Mercado Libre: a veces hay que verlos solos. */
   const [soloFlex, setSoloFlex] = useState(false);
+  const [ubicando, setUbicando] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shipment | null>(null);
   const [toPrint, setToPrint] = useState<Shipment | null>(null);
@@ -233,6 +234,38 @@ export default function AdminPage() {
     else void load();
   }
 
+  /**
+   * Busca las coordenadas de los envíos que todavía no las tienen.
+   *
+   * El servidor procesa de a seis por llamada, porque el buscador de
+   * direcciones acepta una consulta por segundo y una tanda larga se cortaría
+   * por tiempo. Se lo llama de nuevo mientras avise que quedan más.
+   */
+  async function ubicarPendientes() {
+    setUbicando(true);
+    setError('');
+    try {
+      const { data } = await supabase.auth.getSession();
+      for (let vuelta = 0; vuelta < 10; vuelta++) {
+        const res = await fetch('/api/geocode', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${data.session?.access_token ?? ''}`,
+          },
+          body: JSON.stringify({}),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'No se pudo ubicar.');
+        if (!json.quedanMas || json.procesados === 0) break;
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron ubicar los envíos.');
+    }
+    setUbicando(false);
+  }
+
   function print(s: Shipment) {
     setToPrint(s);
     setTimeout(() => window.print(), 250);
@@ -271,6 +304,7 @@ export default function AdminPage() {
     // Se cuenta sobre lo traído, no sobre lo visible: si no, con el filtro
     // prendido el número se explicaría a sí mismo y no serviría de nada.
     flex: shipments.filter((s) => s.is_flex).length,
+    sinUbicar: shipments.filter((s) => s.lat == null).length,
   };
 
   const buscando = Boolean(search.trim());
@@ -426,6 +460,20 @@ export default function AdminPage() {
                 <Contador label="en la calle" valor={resumen.enCalle} clase="text-sky-300" />
                 <Contador label="sin salir" valor={resumen.sinSalir} />
                 <Contador label="no entregados" valor={resumen.fallidos} clase="text-orange-400" />
+
+                {/* Los envíos nuevos se ubican solos al guardarlos. Este botón
+                    es para los que ya estaban cargados de antes. Va a mano y no
+                    solo: son consultas a un servicio gratuito con cupo, no es
+                    para dispararlas cada vez que alguien abre el panel. */}
+                {resumen.sinUbicar > 0 && (
+                  <button
+                    onClick={ubicarPendientes}
+                    disabled={ubicando}
+                    className="rounded border border-[var(--edr-border)] px-2 py-0.5 text-xs font-semibold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
+                  >
+                    {ubicando ? 'Ubicando…' : `📍 ${resumen.sinUbicar} sin ubicar en el mapa`}
+                  </button>
+                )}
 
                 {/* Sólo aparece si hay alguno: un "0 flex" fijo sería ruido. */}
                 {resumen.flex > 0 && (

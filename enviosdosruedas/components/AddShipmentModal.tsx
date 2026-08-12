@@ -7,6 +7,32 @@ import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } 
 
 type Mode = 'manual' | 'pegar';
 
+/**
+ * Le pide al servidor que ubique los envíos recién cargados en el mapa.
+ *
+ * No se espera la respuesta a propósito: buscar las coordenadas tarda un
+ * segundo por envío y el punto es un extra: si falla, el envío igual quedó
+ * guardado y el repartidor tiene la dirección y el "Cómo llegar" de siempre.
+ * Hacerlo esperar sería cobrarle al que carga un beneficio que es del que
+ * reparte.
+ */
+async function ubicarEnElMapa(ids: number[]) {
+  if (!ids.length) return;
+  try {
+    const { data } = await supabase.auth.getSession();
+    await fetch('/api/geocode', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${data.session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({ ids }),
+    });
+  } catch {
+    // Sin punto en el mapa se trabaja igual. No se molesta a nadie con esto.
+  }
+}
+
 /** Hoy + N días, en hora local. En UTC, de noche ya estaríamos en mañana. */
 const fechaEn = (dias: number) => {
   const d = new Date();
@@ -155,11 +181,26 @@ function ShipmentForm({
       amount_to_collect:
         form.payment_mode === 'cobrar_destinatario' ? Number(form.amount_to_collect) || 0 : 0,
     };
-    const { error: dbError } = editing
-      ? await supabase.from('shipments').update(payload).eq('id', editing.id)
-      : await supabase.from('shipments').insert(payload);
+    // Al editar se pide de nuevo el punto sólo si cambió la dirección: si no,
+    // sería gastar el cupo de Nominatim para llegar al mismo lugar.
+    const cambioDireccion =
+      !editing ||
+      editing.address_street !== payload.address_street ||
+      editing.city !== payload.city;
+
+    const { data: guardado, error: dbError } = editing
+      ? await supabase
+          .from('shipments')
+          .update(cambioDireccion ? { ...payload, lat: null, lng: null } : payload)
+          .eq('id', editing.id)
+          .select('id')
+      : await supabase.from('shipments').insert(payload).select('id');
+
     setSaving(false);
     if (dbError) return setError(dbError.message);
+
+    if (cambioDireccion) void ubicarEnElMapa((guardado ?? []).map((s) => s.id));
+
     onSaved();
     onClose();
   }
@@ -193,9 +234,16 @@ function ShipmentForm({
       // mañana y, desde el paso 14, el repartidor no la podía tocar.
       scheduled_date: r.scheduledDate,
     }));
-    const { error: dbError } = await supabase.from('shipments').insert(payload);
+    const { data: guardados, error: dbError } = await supabase
+      .from('shipments')
+      .insert(payload)
+      .select('id');
+
     setSaving(false);
     if (dbError) return setError(dbError.message);
+
+    void ubicarEnElMapa((guardados ?? []).map((s) => s.id));
+
     onSaved();
     onClose();
   }

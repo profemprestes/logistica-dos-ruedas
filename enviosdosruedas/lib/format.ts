@@ -38,6 +38,13 @@ export interface Shipment {
   assigned_driver: string | null;
   scheduled_date: string;
   created_at: string;
+  /**
+   * Punto de entrega, buscado a partir de la dirección al cargar el envío.
+   * Queda en null cuando el buscador no estuvo seguro: entonces no se dibuja
+   * mapa, que es mejor que dibujarlo en la cuadra equivocada.
+   */
+  lat?: number | null;
+  lng?: number | null;
   driver?: { full_name: string } | null;
 }
 

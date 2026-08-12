@@ -4,6 +4,7 @@ import { money, shipmentCash, type Shipment } from '@/lib/format';
 import type { DeliveryKind } from '@/lib/driver/db';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
+import MiniMapa from '@/components/driver/MiniMapa';
 
 /** Detalle del envío con las dos únicas salidas posibles: entregado o no entregado. */
 export default function ShipmentSheet({
@@ -125,6 +126,10 @@ export default function ShipmentSheet({
         {shipment.product_detail && <Row label="Producto" value={shipment.product_detail} />}
         {shipment.notes && <Row label="Notas" value={shipment.notes} />}
         {shipment.client_name_raw && <Row label="Comercio" value={shipment.client_name_raw} />}
+
+        {/* Va justo arriba de los botones: primero se entiende dónde es, y
+            recién después se decide si llamar o arrancar para allá. */}
+        <MiniMapa lat={shipment.lat} lng={shipment.lng} />
 
         <div className="grid grid-cols-2 gap-3 pt-1">
           {shipment.recipient_phone && (

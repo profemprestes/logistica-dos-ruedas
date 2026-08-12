@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { leerSesion, pantallaDe } from '@/lib/role';
 import Logo from '@/components/Logo';
 
 /** Los repartidores entran con usuario (juan.perez); por dentro es un mail. */
@@ -23,7 +24,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email: toEmail(user),
       password,
     });
@@ -38,17 +39,21 @@ export default function LoginPage() {
       return;
     }
 
-    // Cada uno a su pantalla
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', data.user.id)
-      .single();
+    // Cada uno a su pantalla. Si el rol no se puede leer NO se asume nada: dar
+    // por sentado "repartidor" es lo que le abría la app del repartidor al
+    // admin cuando la consulta fallaba.
+    const { rol } = await leerSesion();
 
     setLoading(false);
-    const destino =
-      profile?.role === 'admin' ? '/admin' : profile?.role === 'comercio' ? '/stock' : '/driver';
-    router.replace(destino);
+
+    if (!rol) {
+      setError(
+        'Entraste bien, pero no pudimos verificar tu cuenta. Revisá la conexión y probá de nuevo.'
+      );
+      return;
+    }
+
+    router.replace(pantallaDe(rol));
   }
 
   return (

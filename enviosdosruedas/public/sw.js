@@ -11,7 +11,9 @@
  *  - NUNCA se mete con las llamadas a Supabase: los datos los maneja la cola
  *    de IndexedDB, y una respuesta cacheada de la API sería peor que un error.
  */
-const CACHE = 'dosruedas-repartidor-v3';
+// v4: el armazón viejo de /driver no miraba el rol y le abría la hoja de ruta
+// al admin. Subir el número hace que `activate` borre el caché anterior.
+const CACHE = 'dosruedas-repartidor-v4';
 
 const SHELL = ['/driver', '/driver/dashboard'];
 

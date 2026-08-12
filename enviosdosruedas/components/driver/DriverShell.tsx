@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import PermissionGate from '@/components/driver/PermissionGate';
+import RoleGate from '@/components/driver/RoleGate';
 import { ToastProvider, useToast } from '@/components/driver/Toast';
 import { useOnline } from '@/lib/driver/useOnline';
 import { watchConnection } from '@/lib/driver/sync';
@@ -13,13 +14,17 @@ import { watchConnection } from '@/lib/driver/sync';
 export default function DriverShell({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
-      <PermissionGate>
-        <div className="edr-driver">
-          <Background />
-          <OfflineBanner />
-          {children}
-        </div>
-      </PermissionGate>
+      {/* El rol se mira ANTES que los permisos: al admin no hay por qué
+          pedirle cámara y GPS para después echarlo de esta app. */}
+      <RoleGate>
+        <PermissionGate>
+          <div className="edr-driver">
+            <Background />
+            <OfflineBanner />
+            {children}
+          </div>
+        </PermissionGate>
+      </RoleGate>
     </ToastProvider>
   );
 }

@@ -1,18 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { trackUrl } from '@/lib/trackUrl';
 
-/**
- * Copia el link de seguimiento del envío, listo para pegar en WhatsApp.
- *
- * El dominio sale de la ventana y no de una constante: así en la computadora
- * de prueba copia localhost y en producción el dominio real, sin que haya que
- * acordarse de cambiar nada.
- */
-export function trackUrl(trackingCode: string): string {
-  const base = typeof window === 'undefined' ? 'https://www.logisticadosruedas.com' : window.location.origin;
-  return `${base}/seguimiento/${trackingCode}`;
-}
+/** Copia el link de seguimiento del envío, listo para pegar en WhatsApp. */
 
 export default function CopyTrackLink({
   trackingCode,

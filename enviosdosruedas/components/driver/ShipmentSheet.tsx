@@ -5,6 +5,7 @@ import type { DeliveryKind } from '@/lib/driver/db';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 import MiniMapa from '@/components/driver/MiniMapa';
+import { trackUrl } from '@/lib/trackUrl';
 
 /** Detalle del envío con las dos únicas salidas posibles: entregado o no entregado. */
 export default function ShipmentSheet({
@@ -42,11 +43,24 @@ export default function ShipmentSheet({
     return `549${solo}`;
   })();
 
-  const waUrl = waNumber
-    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(
-        `Hola! Soy de Envíos DosRuedas, estoy llegando con tu envío ${shipment.tracking_code}.`,
-      )}`
-    : null;
+  /**
+   * El mensaje que le llega al destinatario.
+   *
+   * Lleva de quién es el paquete porque el que recibe casi nunca conoce a
+   * "Envíos DosRuedas": conoce al comercio al que le compró. Sin ese dato el
+   * mensaje parece spam y no lo contestan.
+   *
+   * Y lleva el link de seguimiento en vez del código suelto: con el código hay
+   * que entrar a la página y tipearlo; con el link se toca y listo.
+   */
+  const waTexto = [
+    `Hola! Soy de Envíos DosRuedas, estoy llegando con tu envío${
+      shipment.client_name_raw ? ` de ${shipment.client_name_raw}` : ''
+    }.`,
+    `Seguilo acá: ${trackUrl(shipment.tracking_code)}`,
+  ].join('\n');
+
+  const waUrl = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waTexto)}` : null;
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-[var(--edr-paper)]">

@@ -1,5 +1,7 @@
 'use client';
 
+import { mapaEmbedUrl } from '@/lib/mapa';
+
 /**
  * Dónde queda, de un vistazo.
  *
@@ -26,12 +28,9 @@ export default function MiniMapa({
 }) {
   if (lat == null || lng == null) return null;
 
-  // Ventana de unos 700 m de lado: se ve la cuadra y las calles de alrededor.
-  const d = 0.004;
-  const src =
-    `https://www.openstreetmap.org/export/embed.html` +
-    `?bbox=${lng - d}%2C${lat - d}%2C${lng + d}%2C${lat + d}` +
-    `&layer=mapnik&marker=${lat}%2C${lng}`;
+  // La franja del celular es bien apaisada: el recuadro del mapa se calcula con
+  // esa forma para que el punto quede centrado y no sobre mapa a los costados.
+  const src = mapaEmbedUrl(lat, lng, { aspecto: 2.3, metrosAlto: 450 });
 
   return (
     <div>

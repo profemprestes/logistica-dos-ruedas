@@ -3,6 +3,7 @@
 import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
+import { mapaEmbedUrl } from '@/lib/mapa';
 
 export interface TrackResult {
   code: string;
@@ -67,12 +68,15 @@ const fecha = (iso: string) =>
 export default function ProofOfDelivery({ data }: { data: TrackResult }) {
   const entregado = data.proof?.event === 'entregado';
   const fallido = data.proof?.event === 'no_entregado';
-  const mapa =
-    data.lat && data.lng
-      ? `https://www.openstreetmap.org/export/embed.html?bbox=${data.lng - 0.004}%2C${
-          data.lat - 0.003
-        }%2C${data.lng + 0.004}%2C${data.lat + 0.003}&layer=mapnik&marker=${data.lat}%2C${data.lng}`
-      : null;
+  const mapa = data.lat && data.lng ? mapaEmbedUrl(data.lat, data.lng) : null;
+
+  /**
+   * Sin foto, el mapa ocupa todo el ancho.
+   *
+   * Antes quedaba solo en la columna izquierda de una grilla de dos, con el
+   * hueco vacío al lado: se veía corrido a un costado en vez de centrado.
+   */
+  const soloMapa = mapa && !data.proof?.photoUrl;
 
   return (
     <article className="overflow-hidden rounded-2xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)]">
@@ -173,7 +177,7 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
           )}
 
           {mapa && (
-            <figure>
+            <figure className={soloMapa ? 'sm:col-span-2' : undefined}>
               <figcaption className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
                 Punto de entrega
               </figcaption>

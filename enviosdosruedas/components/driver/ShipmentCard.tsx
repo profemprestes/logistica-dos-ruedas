@@ -66,6 +66,12 @@ export default function ShipmentCard({
           <div className="mt-1 text-sm font-black leading-tight">
             COMPLETAR EN LA APP DE ENVÍOS FLEX
           </div>
+          {/* Durante meses un FLEX se cerró sin foto. El aviso va acá, en la hoja
+              de ruta, y no sólo adentro del envío: la costumbre vieja se corta
+              cuando el repartidor lee el cambio antes de tocar nada. */}
+          <div className="mt-1 border-t-2 border-black/30 pt-1 text-sm font-black leading-tight">
+            📷 LA FOTO VA EN ESTA APP Y ES OBLIGATORIA
+          </div>
         </div>
       )}
 

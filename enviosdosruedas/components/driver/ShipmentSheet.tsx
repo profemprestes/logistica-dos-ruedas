@@ -88,9 +88,12 @@ export default function ShipmentSheet({
               COMPLETAR EN LA APP DE ENVÍOS FLEX
             </div>
             <p className="mt-2 text-sm font-bold">
-              Acá no se cobra ni se saca foto. Cerralo primero en Envíos Flex y recién
-              después tocá &quot;Entregado&quot;.
+              Acá no se cobra. Cerralo primero en Envíos Flex y recién después tocá
+              &quot;Entregado&quot;.
             </p>
+            <div className="mt-2 border-t-2 border-black/30 pt-2 text-base font-black leading-tight">
+              📷 LA FOTO SÍ VA ACÁ: EL PAQUETE CON LA FACHADA DE FONDO
+            </div>
           </div>
         )}
 

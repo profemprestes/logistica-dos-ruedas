@@ -32,6 +32,25 @@ const campo =
 const labelCls =
   'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
+/**
+ * Marca de envío FLEX.
+ *
+ * Va con la palabra escrita a propósito. En el panel el amarillo ya significa
+ * plata a cobrar (los totales, la columna "A cobrar"), así que pintar la fila
+ * de amarillo dejaría sin saber si el color dice "cobrá" o "es flex" en las
+ * filas que tienen las dos cosas. Con la etiqueta no hay ambigüedad.
+ */
+function FlexBadge() {
+  return (
+    <span
+      title="Se cierra en la app de Mercado Libre Flex"
+      className="ml-1.5 rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-black"
+    >
+      Flex
+    </span>
+  );
+}
+
 /** Un número del resumen del período. */
 function Contador({ label, valor, clase = '' }: { label: string; valor: number; clase?: string }) {
   return (
@@ -103,6 +122,8 @@ export default function AdminPage() {
   const [hasta, setHasta] = useState(() => hoyLocal());
   const [driverFilter, setDriverFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | ShipmentStatus>('todos');
+  /** Los FLEX se cierran en la app de Mercado Libre: a veces hay que verlos solos. */
+  const [soloFlex, setSoloFlex] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shipment | null>(null);
   const [toPrint, setToPrint] = useState<Shipment | null>(null);
@@ -218,6 +239,7 @@ export default function AdminPage() {
   }
 
   const visible = shipments.filter((s) => {
+    const okFlex = !soloFlex || Boolean(s.is_flex);
     const okStatus = statusFilter === 'todos' || s.status === statusFilter;
     const q = search.trim().toLowerCase();
     const okSearch =
@@ -226,7 +248,7 @@ export default function AdminPage() {
       s.recipient_name.toLowerCase().includes(q) ||
       s.address_street.toLowerCase().includes(q) ||
       (s.client_name_raw ?? '').toLowerCase().includes(q);
-    return okStatus && okSearch;
+    return okFlex && okStatus && okSearch;
   });
 
   // Suma las dos cobranzas: la de la puerta y la que se le cobra al comercio
@@ -246,6 +268,9 @@ export default function AdminPage() {
     fallidos: visible.filter((s) => s.status === 'pendiente_entrega').length,
     enCalle: visible.filter((s) => s.status === 'retirado' || s.status === 'en_camino').length,
     sinSalir: visible.filter((s) => s.status === 'creado' || s.status === 'pendiente_retiro').length,
+    // Se cuenta sobre lo traído, no sobre lo visible: si no, con el filtro
+    // prendido el número se explicaría a sí mismo y no serviría de nada.
+    flex: shipments.filter((s) => s.is_flex).length,
   };
 
   const buscando = Boolean(search.trim());
@@ -401,6 +426,21 @@ export default function AdminPage() {
                 <Contador label="en la calle" valor={resumen.enCalle} clase="text-sky-300" />
                 <Contador label="sin salir" valor={resumen.sinSalir} />
                 <Contador label="no entregados" valor={resumen.fallidos} clase="text-orange-400" />
+
+                {/* Sólo aparece si hay alguno: un "0 flex" fijo sería ruido. */}
+                {resumen.flex > 0 && (
+                  <button
+                    onClick={() => setSoloFlex((v) => !v)}
+                    title="Ver únicamente los envíos FLEX"
+                    className={`rounded px-2 py-0.5 text-xs font-black uppercase ${
+                      soloFlex
+                        ? 'bg-[var(--edr-yellow)] text-black'
+                        : 'border border-[var(--edr-yellow)] text-[var(--edr-yellow)]'
+                    }`}
+                  >
+                    {resumen.flex} flex {soloFlex ? '· ver todos' : ''}
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -484,8 +524,9 @@ export default function AdminPage() {
 
               {visible.map((s) => (
                 <tr key={s.id} className="border-b border-[var(--edr-border)] last:border-0 hover:bg-[var(--edr-surface-2)]">
-                  <td className="edr-mono whitespace-nowrap px-3 py-2 text-xs font-semibold">
-                    {s.tracking_code}
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span className="edr-mono text-xs font-semibold">{s.tracking_code}</span>
+                    {s.is_flex && <FlexBadge />}
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-semibold">{s.recipient_name}</div>

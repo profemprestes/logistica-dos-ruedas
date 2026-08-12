@@ -51,8 +51,17 @@ export default function ShipmentMobileCard({
   return (
     <div className="rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-3">
       <div className="flex items-start justify-between gap-2">
-        <span className="edr-mono text-xs font-bold text-[var(--edr-muted)]">
-          {shipment.tracking_code}
+        <span className="min-w-0">
+          <span className="edr-mono text-xs font-bold text-[var(--edr-muted)]">
+            {shipment.tracking_code}
+          </span>
+          {/* Con la palabra escrita: el amarillo pelado en el panel ya significa
+              plata a cobrar, y las dos cosas se dan juntas en la misma fila. */}
+          {shipment.is_flex && (
+            <span className="ml-1.5 rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-black">
+              Flex
+            </span>
+          )}
         </span>
         {programado && (
           <span className="rounded bg-[var(--edr-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-yellow)]">

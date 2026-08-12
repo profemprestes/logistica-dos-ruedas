@@ -63,6 +63,18 @@ function Contador({ label, valor, clase = '' }: { label: string; valor: number; 
 /** Estados en los que ya existe una prueba de entrega para mirar */
 const HAS_PROOF: ShipmentStatus[] = ['entregado', 'pendiente_entrega'];
 
+/** Ya no se mueven: no tiene sentido buscarles el punto ni marcarlos. */
+const CERRADOS: ShipmentStatus[] = ['entregado', 'cancelado'];
+
+/**
+ * ¿Hay que ubicarlo todavía?
+ *
+ * El punto sirve para llegar, así que sólo importa en lo que falta repartir.
+ * Marcar un envío entregado de hace tres semanas sería ensuciar el historial
+ * con algo que ya no se puede hacer.
+ */
+const faltaUbicar = (s: Shipment) => s.lat == null && !CERRADOS.includes(s.status);
+
 /** Mismo criterio que en Estadísticas: los atajos sólo completan las fechas. */
 const ATAJOS = [
   { label: 'Hoy', desde: 0, hasta: 0 },
@@ -304,7 +316,9 @@ export default function AdminPage() {
     // Se cuenta sobre lo traído, no sobre lo visible: si no, con el filtro
     // prendido el número se explicaría a sí mismo y no serviría de nada.
     flex: shipments.filter((s) => s.is_flex).length,
-    sinUbicar: shipments.filter((s) => s.lat == null).length,
+    // Mismo criterio que la marca de cada fila: si el número dijera una cosa y
+    // las filas marcadas fueran otras, no se le podría creer a ninguno.
+    sinUbicar: shipments.filter(faltaUbicar).length,
   };
 
   const buscando = Boolean(search.trim());
@@ -523,6 +537,7 @@ export default function AdminPage() {
               drivers={drivers}
               hasProof={HAS_PROOF.includes(s.status)}
               mostrarFecha={buscando || desde !== hasta}
+              faltaUbicar={faltaUbicar(s)}
               onProof={setProof}
               onEdit={(x) => {
                 setEditing(x);
@@ -585,6 +600,20 @@ export default function AdminPage() {
                       {s.address_street}
                       {s.address_extra ? ` — ${s.address_extra}` : ''}
                     </div>
+                    {/* La marca va pegada a la dirección, que es lo que hay que
+                        corregir, y abre el envío para hacerlo de una. */}
+                    {faltaUbicar(s) && (
+                      <button
+                        onClick={() => {
+                          setEditing(s);
+                          setModalOpen(true);
+                        }}
+                        title="No lo pudimos ubicar en el mapa. Tocá para corregirlo."
+                        className="mt-0.5 rounded border border-amber-400/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-200 hover:bg-amber-950"
+                      >
+                        📍 Sin ubicar
+                      </button>
+                    )}
                     <div className="text-xs text-[var(--edr-muted)]">
                       {s.city}
                       {s.delivery_window ? ` · ${s.delivery_window}` : ''}

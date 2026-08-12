@@ -90,11 +90,13 @@ export async function POST(request: Request) {
   }
 
   // Sólo los que no tienen punto: geocodificar dos veces lo mismo es gastar
-  // el cupo de Nominatim al pedo.
+  // el cupo de Nominatim al pedo. Y sólo los que todavía se reparten: el punto
+  // sirve para llegar, y a un envío entregado ya no hay que llegarle.
   let q = admin
     .from('shipments')
     .select('id, address_street, city')
     .is('lat', null)
+    .not('status', 'in', '(entregado,cancelado)')
     .limit(POR_LLAMADA + 1);
 
   if (ids?.length) q = q.in('id', ids);

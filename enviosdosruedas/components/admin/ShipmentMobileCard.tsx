@@ -26,6 +26,7 @@ export default function ShipmentMobileCard({
   drivers,
   hasProof,
   mostrarFecha = false,
+  faltaUbicar = false,
   onProof,
   onEdit,
   onPrint,
@@ -38,6 +39,8 @@ export default function ShipmentMobileCard({
   hasProof: boolean;
   /** Sólo cuando el listado mezcla días: si no, es ruido en cada tarjeta. */
   mostrarFecha?: boolean;
+  /** Sin punto en el mapa y todavía por repartir. */
+  faltaUbicar?: boolean;
   onProof: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
   onPrint: (s: Shipment) => void;
@@ -74,6 +77,16 @@ export default function ShipmentMobileCard({
         {shipment.address_street}
         {shipment.address_extra ? ` — ${shipment.address_extra}` : ''}
       </div>
+
+      {/* Pegada a la dirección, que es lo que hay que corregir. */}
+      {faltaUbicar && (
+        <button
+          onClick={() => onEdit(shipment)}
+          className="mt-1 rounded border border-amber-400/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-200"
+        >
+          📍 Sin ubicar en el mapa
+        </button>
+      )}
       <div className="text-sm text-[var(--edr-muted)]">
         {shipment.recipient_name} · {shipment.city}
         {shipment.delivery_window ? ` · ${shipment.delivery_window}` : ''}

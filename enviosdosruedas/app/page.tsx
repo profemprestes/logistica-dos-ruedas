@@ -20,12 +20,11 @@ export const metadata: Metadata = {
     'Seguí tu envío con el código EDR y accedé al sistema de gestión de Envíos DosRuedas. Mensajería y logística de última milla en Mar del Plata.',
 };
 
-/** Quiénes entran por el login, para que nadie dude si es su puerta. */
-const QUIENES = [
-  { icono: '🗂️', titulo: 'Administración', detalle: 'Envíos, cierre de caja, stock y estadísticas' },
-  { icono: '🛵', titulo: 'Repartidores', detalle: 'Hoja de ruta, escaneo y cierre de entregas' },
-  { icono: '🏬', titulo: 'Comercios', detalle: 'Stock en depósito, y más cosas en camino' },
-];
+/**
+ * Las pastillas de la web comercial, que son las que plantan el "acá estamos".
+ * Sin ellas la portada podía ser la de cualquier empresa de cualquier lado.
+ */
+const PASTILLAS = ['100% marplatense', 'Envíos en el día', 'Cobertura Gral. Pueyrredón'];
 
 export default function Home() {
   return (
@@ -36,21 +35,31 @@ export default function Home() {
           <Logo size={44} />
           <span className="text-lg font-black tracking-tight">Envíos DosRuedas</span>
 
-          <a
-            href="https://www.enviosdosruedas.com"
-            target="_blank"
-            rel="noreferrer"
-            className="ml-auto rounded-full border border-[var(--edr-yellow)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--edr-yellow)] transition hover:bg-[var(--edr-surface)]"
-          >
-            Ir a la web ↗
-          </a>
+          {/* El ingreso vive acá arriba, como una pestaña más: el que entra ya
+              sabe quién es y no necesita que se lo expliquen. */}
+          <nav className="ml-auto flex items-center gap-2">
+            <a
+              href="https://www.enviosdosruedas.com"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-[var(--edr-border)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)] transition hover:bg-[var(--edr-surface)] hover:text-[var(--edr-yellow)]"
+            >
+              Ir a la web ↗
+            </a>
+            <Link
+              href="/login"
+              className="rounded-full bg-[var(--edr-yellow)] px-5 py-2.5 text-xs font-black uppercase tracking-wide text-[var(--edr-blue-dark)] transition hover:brightness-95"
+            >
+              Ingresar
+            </Link>
+          </nav>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:py-14">
         {/* ---------- Titular ---------- */}
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--edr-yellow)]">
-          Plataforma de operaciones
+          Mar del Plata · Mensajería y logística
         </p>
         <h1 className="mt-3 text-4xl font-black uppercase leading-[0.95] tracking-tighter sm:text-6xl">
           Seguimiento y gestión
@@ -58,19 +67,29 @@ export default function Home() {
           de envíos
         </h1>
         <p className="mt-5 max-w-2xl text-base leading-relaxed text-[var(--edr-muted)] sm:text-lg">
-          Este es el sistema con el que trabajamos los envíos: acá seguís tu paquete y entra el
-          equipo. Si querés <strong className="text-white">cotizar un envío o conocer los servicios</strong>,
-          eso está en nuestra web{' '}
+          Este es nuestro sistema de seguimiento, diseñado por Envíos DosRuedas y de uso exclusivo.
+          Para conocer nuestros servicios o cotizar envíos, entrá a nuestra página principal{' '}
           <a
             href="https://www.enviosdosruedas.com"
             target="_blank"
             rel="noreferrer"
             className="font-bold text-[var(--edr-yellow)] underline decoration-2 underline-offset-4"
           >
-            enviosdosruedas.com
+            www.enviosdosruedas.com
           </a>
           .
         </p>
+
+        <ul className="mt-6 flex flex-wrap gap-2">
+          {PASTILLAS.map((p) => (
+            <li
+              key={p}
+              className="rounded-full border border-[var(--edr-border)] px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)]"
+            >
+              {p}
+            </li>
+          ))}
+        </ul>
 
         {/* ---------- Seguimiento ---------- */}
         <section className="mt-10 rounded-3xl bg-[var(--edr-yellow)] p-6 text-[var(--edr-blue-dark)] sm:p-8">
@@ -90,38 +109,20 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---------- Acceso ---------- */}
-        <section className="mt-8 rounded-3xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] p-6 sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--edr-muted)]">
-            Para el equipo y nuestros comercios
-          </p>
-          <h2 className="mt-2 text-2xl font-black uppercase tracking-tight sm:text-3xl">
-            Entrar al sistema
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--edr-muted)]">
-            Una sola puerta para todos: entrás con tu usuario y el sistema te lleva a tu pantalla.
-          </p>
-
-          <ul className="mt-6 grid gap-3 sm:grid-cols-3">
-            {QUIENES.map((q) => (
-              <li
-                key={q.titulo}
-                className="rounded-2xl border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-4 py-4"
-              >
-                <span className="text-2xl leading-none">{q.icono}</span>
-                <div className="mt-2 text-base font-black uppercase tracking-tight">{q.titulo}</div>
-                <div className="mt-1 text-xs leading-snug text-[var(--edr-muted)]">{q.detalle}</div>
-              </li>
-            ))}
-          </ul>
-
+        {/* ---------- Acceso ----------
+            Una línea y listo. El que tiene usuario ya sabe qué es esto; el que
+            no lo tiene, no le sirve que se lo expliquen. Está acá abajo además
+            del botón de arriba porque en el celular la portada se scrollea y
+            nadie vuelve al encabezado. */}
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-3xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-6 py-5">
+          <span className="text-base font-bold">¿Tenés usuario del sistema?</span>
           <Link
             href="/login"
-            className="mt-6 inline-block rounded-full bg-[var(--edr-yellow)] px-8 py-4 text-lg font-black uppercase tracking-wide text-[var(--edr-blue-dark)] transition hover:brightness-95"
+            className="rounded-full bg-[var(--edr-yellow)] px-8 py-3 text-base font-black uppercase tracking-wide text-[var(--edr-blue-dark)] transition hover:brightness-95"
           >
             Ingresar
           </Link>
-        </section>
+        </div>
 
         {/* ---------- Web comercial ---------- */}
         <a

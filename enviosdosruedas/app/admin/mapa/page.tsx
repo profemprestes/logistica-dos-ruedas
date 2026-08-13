@@ -43,6 +43,8 @@ interface Repartidor {
   lat: number;
   lng: number;
   haceMinutos: number;
+  /** La hora de esa última señal, que es lo que se lee de un vistazo. */
+  hora: string;
 }
 
 /**
@@ -162,6 +164,10 @@ export default function MapaAdminPage() {
                 0,
                 Math.round((Date.now() - new Date(p.taken_at).getTime()) / 60_000),
               ),
+              hora: new Date(p.taken_at).toLocaleTimeString('es-AR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
             });
           }
 
@@ -231,8 +237,7 @@ export default function MapaAdminPage() {
       etiqueta: r.nombre.trim().charAt(0).toUpperCase() || '·',
       color: '#7c3aed',
       titulo: r.nombre,
-      detalle:
-        r.haceMinutos <= 1 ? 'Recién ahora' : `Última señal hace ${r.haceMinutos} min`,
+      detalle: `Última señal ${r.hora}` + (r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : ''),
     }));
 
     return [...envios, ...repartidores];
@@ -339,6 +344,16 @@ export default function MapaAdminPage() {
           {/* La leyenda sale de lo que hay en pantalla y no de la lista fija de
               estados: una referencia con cinco colores que no están en el mapa
               es ruido. */}
+          {/* Una pantalla que no explica su propio vacío se lee como rota: sin
+              este cartel, mirar el mapa y no ver ninguna moto no dice si nadie
+              está en la calle o si algo dejó de andar. */}
+          {motos.length === 0 && desde <= today() && today() <= hasta && (
+            <p className="mt-3 border-t border-[var(--edr-border)] pt-3 text-xs text-[var(--edr-muted)]">
+              Ningún repartidor está mandando su posición en este momento. Aparecen acá cuando
+              tienen un envío <strong>en camino</strong> y la app abierta.
+            </p>
+          )}
+
           {motos.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--edr-border)] pt-3">
               <span className="text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)]">
@@ -354,7 +369,8 @@ export default function MapaAdminPage() {
                   </span>
                   <strong>{r.nombre}</strong>
                   <span className="text-[var(--edr-muted)]">
-                    {r.haceMinutos <= 1 ? 'ahora' : `hace ${r.haceMinutos} min`}
+                    {r.hora}
+                    {r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : ''}
                   </span>
                 </span>
               ))}

@@ -702,49 +702,56 @@ export default function AdminPage() {
                   <td className="px-3 py-2 text-right">
                     <CashCell shipment={s} />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
-                    <CopyTrackLink trackingCode={s.tracking_code} className="mr-1" />
-                    {HAS_PROOF.includes(s.status) && (
+                  {/* Los botones se acomodan en varias líneas en vez de
+                      empujar la tabla a lo ancho. Con seis en una sola línea la
+                      columna medía 487 px y, en una pantalla de 1024, doscientos
+                      de ellos quedaban afuera del marco: había que arrastrar la
+                      tabla de costado para llegar a "Eliminar". */}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <CopyTrackLink trackingCode={s.tracking_code} />
+                      {HAS_PROOF.includes(s.status) && (
+                        <button
+                          onClick={() => setProof(s)}
+                          className="rounded border-2 border-[var(--edr-yellow)] px-2 py-1 text-xs font-bold hover:bg-[var(--edr-surface-2)]"
+                        >
+                          Prueba
+                        </button>
+                      )}
+                      {/* Un envío cancelado no se cierra: esa historia terminó.
+                          Uno entregado sí se puede abrir, para corregir a "no
+                          entregado" cuando se cerró mal. */}
+                      {s.status !== 'cancelado' && (
+                        <button
+                          onClick={() => setCerrando(s)}
+                          title="Registrar la entrega o el intento fallido"
+                          className="rounded border border-orange-400 px-2 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-950"
+                        >
+                          Cerrar
+                        </button>
+                      )}
                       <button
-                        onClick={() => setProof(s)}
-                        className="rounded border-2 border-[var(--edr-yellow)] px-2 py-1 text-xs font-bold hover:bg-[var(--edr-surface-2)]"
+                        onClick={() => {
+                          setEditing(s);
+                          setModalOpen(true);
+                        }}
+                        className="rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
                       >
-                        Ver prueba
+                        Editar
                       </button>
-                    )}
-                    {/* Un envío cancelado no se cierra: esa historia terminó.
-                        Uno entregado sí se puede abrir, para corregir a "no
-                        entregado" cuando se cerró mal. */}
-                    {s.status !== 'cancelado' && (
                       <button
-                        onClick={() => setCerrando(s)}
-                        title="Registrar la entrega o el intento fallido"
-                        className="ml-1 rounded border border-orange-400 px-2 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-950"
+                        onClick={() => print(s)}
+                        className="rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
                       >
-                        Cerrar
+                        Imprimir
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setEditing(s);
-                        setModalOpen(true);
-                      }}
-                      className="ml-1 rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
-                    >
-                      Ver / editar
-                    </button>
-                    <button
-                      onClick={() => print(s)}
-                      className="ml-1 rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
-                    >
-                      Imprimir
-                    </button>
-                    <button
-                      onClick={() => remove(s)}
-                      className="ml-1 rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
-                    >
-                      Eliminar
-                    </button>
+                      <button
+                        onClick={() => remove(s)}
+                        className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

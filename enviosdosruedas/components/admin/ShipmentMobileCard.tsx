@@ -150,39 +150,44 @@ export default function ShipmentMobileCard({
         </select>
       </div>
 
+      {/* Sin `flex-1`: con seis botones estirados a partes iguales cada uno
+          quedaba en unos sesenta píxeles y textos como "Ver / editar" se
+          partían adentro. Ahora cada uno mide lo que dice y bajan de renglón
+          cuando no entran. `grow` los deja completar la última fila en vez de
+          dejar un hueco. */}
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <CopyTrackLink trackingCode={shipment.tracking_code} className="flex-1 py-2" />
+        <CopyTrackLink trackingCode={shipment.tracking_code} className="grow py-2" />
         {hasProof && (
           <button
             onClick={() => onProof(shipment)}
-            className="flex-1 rounded border-2 border-[var(--edr-yellow)] px-2 py-2 text-xs font-bold"
+            className="grow rounded border-2 border-[var(--edr-yellow)] px-3 py-2 text-xs font-bold"
           >
-            Ver prueba
+            Prueba
           </button>
         )}
         {onCerrar && (
           <button
             onClick={() => onCerrar(shipment)}
-            className="flex-1 rounded border border-orange-400 px-2 py-2 text-xs font-semibold text-orange-200"
+            className="grow rounded border border-orange-400 px-3 py-2 text-xs font-semibold text-orange-200"
           >
             Cerrar
           </button>
         )}
         <button
           onClick={() => onEdit(shipment)}
-          className="flex-1 rounded border border-[var(--edr-border)] px-2 py-2 text-xs font-semibold"
+          className="grow rounded border border-[var(--edr-border)] px-3 py-2 text-xs font-semibold"
         >
-          Ver / editar
+          Editar
         </button>
         <button
           onClick={() => onPrint(shipment)}
-          className="flex-1 rounded border border-[var(--edr-border)] px-2 py-2 text-xs font-semibold"
+          className="grow rounded border border-[var(--edr-border)] px-3 py-2 text-xs font-semibold"
         >
           Imprimir
         </button>
         <button
           onClick={() => onDelete(shipment)}
-          className="rounded border border-red-400 px-2 py-2 text-xs font-semibold text-red-200"
+          className="grow rounded border border-red-400 px-3 py-2 text-xs font-semibold text-red-200"
         >
           Eliminar
         </button>

@@ -34,6 +34,8 @@ export default function ShipmentMobileCard({
   onStatus,
   onAssign,
   onCerrar,
+  seleccionado = false,
+  onSeleccionar,
 }: {
   shipment: Shipment;
   drivers: { id: string; full_name: string }[];
@@ -50,14 +52,30 @@ export default function ShipmentMobileCard({
   onAssign: (s: Shipment, driverId: string) => void;
   /** Sin esto no se muestra el botón: un envío cancelado ya no se cierra. */
   onCerrar?: (s: Shipment) => void;
+  seleccionado?: boolean;
+  /** Sin esto no aparece el tilde: la selección es cosa del listado. */
+  onSeleccionar?: (id: number) => void;
 }) {
   const cash = shipmentCash(shipment);
   const programado = esProgramado(shipment);
 
   return (
-    <div className="rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-3">
+    <div
+      className={`rounded-lg border bg-[var(--edr-surface)] p-3 ${
+        seleccionado ? 'border-[var(--edr-yellow)]' : 'border-[var(--edr-border)]'
+      }`}
+    >
       <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0">
+        <span className="flex min-w-0 items-center gap-2">
+          {onSeleccionar && (
+            <input
+              type="checkbox"
+              aria-label={`Seleccionar ${shipment.tracking_code}`}
+              checked={seleccionado}
+              onChange={() => onSeleccionar(shipment.id)}
+              className="h-4 w-4 shrink-0"
+            />
+          )}
           <span className="edr-mono text-xs font-bold text-[var(--edr-muted)]">
             {shipment.tracking_code}
           </span>

@@ -146,6 +146,9 @@ export default function AdminPage() {
   const [proof, setProof] = useState<Shipment | null>(null);
   /** El envío que se está cerrando a mano desde el panel. */
   const [cerrando, setCerrando] = useState<Shipment | null>(null);
+  /** Los envíos tildados para asignarlos de una. */
+  const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
+  const [asignandoLote, setAsignandoLote] = useState(false);
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -242,6 +245,75 @@ export default function AdminPage() {
       });
     }
 
+    void load();
+  }
+
+  const alternarSeleccion = (id: number) =>
+    setSeleccion((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+
+  /**
+   * Asigna todos los tildados a la vez.
+   *
+   * Se hace en dos pasos porque el estado no se puede pisar parejo: un envío
+   * en 'creado' pasa a 'pendiente_retiro' al asignarse, pero uno que ya está
+   * retirado o en camino tiene que quedarse donde está. Mandarle el mismo
+   * estado a todos lo haría retroceder.
+   */
+  async function asignarSeleccion(driverId: string) {
+    const ids = [...seleccion];
+    if (!ids.length) return;
+
+    setAsignandoLote(true);
+    setError('');
+
+    const { error: e1 } = await supabase
+      .from('shipments')
+      .update({
+        assigned_driver: driverId || null,
+        assigned_at: driverId ? new Date().toISOString() : null,
+      })
+      .in('id', ids);
+
+    if (e1) {
+      setAsignandoLote(false);
+      setError(e1.message);
+      return;
+    }
+
+    if (driverId) {
+      const reciencreados = shipments
+        .filter((s) => ids.includes(s.id) && s.status === 'creado')
+        .map((s) => s.id);
+
+      if (reciencreados.length) {
+        await supabase
+          .from('shipments')
+          .update({ status: 'pendiente_retiro' })
+          .in('id', reciencreados);
+      }
+
+      // Un aviso por tanda: ocho seguidos en el celular de alguien que está
+      // manejando no son ocho avisos, son una molestia que se descarta.
+      const primero = shipments.find((s) => s.id === ids[0]);
+      void notificarRepartidor({
+        driverId,
+        title: ids.length === 1 ? 'Te asignaron un envío' : `Te asignaron ${ids.length} envíos`,
+        body:
+          ids.length === 1
+            ? `${primero?.address_street ?? ''} · ${primero?.tracking_code ?? ''}`
+            : `${primero?.address_street ?? ''} y ${ids.length - 1} más`,
+        url: '/driver/dashboard',
+        tag: 'asignacion',
+      });
+    }
+
+    setSeleccion(new Set());
+    setAsignandoLote(false);
     void load();
   }
 
@@ -562,6 +634,41 @@ export default function AdminPage() {
         {/* Teléfono: una tarjeta por envío. La tabla de abajo tiene siete
             columnas y en un celular obliga a arrastrar de costado para llegar
             a los botones, que es justo lo que se necesita desde la calle. */}
+        {/* Barra de la selección. Pegada arriba porque con veinte envíos en
+            pantalla el botón tiene que seguir a la vista mientras se tilda. */}
+        {seleccion.size > 0 && (
+          <div className="sticky top-0 z-20 mb-2 flex flex-wrap items-center gap-2 rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-3 py-2">
+            <span className="text-sm font-black">
+              {seleccion.size} seleccionado{seleccion.size > 1 ? 's' : ''}
+            </span>
+            <select
+              defaultValue=""
+              disabled={asignandoLote}
+              onChange={(e) => {
+                const v = e.target.value;
+                e.target.value = '';
+                if (v) void asignarSeleccion(v === 'libre' ? '' : v);
+              }}
+              className={`${campo} disabled:opacity-50`}
+            >
+              <option value="">Asignar a…</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name}
+                </option>
+              ))}
+              <option value="libre">Sacarles el repartidor</option>
+            </select>
+            {asignandoLote && <span className="text-xs text-[var(--edr-muted)]">Asignando…</span>}
+            <button
+              onClick={() => setSeleccion(new Set())}
+              className="ml-auto rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface)]"
+            >
+              Limpiar selección
+            </button>
+          </div>
+        )}
+
         <div className="space-y-2 lg:hidden">
           {loading && (
             <p className="py-8 text-center text-sm text-[var(--edr-muted)]">Cargando envíos…</p>
@@ -593,6 +700,8 @@ export default function AdminPage() {
               onStatus={changeStatus}
               onAssign={assignDriver}
               onCerrar={s.status === 'cancelado' ? undefined : setCerrando}
+              seleccionado={seleccion.has(s.id)}
+              onSeleccionar={alternarSeleccion}
             />
           ))}
         </div>
@@ -601,6 +710,19 @@ export default function AdminPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--edr-border)] bg-[var(--edr-surface-2)] text-left text-[11px] uppercase tracking-wide text-[var(--edr-muted)]">
               <tr>
+                <th className="w-8 px-3 py-2">
+                  {/* Tilda y destilda todo lo que está a la vista, que es lo
+                      que el filtro dejó: "todos" tiene que querer decir todos
+                      los que veo, no todos los que existen. */}
+                  <input
+                    type="checkbox"
+                    aria-label="Seleccionar todos"
+                    checked={visible.length > 0 && visible.every((s) => seleccion.has(s.id))}
+                    onChange={(e) =>
+                      setSeleccion(e.target.checked ? new Set(visible.map((s) => s.id)) : new Set())
+                    }
+                  />
+                </th>
                 <th className="px-3 py-2">Código</th>
                 <th className="px-3 py-2">Destinatario</th>
                 <th className="px-3 py-2">Dirección</th>
@@ -613,7 +735,7 @@ export default function AdminPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-[var(--edr-muted)]">
+                  <td colSpan={8} className="px-3 py-8 text-center text-[var(--edr-muted)]">
                     Cargando envíos…
                   </td>
                 </tr>
@@ -621,7 +743,7 @@ export default function AdminPage() {
 
               {!loading && visible.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-[var(--edr-muted)]">
+                  <td colSpan={8} className="px-3 py-10 text-center text-[var(--edr-muted)]">
                     {buscando
                       ? `Ningún envío coincide con "${search.trim()}".`
                       : driverFilter
@@ -632,7 +754,20 @@ export default function AdminPage() {
               )}
 
               {visible.map((s) => (
-                <tr key={s.id} className="border-b border-[var(--edr-border)] last:border-0 hover:bg-[var(--edr-surface-2)]">
+                <tr
+                  key={s.id}
+                  className={`border-b border-[var(--edr-border)] last:border-0 hover:bg-[var(--edr-surface-2)] ${
+                    seleccion.has(s.id) ? 'bg-[var(--edr-surface-2)]' : ''
+                  }`}
+                >
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar ${s.tracking_code}`}
+                      checked={seleccion.has(s.id)}
+                      onChange={() => alternarSeleccion(s.id)}
+                    />
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span className="edr-mono text-xs font-semibold">{s.tracking_code}</span>
                     {s.is_flex && <FlexBadge />}
@@ -763,6 +898,7 @@ export default function AdminPage() {
       <AddShipmentModal
         open={modalOpen}
         editing={editing}
+        drivers={drivers}
         onClose={() => setModalOpen(false)}
         onSaved={load}
       />

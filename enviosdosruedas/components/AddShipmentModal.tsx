@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
 import VerificarPunto from '@/components/admin/VerificarPunto';
+import { notificarRepartidor } from '@/lib/notify';
 
 type Mode = 'manual' | 'pegar';
 
@@ -60,6 +61,47 @@ async function ubicarEnElMapa(ids: number[]) {
     }
   } catch {
     // Sin punto en el mapa se trabaja igual. No se molesta a nadie con esto.
+  }
+}
+
+/**
+ * Los campos de asignación que van con el envío al guardarlo.
+ *
+ * `pendiente_retiro` y no `creado`: asignado quiere decir que ya tiene dueño y
+ * está esperando que lo pase a buscar. Es el mismo salto que hace el
+ * desplegable de la tabla, escrito una sola vez para que no se separen.
+ */
+function camposDeAsignacion(driverId: string): {
+  assigned_driver?: string;
+  assigned_at?: string;
+  status?: string;
+} {
+  if (!driverId) return {};
+  return {
+    assigned_driver: driverId,
+    assigned_at: new Date().toISOString(),
+    status: 'pendiente_retiro',
+  };
+}
+
+/**
+ * Un aviso por tanda, no uno por envío.
+ *
+ * Ocho notificaciones seguidas en el celular de alguien que está manejando no
+ * son ocho avisos: son una molestia que se descarta sin leer.
+ */
+async function avisarAsignacion(driverId: string, cuantos: number, primera: string) {
+  if (!driverId) return;
+  try {
+    await notificarRepartidor({
+      driverId,
+      title: cuantos === 1 ? 'Te asignaron un envío' : `Te asignaron ${cuantos} envíos`,
+      body: cuantos === 1 ? primera : `${primera} y ${cuantos - 1} más`,
+      url: '/driver/dashboard',
+      tag: 'asignacion',
+    });
+  } catch {
+    // Que no llegue el aviso no puede voltear la carga de la tanda.
   }
 }
 
@@ -153,11 +195,14 @@ export default function AddShipmentModal({
   onClose,
   onSaved,
   editing,
+  drivers = [],
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   editing?: Shipment | null;
+  /** Para poder asignar la tanda entera al cargarla. */
+  drivers?: { id: string; full_name: string }[];
 }) {
   if (!open) return null;
   return (
@@ -166,6 +211,7 @@ export default function AddShipmentModal({
       editing={editing ?? null}
       onClose={onClose}
       onSaved={onSaved}
+      drivers={drivers}
     />
   );
 }
@@ -174,10 +220,12 @@ function ShipmentForm({
   editing,
   onClose,
   onSaved,
+  drivers,
 }: {
   editing: Shipment | null;
   onClose: () => void;
   onSaved: () => void;
+  drivers: { id: string; full_name: string }[];
 }) {
   const [mode, setMode] = useState<Mode>('manual');
   const [form, setForm] = useState<FormState>(() =>
@@ -189,6 +237,14 @@ function ShipmentForm({
   const [fechaLote, setFechaLote] = useState(() => fechaEn(0));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  /**
+   * A quién se le asigna lo que se está cargando.
+   *
+   * Vale para el envío suelto y para la tanda entera: cargar ocho y después
+   * asignarlos de a uno con el desplegable de la tabla son ocho vueltas para
+   * una decisión que ya estaba tomada al pegarlos.
+   */
+  const [asignarA, setAsignarA] = useState(editing?.assigned_driver ?? '');
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -211,6 +267,7 @@ function ShipmentForm({
     setError('');
     const payload = {
       ...form,
+      ...camposDeAsignacion(asignarA),
       shipping_fee: Number(form.shipping_fee) || 0,
       merchandise_amount: Number(form.merchandise_amount) || 0,
       amount_to_collect:
@@ -241,6 +298,12 @@ function ShipmentForm({
 
     if (!puntoManual && cambioDireccion) {
       void ubicarEnElMapa((guardado ?? []).map((s) => s.id));
+    }
+
+    // Sólo si cambió de dueño: guardar un envío ya asignado sin tocar el
+    // repartidor no tiene por qué volver a sonarle el celular.
+    if (asignarA && asignarA !== editing?.assigned_driver) {
+      void avisarAsignacion(asignarA, 1, payload.address_street);
     }
 
     onSaved();
@@ -279,6 +342,7 @@ function ShipmentForm({
       // no lo pisa: `/api/geocode` sólo toca los que tienen `lat` en null.
       lat: r.lat,
       lng: r.lng,
+      ...camposDeAsignacion(asignarA),
     }));
     const { data: guardados, error: dbError } = await supabase
       .from('shipments')
@@ -289,6 +353,7 @@ function ShipmentForm({
     if (dbError) return setError(dbError.message);
 
     void ubicarEnElMapa((guardados ?? []).map((s) => s.id));
+    void avisarAsignacion(asignarA, toSave.length, toSave[0]?.addressStreet ?? '');
 
     onSaved();
     onClose();
@@ -320,6 +385,37 @@ function ShipmentForm({
             ×
           </button>
         </div>
+
+        {/* Arriba de las solapas porque vale para los dos modos: el envío
+            suelto y la tanda entera. Cargar ocho y después asignarlos de a uno
+            con el desplegable de la tabla son ocho vueltas para una decisión
+            que ya estaba tomada al pegarlos. */}
+        {drivers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--edr-border)] px-5 py-3">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)]">
+              Asignar a
+            </label>
+            <select
+              value={asignarA}
+              onChange={(e) => setAsignarA(e.target.value)}
+              className={`${field} w-auto`}
+            >
+              <option value="">Nadie (lo toma por escaneo)</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name}
+                </option>
+              ))}
+            </select>
+            {asignarA && (
+              <span className="text-xs text-[var(--edr-muted)]">
+                {editing
+                  ? 'Queda asignado a esta persona.'
+                  : 'Todo lo que se cargue ahora queda asignado y le llega un aviso.'}
+              </span>
+            )}
+          </div>
+        )}
 
         {!editing && (
           <div className="flex gap-1 border-b border-[var(--edr-border)] px-5 pt-3">

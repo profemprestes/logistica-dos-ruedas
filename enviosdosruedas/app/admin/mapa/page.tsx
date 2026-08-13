@@ -36,6 +36,24 @@ interface Driver {
   full_name: string;
 }
 
+/** Un repartidor con la app abierta y algo en camino. */
+interface Repartidor {
+  id: string;
+  nombre: string;
+  lat: number;
+  lng: number;
+  haceMinutos: number;
+}
+
+/**
+ * Desde cuándo se lo considera desconectado.
+ *
+ * La app manda la posición cada dos minutos mientras haya algo en camino, y
+ * también al volver al frente. Con diez sin noticias, o cerró la app o se
+ * quedó sin señal: mostrarlo como si estuviera ahí sería mentir.
+ */
+const MINUTOS_CONECTADO = 10;
+
 /**
  * El día entero sobre el mapa.
  *
@@ -53,6 +71,7 @@ export default function MapaAdminPage() {
   const [soloPendientes, setSoloPendientes] = useState(false);
 
   const [envios, setEnvios] = useState<Shipment[]>([]);
+  const [enCalle, setEnCalle] = useState<Repartidor[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [elegido, setElegido] = useState<Shipment | null>(null);
@@ -96,6 +115,69 @@ export default function MapaAdminPage() {
     };
   }, [ready, desde, hasta, driverId]);
 
+  /**
+   * Dónde anda cada repartidor conectado.
+   *
+   * Sale de las posiciones que manda la app, las mismas del seguimiento
+   * público. Con una diferencia importante: acá va la posición EXACTA, no la
+   * zona de 500 metros. Afuera se aproxima porque el link lo abre cualquiera;
+   * adentro, coordinar el reparto necesita saber dónde está la moto.
+   *
+   * Se refresca solo: un mapa de flota que hay que recargar a mano no sirve
+   * para mirar mientras se trabaja.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    let vivo = true;
+
+    const traer = () => {
+      const desdeCuando = new Date(Date.now() - MINUTOS_CONECTADO * 60_000).toISOString();
+
+      supabase
+        .from('driver_positions')
+        .select('driver_id, lat, lng, taken_at, perfil:driver_id(full_name)')
+        .gte('taken_at', desdeCuando)
+        .order('taken_at', { ascending: false })
+        .limit(200)
+        .then(({ data }) => {
+          if (!vivo) return;
+
+          // Una fila por repartidor: la lista viene de la más nueva a la más
+          // vieja, así que la primera de cada uno es la que vale.
+          const ultima = new Map<string, Repartidor>();
+          for (const p of (data ?? []) as unknown as {
+            driver_id: string;
+            lat: number;
+            lng: number;
+            taken_at: string;
+            perfil: { full_name: string } | null;
+          }[]) {
+            if (ultima.has(p.driver_id)) continue;
+            ultima.set(p.driver_id, {
+              id: p.driver_id,
+              nombre: p.perfil?.full_name ?? 'Repartidor',
+              lat: Number(p.lat),
+              lng: Number(p.lng),
+              haceMinutos: Math.max(
+                0,
+                Math.round((Date.now() - new Date(p.taken_at).getTime()) / 60_000),
+              ),
+            });
+          }
+
+          setEnCalle([...ultima.values()]);
+        });
+    };
+
+    traer();
+    const timer = window.setInterval(traer, 60_000);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [ready]);
+
   const CERRADOS: ShipmentStatus[] = useMemo(() => ['entregado', 'cancelado'], []);
 
   const visibles = useMemo(
@@ -110,21 +192,47 @@ export default function MapaAdminPage() {
 
   const sinPunto = visibles.length - conPunto.length;
 
-  const puntos: PuntoMapa[] = useMemo(
-    () =>
-      conPunto.map((s, i) => ({
-        id: s.id,
-        lat: Number(s.lat),
-        lng: Number(s.lng),
-        etiqueta: String(i + 1),
-        color: STATUS_COLOR[s.status],
-        titulo: `${i + 1}. ${s.address_street}`,
-        detalle:
-          `${s.recipient_name} · ${STATUS_LABEL[s.status]}` +
-          (s.client_name_raw ? ` · ${s.client_name_raw}` : ''),
-      })),
-    [conPunto],
-  );
+  /**
+   * Los repartidores que van al mapa.
+   *
+   * Sólo cuando el período incluye hoy: mirando el reparto de la semana pasada,
+   * una moto en su posición de ahora no significa nada. Y si hay un repartidor
+   * elegido en el filtro, se muestra sólo él.
+   */
+  const motos = useMemo(() => {
+    const hoyEnRango = desde <= today() && today() <= hasta;
+    if (!hoyEnRango) return [];
+    return driverId ? enCalle.filter((r) => r.id === driverId) : enCalle;
+  }, [enCalle, driverId, desde, hasta]);
+
+  const puntos: PuntoMapa[] = useMemo(() => {
+    const envios: PuntoMapa[] = conPunto.map((s, i) => ({
+      id: s.id,
+      lat: Number(s.lat),
+      lng: Number(s.lng),
+      etiqueta: String(i + 1),
+      color: STATUS_COLOR[s.status],
+      titulo: `${i + 1}. ${s.address_street}`,
+      detalle:
+        `${s.recipient_name} · ${STATUS_LABEL[s.status]}` +
+        (s.client_name_raw ? ` · ${s.client_name_raw}` : ''),
+    }));
+
+    // Las motos van con id negativo para no chocar con el de ningún envío:
+    // tocar una no tiene que abrir la ficha de un envío cualquiera.
+    const repartidores: PuntoMapa[] = motos.map((r, i) => ({
+      id: -(i + 1),
+      lat: r.lat,
+      lng: r.lng,
+      etiqueta: r.nombre.trim().charAt(0).toUpperCase() || '·',
+      color: '#7c3aed',
+      titulo: r.nombre,
+      detalle:
+        r.haceMinutos <= 1 ? 'Recién ahora' : `Última señal hace ${r.haceMinutos} min`,
+    }));
+
+    return [...envios, ...repartidores];
+  }, [conPunto, motos]);
 
   const porEstado = useMemo(() => {
     const cuenta = new Map<ShipmentStatus, number>();
@@ -214,6 +322,28 @@ export default function MapaAdminPage() {
           {/* La leyenda sale de lo que hay en pantalla y no de la lista fija de
               estados: una referencia con cinco colores que no están en el mapa
               es ruido. */}
+          {motos.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--edr-border)] pt-3">
+              <span className="text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)]">
+                En la calle ahora
+              </span>
+              {motos.map((r) => (
+                <span key={r.id} className="flex items-center gap-1.5 text-xs">
+                  <span
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white ring-1 ring-white/40"
+                    style={{ background: '#7c3aed' }}
+                  >
+                    {r.nombre.trim().charAt(0).toUpperCase()}
+                  </span>
+                  <strong>{r.nombre}</strong>
+                  <span className="text-[var(--edr-muted)]">
+                    {r.haceMinutos <= 1 ? 'ahora' : `hace ${r.haceMinutos} min`}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+
           {porEstado.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
               {porEstado.map(([estado, n]) => (
@@ -252,7 +382,10 @@ export default function MapaAdminPage() {
         ) : (
           <MapaEnvios
             puntos={puntos}
-            onTocar={(id) => setElegido(envios.find((s) => s.id === id) ?? null)}
+            // Los id negativos son repartidores: no tienen ficha de envío.
+            onTocar={(id) =>
+              setElegido(id < 0 ? null : (envios.find((s) => s.id === id) ?? null))
+            }
           />
         )}
 

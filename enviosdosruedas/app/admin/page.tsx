@@ -10,7 +10,7 @@ import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
-import CerrarEnvio from '@/components/admin/CerrarEnvio';
+import CerrarEnvio, { type Cierre } from '@/components/admin/CerrarEnvio';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import { trackUrl } from '@/lib/trackUrl';
 import { hoyLocal } from '@/lib/scheduled';
@@ -154,6 +154,20 @@ export default function AdminPage() {
   const [proof, setProof] = useState<Shipment | null>(null);
   /** El envío que se está cerrando a mano desde el panel. */
   const [cerrando, setCerrando] = useState<Shipment | null>(null);
+
+  /** Con qué solapa abre el cuadro. El botón "Cerrar" no elige; el
+   *  desplegable sí, porque ahí ya dijo si fue entregado o no. */
+  const [cierreInicial, setCierreInicial] = useState<Cierre>('no_entregado');
+
+  /**
+   * Abre el cuadro de cierre. Va por acá SIEMPRE, para que la solapa no quede
+   * pegada de la vez anterior: elegir "Entregado" en el desplegable y después
+   * tocar "Cerrar" en otro envío abriría el segundo en entregado.
+   */
+  function abrirCierre(s: Shipment, tipo: Cierre = 'no_entregado') {
+    setCierreInicial(tipo);
+    setCerrando(s);
+  }
   /** Los envíos tildados para asignarlos de una. */
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [asignandoLote, setAsignandoLote] = useState(false);
@@ -401,23 +415,49 @@ export default function AdminPage() {
 
   async function changeStatus(s: Shipment, status: ShipmentStatus) {
     /*
-     * Elegir "No entregado" en la columna no es cambiar una casilla: es
-     * registrar que hubo un intento, y eso necesita un motivo. Sin el motivo
-     * el seguimiento del cliente no puede decir por qué no se entregó, que es
+     * Cerrar un envío —para bien o para mal— no es cambiar una casilla: es
+     * registrar cómo terminó, y eso necesita el motivo o quién recibió. Sin
+     * eso el seguimiento del cliente no puede decir qué pasó, que es
      * justamente lo que va a preguntar.
      *
-     * Así que esa opción abre el mismo cuadro que el botón "Cerrar", en vez de
-     * hacer un cambio mudo. El resto de los estados se cambian como siempre:
-     * son correcciones de casilla y no hechos nuevos.
+     * Así que esas dos opciones abren el mismo cuadro que el botón "Cerrar",
+     * en vez de hacer un cambio mudo.
      */
-    if (status === 'pendiente_entrega') {
-      setCerrando(s);
+    if (status === 'pendiente_entrega' || status === 'entregado') {
+      abrirCierre(s, status === 'entregado' ? 'entregado' : 'no_entregado');
       return;
     }
 
-    const { error: dbError } = await supabase.from('shipments').update({ status }).eq('id', s.id);
-    if (dbError) setError(dbError.message);
-    else void load();
+    /*
+     * El resto pasa por la función del paso 28 en vez de escribir la casilla
+     * directo. La diferencia: retirado y en camino quedan anotados en el
+     * historial, con su hora.
+     *
+     * Antes el desplegable movía la casilla y nada más, así que un envío
+     * marcado retirado desde acá no mostraba ese paso en el seguimiento del
+     * cliente ni en el comprobante. Volver atrás, en cambio, sigue sin anotar
+     * nada: eso es corregir un error de carga, no un hecho de la calle.
+     */
+    const { error: dbError } = await supabase.rpc('cambiar_estado_admin', {
+      p_shipment_id: s.id,
+      p_status: status,
+    });
+
+    if (dbError) {
+      const m = dbError.message;
+      setError(
+        m.includes('SOLO_ADMIN')
+          ? 'Sólo un administrador puede cambiar el estado.'
+          : m.includes('USAR_CERRAR')
+            ? 'Para entregado y no entregado usá el botón "Cerrar": ahí queda el motivo o quién recibió.'
+            : m.includes('ENVIO_NO_ENCONTRADO')
+              ? 'Ese envío ya no está.'
+              : m,
+      );
+      return;
+    }
+
+    void load();
   }
 
   /**
@@ -802,7 +842,7 @@ export default function AdminPage() {
               onDelete={remove}
               onStatus={changeStatus}
               onAssign={assignDriver}
-              onCerrar={s.status === 'cancelado' ? undefined : setCerrando}
+              onCerrar={s.status === 'cancelado' ? undefined : (x) => abrirCierre(x)}
               seleccionado={seleccion.has(s.id)}
               onSeleccionar={alternarSeleccion}
             />
@@ -961,7 +1001,7 @@ export default function AdminPage() {
                           entregado" cuando se cerró mal. */}
                       {s.status !== 'cancelado' && (
                         <button
-                          onClick={() => setCerrando(s)}
+                          onClick={() => abrirCierre(s)}
                           title="Registrar la entrega o el intento fallido"
                           className="rounded border border-orange-400 px-2 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-950"
                         >
@@ -1011,6 +1051,7 @@ export default function AdminPage() {
       {cerrando && (
         <CerrarEnvio
           shipment={cerrando}
+          inicial={cierreInicial}
           onCerrar={() => setCerrando(null)}
           onListo={load}
         />

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { FAILURE_REASONS } from '@/components/driver/ResolveDeliveryModal';
 import type { Shipment } from '@/lib/format';
 
-type Cierre = 'entregado' | 'no_entregado';
+export type Cierre = 'entregado' | 'no_entregado';
 
 /**
  * Cerrar un envío desde el panel, para bien o para mal.
@@ -25,14 +25,17 @@ type Cierre = 'entregado' | 'no_entregado';
  */
 export default function CerrarEnvio({
   shipment,
+  inicial = 'no_entregado',
   onCerrar,
   onListo,
 }: {
   shipment: Shipment;
+  /** Con qué solapa abre. El desplegable de estado ya sabe cuál quiere. */
+  inicial?: Cierre;
   onCerrar: () => void;
   onListo: () => void;
 }) {
-  const [tipo, setTipo] = useState<Cierre>('no_entregado');
+  const [tipo, setTipo] = useState<Cierre>(inicial);
   const [motivo, setMotivo] = useState('');
   const [recibio, setRecibio] = useState('');
   const [comentario, setComentario] = useState('');

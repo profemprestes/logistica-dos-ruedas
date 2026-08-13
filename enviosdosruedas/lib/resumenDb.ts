@@ -71,7 +71,7 @@ export async function traerDelSistema(
     .from('delivery_logs')
     .select(LOG_SELECT)
     .eq('driver_id', driverId)
-    .in('event', ['entregado', 'retirado'])
+    .in('event', ['entregado', 'retirado', 'no_entregado'])
     .gte('happened_at', from)
     .lte('happened_at', to)
     .order('happened_at');
@@ -118,6 +118,32 @@ export async function traerDelSistema(
   for (const [shipmentId, { monto, log }] of alRetirar) {
     if (entregas.has(shipmentId)) continue;
     renglones.push(renglon(log, monto, 0, ' (cobrado al retirar, sin entregar)'));
+  }
+
+  /*
+   * Los intentos fallidos: el repartidor fue hasta la puerta.
+   *
+   * Van con el envío en CERO, igual que los de arriba y por el mismo motivo:
+   * el viaje se hizo, pero si se paga o no depende de por qué falló. Que el
+   * cliente estuviera ausente no es lo mismo que una dirección mal escrita, y
+   * esa diferencia no la puede decidir una cuenta automática. El renglón queda
+   * a la vista y marcado; poner el monto —o borrarlo— es una decisión de quien
+   * liquida.
+   *
+   * Si el mismo envío terminó entregándose en el período, no va: sería cobrar
+   * dos veces el mismo destino.
+   */
+  const fallidos = new Map<number, DeliveryLog>();
+  for (const l of logs) {
+    if (l.event === 'no_entregado') fallidos.set(l.shipment!.id, l);
+  }
+
+  for (const [shipmentId, log] of fallidos) {
+    if (entregas.has(shipmentId)) continue;
+    // El motivo va en el renglón: es justamente el dato con el que se decide.
+    renglones.push(
+      renglon(log, 0, 0, ` (NO ENTREGADO: ${log.failure_reason ?? 'sin motivo'} — ¿se paga la visita?)`),
+    );
   }
 
   return renglones;

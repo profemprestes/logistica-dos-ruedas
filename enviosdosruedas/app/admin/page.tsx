@@ -11,6 +11,7 @@ import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
 import CerrarEnvio, { type Cierre } from '@/components/admin/CerrarEnvio';
+import ReprogramarEnvio from '@/components/admin/ReprogramarEnvio';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import { trackUrl } from '@/lib/trackUrl';
 import { hoyLocal } from '@/lib/scheduled';
@@ -154,6 +155,9 @@ export default function AdminPage() {
   const [proof, setProof] = useState<Shipment | null>(null);
   /** El envío que se está cerrando a mano desde el panel. */
   const [cerrando, setCerrando] = useState<Shipment | null>(null);
+
+  /** El envío que se está reprogramando para otro día. */
+  const [reprogramando, setReprogramando] = useState<Shipment | null>(null);
 
   /** Con qué solapa abre el cuadro. El botón "Cerrar" no elige; el
    *  desplegable sí, porque ahí ya dijo si fue entregado o no. */
@@ -843,6 +847,7 @@ export default function AdminPage() {
               onStatus={changeStatus}
               onAssign={assignDriver}
               onCerrar={s.status === 'cancelado' ? undefined : (x) => abrirCierre(x)}
+              onReprogramar={s.status === 'pendiente_entrega' ? setReprogramando : undefined}
               seleccionado={seleccion.has(s.id)}
               onSeleccionar={alternarSeleccion}
             />
@@ -996,6 +1001,18 @@ export default function AdminPage() {
                           Prueba
                         </button>
                       )}
+                      {/* Sólo lo que no se pudo entregar se reintenta: nace un
+                          envío nuevo para otro día y el intento fallido se
+                          queda en el suyo. */}
+                      {s.status === 'pendiente_entrega' && (
+                        <button
+                          onClick={() => setReprogramando(s)}
+                          title="Volver a intentarlo otro día"
+                          className="rounded border border-sky-400 px-2 py-1 text-xs font-semibold text-sky-300 hover:bg-sky-950"
+                        >
+                          Reprogramar
+                        </button>
+                      )}
                       {/* Un envío cancelado no se cierra: esa historia terminó.
                           Uno entregado sí se puede abrir, para corregir a "no
                           entregado" cuando se cerró mal. */}
@@ -1047,6 +1064,14 @@ export default function AdminPage() {
       />
 
       <ProofOfDeliveryModal shipment={proof} onClose={() => setProof(null)} />
+
+      {reprogramando && (
+        <ReprogramarEnvio
+          shipment={reprogramando}
+          onCerrar={() => setReprogramando(null)}
+          onListo={load}
+        />
+      )}
 
       {cerrando && (
         <CerrarEnvio

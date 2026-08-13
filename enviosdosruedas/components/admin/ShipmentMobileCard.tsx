@@ -34,6 +34,7 @@ export default function ShipmentMobileCard({
   onStatus,
   onAssign,
   onCerrar,
+  onReprogramar,
   seleccionado = false,
   onSeleccionar,
 }: {
@@ -52,6 +53,8 @@ export default function ShipmentMobileCard({
   onAssign: (s: Shipment, driverId: string) => void;
   /** Sin esto no se muestra el botón: un envío cancelado ya no se cierra. */
   onCerrar?: (s: Shipment) => void;
+  /** Sólo llega cuando el envío quedó como no entregado. */
+  onReprogramar?: (s: Shipment) => void;
   seleccionado?: boolean;
   /** Sin esto no aparece el tilde: la selección es cosa del listado. */
   onSeleccionar?: (id: number) => void;
@@ -181,6 +184,14 @@ export default function ShipmentMobileCard({
             className="grow rounded border-2 border-[var(--edr-yellow)] px-3 py-2 text-xs font-bold"
           >
             Prueba
+          </button>
+        )}
+        {onReprogramar && (
+          <button
+            onClick={() => onReprogramar(shipment)}
+            className="grow rounded border border-sky-400 px-3 py-2 text-xs font-semibold text-sky-200"
+          >
+            Reprogramar
           </button>
         )}
         {onCerrar && (

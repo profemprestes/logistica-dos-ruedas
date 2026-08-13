@@ -68,6 +68,22 @@ export const STATUS_LABEL: Record<ShipmentStatus, string> = {
   cancelado: 'Cancelado',
 };
 
+/**
+ * Cómo se llaman los estados EN EL PANEL.
+ *
+ * En la base no existe un estado "no entregado": un envío que no se pudo
+ * entregar queda en `pendiente_entrega`, esperando que se lo vuelva a
+ * intentar. Ese nombre describe bien la casilla y mal lo que pasó, y el que
+ * mira el listado quiere ver lo que pasó.
+ *
+ * Vive acá y no en la pantalla para que la tabla y la tarjeta del celular no
+ * puedan terminar llamándolo distinto.
+ */
+export const ETIQUETA_ESTADO: Record<ShipmentStatus, string> = {
+  ...STATUS_LABEL,
+  pendiente_entrega: 'No entregado',
+};
+
 /** Clases de Tailwind para el chip de estado de cada fila */
 export const STATUS_CLASS: Record<ShipmentStatus, string> = {
   creado: 'bg-neutral-100 text-neutral-700 ring-neutral-300',

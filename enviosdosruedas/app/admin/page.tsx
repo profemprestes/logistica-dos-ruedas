@@ -18,7 +18,7 @@ import {
   money,
   shipmentCash,
   STATUS_CLASS,
-  STATUS_LABEL,
+  ETIQUETA_ESTADO,
   type Shipment,
   type ShipmentStatus,
 } from '@/lib/format';
@@ -203,7 +203,7 @@ export default function AdminPage() {
 
     const aviso = enLaCalle
       ? `OJO: ${s.tracking_code} ya lo tiene ${s.driver?.full_name ?? 'un repartidor'} ` +
-        `(${STATUS_LABEL[s.status]}).\n\n` +
+        `(${ETIQUETA_ESTADO[s.status]}).\n\n` +
         'Si lo borrás y él ya lo cerró en el celular, esa entrega se va a rechazar y ' +
         'pierde la foto y el GPS.\n\nConviene marcarlo como "Cancelado" en vez de borrarlo.\n\n' +
         '¿Borrar igual?'
@@ -246,6 +246,21 @@ export default function AdminPage() {
   }
 
   async function changeStatus(s: Shipment, status: ShipmentStatus) {
+    /*
+     * Elegir "No entregado" en la columna no es cambiar una casilla: es
+     * registrar que hubo un intento, y eso necesita un motivo. Sin el motivo
+     * el seguimiento del cliente no puede decir por qué no se entregó, que es
+     * justamente lo que va a preguntar.
+     *
+     * Así que esa opción abre el mismo cuadro que el botón "Cerrar", en vez de
+     * hacer un cambio mudo. El resto de los estados se cambian como siempre:
+     * son correcciones de casilla y no hechos nuevos.
+     */
+    if (status === 'pendiente_entrega') {
+      setCerrando(s);
+      return;
+    }
+
     const { error: dbError } = await supabase.from('shipments').update({ status }).eq('id', s.id);
     if (dbError) setError(dbError.message);
     else void load();
@@ -375,7 +390,7 @@ export default function AdminPage() {
             className="flex-1 rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm sm:flex-none"
           >
             <option value="todos">Todos los estados</option>
-            {Object.entries(STATUS_LABEL).map(([v, l]) => (
+            {Object.entries(ETIQUETA_ESTADO).map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>
@@ -663,7 +678,7 @@ export default function AdminPage() {
                       onChange={(e) => changeStatus(s, e.target.value as ShipmentStatus)}
                       className={`rounded px-2 py-1 text-xs font-semibold ring-1 ${STATUS_CLASS[s.status]}`}
                     >
-                      {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                      {Object.entries(ETIQUETA_ESTADO).map(([v, l]) => (
                         <option key={v} value={v}>
                           {l}
                         </option>

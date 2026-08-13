@@ -4,7 +4,7 @@ import {
   money,
   shipmentCash,
   STATUS_CLASS,
-  STATUS_LABEL,
+  ETIQUETA_ESTADO,
   type Shipment,
   type ShipmentStatus,
 } from '@/lib/format';
@@ -129,7 +129,7 @@ export default function ShipmentMobileCard({
           onChange={(e) => onStatus(shipment, e.target.value as ShipmentStatus)}
           className={`w-full rounded px-2 py-2 text-xs font-semibold ring-1 ${STATUS_CLASS[shipment.status]}`}
         >
-          {Object.entries(STATUS_LABEL).map(([v, l]) => (
+          {Object.entries(ETIQUETA_ESTADO).map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>

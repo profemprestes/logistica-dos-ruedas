@@ -273,6 +273,13 @@ export default function DriverDashboardPage() {
           </button>
 
           <Link
+            href="/driver/mapa"
+            className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
+          >
+            🗺️ Mapa
+          </Link>
+
+          <Link
             href="/driver/profile"
             className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
           >

@@ -7,6 +7,7 @@ import Logo from '@/components/Logo';
 
 const LINKS = [
   { href: '/admin', label: 'Envíos' },
+  { href: '/admin/mapa', label: 'Mapa' },
   { href: '/admin/drivers', label: 'Repartidores' },
   { href: '/admin/billing', label: 'Cierre de caja' },
   { href: '/admin/resumenes', label: 'Resúmenes' },

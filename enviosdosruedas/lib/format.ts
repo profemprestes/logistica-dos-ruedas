@@ -80,6 +80,24 @@ export const STATUS_CLASS: Record<ShipmentStatus, string> = {
 };
 
 /**
+ * El mismo semáforo que `STATUS_CLASS`, en hexadecimal.
+ *
+ * Los puntos del mapa los dibuja Leaflet con HTML suelto, fuera del alcance de
+ * Tailwind, así que necesita el color escrito. Van al lado del otro para que
+ * cambiar un estado de color sea mirar dos líneas seguidas y no acordarse de
+ * que existe un archivo de mapas.
+ */
+export const STATUS_COLOR: Record<ShipmentStatus, string> = {
+  creado: '#737373',
+  pendiente_retiro: '#d97706',
+  retirado: '#0284c7',
+  en_camino: '#1d4ed8',
+  entregado: '#059669',
+  pendiente_entrega: '#ea580c',
+  cancelado: '#dc2626',
+};
+
+/**
  * Plata que toca el repartidor en cada envío.
  *
  *  - atPickup:   se la cobra AL COMERCIO cuando retira (modo "cobrar al retirar").

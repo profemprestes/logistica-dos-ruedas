@@ -258,8 +258,11 @@ export default function DriverDashboardPage() {
 
       // Salir en camino es el momento exacto en que el que espera empieza a
       // mirar el seguimiento: la primera posición se manda ahora y no en el
-      // próximo tic del reloj, que puede tardar dos minutos.
+      // próximo tic del reloj, que puede tardar dos minutos. Retirar también
+      // deja rastro, con el espaciado de siempre: es otro momento en que la app
+      // está en pantalla, y esos son los únicos que sirven.
       if (estado === 'en_camino') avisarPosicionYa();
+      else avisarPosicionSiCorresponde();
 
       toast(estado === 'retirado' ? 'Marcado como retirado.' : 'Marcado en camino.', 'ok');
     },

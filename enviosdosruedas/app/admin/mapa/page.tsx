@@ -36,7 +36,7 @@ interface Driver {
   full_name: string;
 }
 
-/** Un repartidor con la app abierta y algo en camino. */
+/** Dónde se lo vio por última vez, y por qué. */
 interface Repartidor {
   id: string;
   nombre: string;
@@ -45,6 +45,8 @@ interface Repartidor {
   haceMinutos: number;
   /** La hora de esa última señal, que es lo que se lee de un vistazo. */
   hora: string;
+  /** De dónde salió el punto: le cambia el sentido a lo que se está mirando. */
+  origen: 'app' | 'entrega';
 }
 
 /**
@@ -141,50 +143,101 @@ export default function MapaAdminPage() {
     if (!ready) return;
     let vivo = true;
 
-    const traer = () => {
-      // Sin filtro de tiempo: la tabla se limpia sola a las tres horas, así que
-      // lo que hay guardado es siempre de la jornada.
-      supabase
-        .from('driver_positions')
-        .select('driver_id, lat, lng, taken_at, perfil:driver_id(full_name)')
-        .order('taken_at', { ascending: false })
-        .limit(200)
-        .then(({ data }) => {
-          if (!vivo) return;
+    /*
+     * DOS FUENTES, y la segunda es la que hace que esto sirva.
+     *
+     * Una son las posiciones que manda la app sola. La otra son las entregas
+     * cerradas: cada vez que el repartidor cierra un envío, la app toma el GPS
+     * y lo guarda con el movimiento. Esa segunda fuente venía existiendo desde
+     * el principio y el mapa no la miraba, así que un repartidor que entregó
+     * hace diez minutos aparecía como sin señal desde hacía una hora.
+     *
+     * Encima es MEJOR: el punto de una entrega se toma con el celular en la
+     * mano y viene con dos metros de precisión, contra los quince o treinta
+     * del envío automático. Y no depende de que la app esté en pantalla en el
+     * momento justo: si cerró una entrega, hay punto.
+     *
+     * Gana la más nueva de las dos.
+     */
+    const traer = async () => {
+      const desdeHoy = `${today()}T00:00:00`;
 
-          // Una fila por repartidor: la lista viene de la más nueva a la más
-          // vieja, así que la primera de cada uno es la que vale.
-          const ultima = new Map<string, Repartidor>();
-          for (const p of (data ?? []) as unknown as {
-            driver_id: string;
-            lat: number;
-            lng: number;
-            taken_at: string;
-            perfil: { full_name: string } | null;
-          }[]) {
-            if (ultima.has(p.driver_id)) continue;
-            ultima.set(p.driver_id, {
-              id: p.driver_id,
-              nombre: p.perfil?.full_name ?? 'Repartidor',
-              lat: Number(p.lat),
-              lng: Number(p.lng),
-              haceMinutos: Math.max(
-                0,
-                Math.round((Date.now() - new Date(p.taken_at).getTime()) / 60_000),
-              ),
-              hora: new Date(p.taken_at).toLocaleTimeString('es-AR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-            });
-          }
+      const [posiciones, entregas] = await Promise.all([
+        // La tabla se limpia sola a las tres horas: lo que hay es del día.
+        supabase
+          .from('driver_positions')
+          .select('driver_id, lat, lng, taken_at, perfil:driver_id(full_name)')
+          .order('taken_at', { ascending: false })
+          .limit(200),
+        supabase
+          .from('delivery_logs')
+          .select('driver_id, lat, lng, happened_at, perfil:driver_id(full_name)')
+          .not('lat', 'is', null)
+          .gte('happened_at', new Date(desdeHoy).toISOString())
+          .order('happened_at', { ascending: false })
+          .limit(200),
+      ]);
 
-          setEnCalle([...ultima.values()]);
+      if (!vivo) return;
+
+      const candidatos: (Repartidor & { cuando: number })[] = [];
+
+      const sumar = (
+        driverId: string,
+        nombre: string,
+        lat: number,
+        lng: number,
+        cuando: string,
+        origen: 'app' | 'entrega',
+      ) => {
+        const t = new Date(cuando).getTime();
+        candidatos.push({
+          id: driverId,
+          nombre,
+          lat: Number(lat),
+          lng: Number(lng),
+          cuando: t,
+          haceMinutos: Math.max(0, Math.round((Date.now() - t) / 60_000)),
+          hora: new Date(t).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+          origen,
         });
+      };
+
+      type Fila = {
+        driver_id: string;
+        lat: number;
+        lng: number;
+        perfil: { full_name: string } | null;
+      };
+
+      for (const p of (posiciones.data ?? []) as unknown as (Fila & { taken_at: string })[]) {
+        sumar(p.driver_id, p.perfil?.full_name ?? 'Repartidor', p.lat, p.lng, p.taken_at, 'app');
+      }
+
+      for (const l of (entregas.data ?? []) as unknown as (Fila & { happened_at: string })[]) {
+        if (!l.driver_id) continue;
+        sumar(
+          l.driver_id,
+          l.perfil?.full_name ?? 'Repartidor',
+          l.lat,
+          l.lng,
+          l.happened_at,
+          'entrega',
+        );
+      }
+
+      // Una por repartidor: la más nueva, venga de donde venga.
+      const ultima = new Map<string, Repartidor & { cuando: number }>();
+      for (const c of candidatos) {
+        const previa = ultima.get(c.id);
+        if (!previa || c.cuando > previa.cuando) ultima.set(c.id, c);
+      }
+
+      setEnCalle([...ultima.values()]);
     };
 
-    traer();
-    const timer = window.setInterval(traer, 60_000);
+    void traer();
+    const timer = window.setInterval(() => void traer(), 60_000);
 
     return () => {
       vivo = false;
@@ -246,7 +299,7 @@ export default function MapaAdminPage() {
       color: '#7c3aed',
       titulo: r.nombre,
       detalle:
-        `Última señal ${r.hora}` +
+        `${r.origen === 'entrega' ? 'Cerró una entrega' : 'Última señal'} ${r.hora}` +
         (r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : '') +
         (r.haceMinutos > MINUTOS_RECIENTE ? ' · puede haberse movido' : ''),
     }));
@@ -389,6 +442,7 @@ export default function MapaAdminPage() {
                   >
                     {r.hora}
                     {r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : ''}
+                    {r.origen === 'entrega' ? ' · en una entrega' : ''}
                   </span>
                 </span>
               ))}

@@ -10,6 +10,14 @@ import { compressPhoto } from '@/lib/driver/photo';
  * stream de video: sale más rápido, enfoca mejor y no pelea con el lector de QR
  * por el uso de la cámara.
  *
+ * DOS BOTONES Y NO UNO. Sacar la foto y elegirla de la galería son dos campos
+ * distintos, aunque parezcan lo mismo. El truco sería sacarle el `capture` al
+ * único que hay: ahí el celular pregunta cada vez "¿cámara o galería?", y el
+ * caso normal —sacar la foto parado en la puerta— pasa de un toque a dos. Con
+ * un botón para cada cosa, el de siempre sigue siendo directo y el otro está
+ * cuando hace falta: la foto ya sacada con la cámara del celular, o la que
+ * mandó el comercio por WhatsApp.
+ *
  * El tope de dos no es capricho: cada foto se sube desde la calle, con la señal
  * que haya. Dejar que se saquen diez es garantizar entregas que nunca terminan
  * de subir.
@@ -26,7 +34,8 @@ export default function PhotoInput({
   /** Qué dice el botón cuando todavía no hay ninguna. */
   etiquetaPrimera?: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const camaraRef = useRef<HTMLInputElement>(null);
+  const galeriaRef = useRef<HTMLInputElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [aviso, setAviso] = useState('');
@@ -96,8 +105,10 @@ export default function PhotoInput({
 
   return (
     <div>
+      {/* El mismo manejador para los dos: lo único que cambia es de dónde sale
+          la foto. `capture` es lo que hace que uno abra la cámara derecho. */}
       <input
-        ref={inputRef}
+        ref={camaraRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -105,6 +116,17 @@ export default function PhotoInput({
         onChange={(e) => {
           handleFile(e.target.files?.[0]);
           e.target.value = ''; // permite volver a elegir la misma foto
+        }}
+      />
+
+      <input
+        ref={galeriaRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          handleFile(e.target.files?.[0]);
+          e.target.value = '';
         }}
       />
 
@@ -134,7 +156,7 @@ export default function PhotoInput({
       {!completo && (
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => camaraRef.current?.click()}
           disabled={busy}
           className={`w-full rounded-xl px-4 py-5 text-lg font-black active:scale-[0.99] disabled:opacity-60 ${
             photos.length > 0
@@ -147,6 +169,17 @@ export default function PhotoInput({
             : photos.length > 0
               ? '📷 Agregar otra foto (opcional)'
               : etiquetaPrimera}
+        </button>
+      )}
+
+      {!completo && (
+        <button
+          type="button"
+          onClick={() => galeriaRef.current?.click()}
+          disabled={busy}
+          className="mt-2 w-full rounded-xl border-2 border-[var(--edr-border)] px-4 py-3 text-base font-bold text-[var(--edr-muted)] active:scale-[0.99] disabled:opacity-60"
+        >
+          🖼️ Elegir de la galería
         </button>
       )}
 

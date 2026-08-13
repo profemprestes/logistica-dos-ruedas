@@ -33,7 +33,7 @@ export default function ShipmentMobileCard({
   onDelete,
   onStatus,
   onAssign,
-  onNoEntregado,
+  onCerrar,
 }: {
   shipment: Shipment;
   drivers: { id: string; full_name: string }[];
@@ -48,8 +48,8 @@ export default function ShipmentMobileCard({
   onDelete: (s: Shipment) => void;
   onStatus: (s: Shipment, status: ShipmentStatus) => void;
   onAssign: (s: Shipment, driverId: string) => void;
-  /** Sin esto no se muestra el botón: un envío cerrado no admite intentos. */
-  onNoEntregado?: (s: Shipment) => void;
+  /** Sin esto no se muestra el botón: un envío cancelado ya no se cierra. */
+  onCerrar?: (s: Shipment) => void;
 }) {
   const cash = shipmentCash(shipment);
   const programado = esProgramado(shipment);
@@ -160,12 +160,12 @@ export default function ShipmentMobileCard({
             Ver prueba
           </button>
         )}
-        {onNoEntregado && (
+        {onCerrar && (
           <button
-            onClick={() => onNoEntregado(shipment)}
+            onClick={() => onCerrar(shipment)}
             className="flex-1 rounded border border-orange-400 px-2 py-2 text-xs font-semibold text-orange-200"
           >
-            No entregado
+            Cerrar
           </button>
         )}
         <button

@@ -108,7 +108,8 @@ function explicacion(data: TrackResult): string {
     return 'Tu envío fue cancelado. Comunicate con el vendedor o con la mensajería si creés que es un error.';
   }
 
-  if (data.proof?.event === 'entregado') return '';
+  // Mismo orden que el sello: primero lo que el envío ES.
+  if (data.status === 'entregado' || data.proof?.event === 'entregado') return '';
 
   if (data.proof?.event === 'no_entregado') {
     return 'Tu envío no pudo ser entregado. Comunicate con tu vendedor o con la mensajería para coordinar la entrega.';
@@ -196,9 +197,35 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
     };
   }, [data.status, data.code]);
 
+  /*
+   * Manda el estado del envío, no el último movimiento.
+   *
+   * Antes el sello salía del registro más nuevo, y eso dejaba envíos
+   * trabados: marcado "no entregado" y después corregido a entregado desde el
+   * panel, el seguimiento seguía mostrando NO ENTREGADO para siempre, porque
+   * cambiar el estado no escribe un registro nuevo.
+   *
+   * El estado es lo que el envío ES; los registros son lo que le PASÓ. Para el
+   * sello vale el primero, y el historial completo sigue abajo en la línea de
+   * tiempo y en el comprobante.
+   */
   const cancelado = data.status === 'cancelado';
-  const entregado = data.proof?.event === 'entregado';
-  const fallido = data.proof?.event === 'no_entregado';
+  const entregado = data.status === 'entregado' || data.proof?.event === 'entregado';
+  const fallido = !cancelado && !entregado && data.proof?.event === 'no_entregado';
+
+  /**
+   * La fecha del sello sólo si corresponde a lo que el sello dice. Poner
+   * debajo de "ENTREGADO" la fecha de un intento fallido es peor que no poner
+   * ninguna.
+   */
+  const fechaSello =
+    entregado && data.proof?.event === 'entregado'
+      ? data.proof.happenedAt
+      : entregado
+        ? data.deliveredAt
+        : fallido && data.proof
+          ? data.proof.happenedAt
+          : null;
   const mapa = data.lat && data.lng ? mapaEmbedUrl(data.lat, data.lng) : null;
 
   /**
@@ -284,9 +311,9 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
                   ? 'NO ENTREGADO'
                   : (HITOS[data.status] ?? STATUS_LABEL[data.status] ?? '').toUpperCase()}
           </div>
-          {data.proof && (
+          {fechaSello && (
             <div className="mt-2 text-sm font-bold text-[var(--edr-muted)]">
-              {fecha(data.proof.happenedAt)}
+              {fecha(fechaSello)}
             </div>
           )}
 

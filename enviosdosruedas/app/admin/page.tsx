@@ -10,7 +10,7 @@ import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
-import MarcarNoEntregado from '@/components/admin/MarcarNoEntregado';
+import CerrarEnvio from '@/components/admin/CerrarEnvio';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import { hoyLocal } from '@/lib/scheduled';
 import { dayShift } from '@/lib/settlement';
@@ -137,13 +137,15 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState<'todos' | ShipmentStatus>('todos');
   /** Los FLEX se cierran en la app de Mercado Libre: a veces hay que verlos solos. */
   const [soloFlex, setSoloFlex] = useState(false);
+  /** Ver sólo los que quedaron con un intento fallido, para reprogramarlos. */
+  const [soloFallidos, setSoloFallidos] = useState(false);
   const [ubicando, setUbicando] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shipment | null>(null);
   const [toPrint, setToPrint] = useState<Shipment | null>(null);
   const [proof, setProof] = useState<Shipment | null>(null);
-  /** El envío al que se le va a registrar un intento fallido desde el panel. */
-  const [noEntregado, setNoEntregado] = useState<Shipment | null>(null);
+  /** El envío que se está cerrando a mano desde el panel. */
+  const [cerrando, setCerrando] = useState<Shipment | null>(null);
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -288,6 +290,9 @@ export default function AdminPage() {
 
   const visible = shipments.filter((s) => {
     const okFlex = !soloFlex || Boolean(s.is_flex);
+    // "No entregado" no es un estado del envío sino lo que le pasó: el envío
+    // queda en 'pendiente_entrega', esperando que se lo vuelva a intentar.
+    const okFallidos = !soloFallidos || s.status === 'pendiente_entrega';
     const okStatus = statusFilter === 'todos' || s.status === statusFilter;
     const q = search.trim().toLowerCase();
     const okSearch =
@@ -296,7 +301,7 @@ export default function AdminPage() {
       s.recipient_name.toLowerCase().includes(q) ||
       s.address_street.toLowerCase().includes(q) ||
       (s.client_name_raw ?? '').toLowerCase().includes(q);
-    return okFlex && okStatus && okSearch;
+    return okFlex && okFallidos && okStatus && okSearch;
   });
 
   // Suma las dos cobranzas: la de la puerta y la que se le cobra al comercio
@@ -313,7 +318,9 @@ export default function AdminPage() {
   const resumen = {
     total: visible.length,
     entregados: visible.filter((s) => s.status === 'entregado').length,
-    fallidos: visible.filter((s) => s.status === 'pendiente_entrega').length,
+    // Sobre lo traído y no sobre lo visible: es un botón de filtro, y un
+    // número que se explica a sí mismo al apretarlo no sirve para nada.
+    fallidos: shipments.filter((s) => s.status === 'pendiente_entrega').length,
     enCalle: visible.filter((s) => s.status === 'retirado' || s.status === 'en_camino').length,
     sinSalir: visible.filter((s) => s.status === 'creado' || s.status === 'pendiente_retiro').length,
     // Se cuenta sobre lo traído, no sobre lo visible: si no, con el filtro
@@ -476,7 +483,27 @@ export default function AdminPage() {
                 <Contador label="entregados" valor={resumen.entregados} clase="text-emerald-400" />
                 <Contador label="en la calle" valor={resumen.enCalle} clase="text-sky-300" />
                 <Contador label="sin salir" valor={resumen.sinSalir} />
-                <Contador label="no entregados" valor={resumen.fallidos} clase="text-orange-400" />
+                {/* Se cuenta sobre lo traído y no sobre lo visible, igual que
+                    el de flex: con el filtro prendido, un número que se explica
+                    a sí mismo no sirve para nada. */}
+                <button
+                  onClick={() => setSoloFallidos((v) => !v)}
+                  title="Ver únicamente los envíos que quedaron sin entregar"
+                  className={`rounded px-2 py-0.5 text-xs ${
+                    soloFallidos
+                      ? 'bg-orange-500 font-black text-black'
+                      : 'text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
+                  }`}
+                >
+                  <span
+                    className={`edr-mono text-base font-black ${
+                      soloFallidos ? 'text-black' : 'text-orange-400'
+                    }`}
+                  >
+                    {resumen.fallidos}
+                  </span>{' '}
+                  no entregados {soloFallidos ? '· ver todos' : ''}
+                </button>
 
                 {/* Los envíos nuevos se ubican solos al guardarlos. Este botón
                     es para los que ya estaban cargados de antes. Va a mano y no
@@ -550,7 +577,7 @@ export default function AdminPage() {
               onDelete={remove}
               onStatus={changeStatus}
               onAssign={assignDriver}
-              onNoEntregado={CERRADOS.includes(s.status) ? undefined : setNoEntregado}
+              onCerrar={s.status === 'cancelado' ? undefined : setCerrando}
             />
           ))}
         </div>
@@ -670,15 +697,16 @@ export default function AdminPage() {
                         Ver prueba
                       </button>
                     )}
-                    {/* Un envío ya entregado o cancelado no admite un intento
-                        fallido: sería reescribir una historia terminada. */}
-                    {!CERRADOS.includes(s.status) && (
+                    {/* Un envío cancelado no se cierra: esa historia terminó.
+                        Uno entregado sí se puede abrir, para corregir a "no
+                        entregado" cuando se cerró mal. */}
+                    {s.status !== 'cancelado' && (
                       <button
-                        onClick={() => setNoEntregado(s)}
-                        title="Registrar un intento fallido"
+                        onClick={() => setCerrando(s)}
+                        title="Registrar la entrega o el intento fallido"
                         className="ml-1 rounded border border-orange-400 px-2 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-950"
                       >
-                        No entregado
+                        Cerrar
                       </button>
                     )}
                     <button
@@ -719,10 +747,10 @@ export default function AdminPage() {
 
       <ProofOfDeliveryModal shipment={proof} onClose={() => setProof(null)} />
 
-      {noEntregado && (
-        <MarcarNoEntregado
-          shipment={noEntregado}
-          onCerrar={() => setNoEntregado(null)}
+      {cerrando && (
+        <CerrarEnvio
+          shipment={cerrando}
+          onCerrar={() => setCerrando(null)}
           onListo={load}
         />
       )}

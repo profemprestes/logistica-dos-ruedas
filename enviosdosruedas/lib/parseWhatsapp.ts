@@ -114,10 +114,42 @@ const RE_FLAG_AL_RETIRAR = /\bcobrar\s+al\s+retirar\b|\bcobra\s+al\s+retirar\b/i
 const RE_FLAG_PAGADO = /\b(pagado|abonado|ya\s+pag[oó])\b/i;
 const RE_FLAG_FLEX = /\bflex\b/i;
 
-const RE_PHONE = /\b(?:\+?54)?\s?(?:9)?\s?\d{8,13}\b/;
-/** Calle + altura, con depto opcional pegado al final ("ESPAÑA 2155 5B") */
-const RE_ADDR_HEAD = /^(.*?\d{1,5}(?:\s+\d{1,3}\s*[A-Za-z]\b)?)/;
-const RE_DEPTO_TAIL = /\s(\d{1,3}\s*[A-Za-z])$/;
+/**
+ * Un teléfono como lo escribe la gente: con espacios, guiones y paréntesis.
+ *
+ * El patrón viejo pedía los dígitos pegados, así que "Noelia +54 9 223
+ * 634-6427" y "Diego 223 533 2554" no eran teléfonos para el sistema y el
+ * contacto entero terminaba en el campo de producto. Nunca se cargó un
+ * destinatario con nombre y teléfono desde una tanda pegada.
+ *
+ * Se acepta cualquier hilera de números con separadores en el medio y después
+ * se cuentan los dígitos: eso es lo que decide si es un teléfono o el número
+ * de una casa.
+ */
+const RE_TEL_CANDIDATO = /\+?\d[\d\s().-]{6,}\d/g;
+
+/** Saca el teléfono de un texto y devuelve lo que queda: el nombre, casi siempre. */
+function sacarTelefono(texto: string): { telefono: string; resto: string } {
+  for (const m of texto.matchAll(RE_TEL_CANDIDATO)) {
+    const digitos = m[0].replace(/\D/g, '');
+    // Menos de ocho no es un teléfono; más de quince, tampoco.
+    if (digitos.length < 8 || digitos.length > 15) continue;
+    return { telefono: clean(m[0]), resto: clean(texto.replace(m[0], ' ')) };
+  }
+  return { telefono: '', resto: texto };
+}
+
+const tieneTelefono = (texto: string) => sacarTelefono(texto).telefono !== '';
+
+/**
+ * Calle + altura, con depto opcional pegado al final ("ESPAÑA 2155 5B").
+ *
+ * La barra contempla los departamentos dobles, comunes en los edificios
+ * viejos: "BELGRANO 2875 5A/B" se partía en "BELGRANO 2875 5A" más una nota
+ * suelta que decía "/B".
+ */
+const RE_ADDR_HEAD = /^(.*?\d{1,5}(?:\s+\d{1,3}\s*[A-Za-z](?:\s*\/\s*[A-Za-z])?\b)?)/;
+const RE_DEPTO_TAIL = /\s(\d{1,3}\s*[A-Za-z](?:\s*\/\s*[A-Za-z])?)$/;
 const RE_PISO_DTO = /\b((?:piso|p\.)\s*\w+(?:\s*(?:dto|dpto|depto)\.?\s*\w+)?|(?:dto|dpto|depto)\.?\s*\w+)\b/i;
 
 let counter = 0;
@@ -156,6 +188,22 @@ function takeAddress(segment: string): { street: string; extra: string; rest: st
   if (head && head[1].trim()) {
     rest = clean(street.slice(head[0].length));
     street = clean(head[1]);
+
+    /*
+     * Esquinas. "CALLE 20 Y CALLE 491" se cortaba en el primer número y
+     * quedaba como "CALLE 20", con "Y CALLE 491" tirado en las notas: la mitad
+     * de la dirección afuera del renglón que lee el repartidor.
+     *
+     * En buena parte del partido no hay numeración, o es irregular, y la
+     * dirección ES la esquina. Así que si lo que sigue empieza con "y" o "esq"
+     * y parece otra calle —letras y números, sin comas ni frases— se vuelve a
+     * pegar.
+     */
+    const esquina = rest.match(/^(?:y|esq\.?|esquina)\s+(.+)$/i);
+    if (esquina && esquina[1].length <= 40 && /^[\wáéíóúñ\s.°º]+$/i.test(esquina[1])) {
+      street = `${street} y ${clean(esquina[1])}`;
+      rest = '';
+    }
   } else {
     // Sin altura numérica: PLANTA YPF, ALDREY, CORREO OCA PASO E INDEPENDENCIA
     const parts = street.split(/[.,]/);
@@ -206,7 +254,10 @@ export function parseWhatsappText(
   for (const crudo of lines) {
     // El formato se saca ANTES de mirar si es viñeta: si no, el comercio en
     // negrita (`*TOYPIOLA*`) pasa por línea de entrega y se pierde.
-    const original = sinFormatoWhatsapp(crudo);
+    // Un chat exportado trae cada renglón con "[12/8, 09:14] Matías: " adelante.
+    // Sin sacarlo, el corchete se lee como parte de la dirección y el envío
+    // entra con "[12" de calle. El otro parser, el del resumen, ya lo hacía.
+    const original = sinFormatoWhatsapp(crudo).replace(/^\[[^\]]+\]\s*[^:]{1,40}:\s*/, '');
 
     const isDeliveryLine = /^[-•*·]/.test(original);
     let line = original.replace(/^[-•*·]\s*/, '').trim();
@@ -240,9 +291,18 @@ export function parseWhatsappText(
     // ---------- Línea de entrega ----------
     const warnings: string[] = [];
 
-    // Paréntesis: separo instrucciones de plata de producto/contacto
+    /*
+     * Cada paréntesis va a un lado distinto, y se miran de a uno.
+     *
+     * Antes se juntaban todos y lo que no fuera plata caía en "producto". Por
+     * eso una instrucción como "(volver a rendir al terminar a Galicia 2166)"
+     * terminaba mezclada con el contacto en un campo que el repartidor lee
+     * como si fuera la descripción del paquete.
+     */
     const flags: string[] = [];
-    const info: string[] = [];
+    const contactos: string[] = [];
+    const notasSueltas: string[] = [];
+
     line = line.replace(/\(([^)]*)\)/g, (_m, inner: string) => {
       const t = inner.trim();
       if (
@@ -252,8 +312,10 @@ export function parseWhatsappText(
         RE_FLAG_FLEX.test(t)
       ) {
         flags.push(t);
+      } else if (tieneTelefono(t)) {
+        contactos.push(t);
       } else {
-        info.push(t);
+        notasSueltas.push(t);
       }
       return ' ';
     });
@@ -262,20 +324,19 @@ export function parseWhatsappText(
     const isReminder = flexDelComercio || RE_FLAG_FLEX.test(flagText) || RE_FLAG_FLEX.test(line);
     if (isReminder) line = line.replace(/\bflex\b/gi, ' ');
 
-    // Producto y contacto del destinatario
+    // Contacto del destinatario: el paréntesis que trae un teléfono.
     let recipientName = '';
     let recipientPhone = '';
-    let productDetail = '';
-    if (info.length) {
-      const parts = info.join(', ').split(/[,;]/).map((p) => p.trim()).filter(Boolean);
-      const idx = parts.findIndex((p) => RE_PHONE.test(p));
-      if (idx >= 0) {
-        recipientPhone = (parts[idx].match(RE_PHONE)?.[0] ?? '').trim();
-        recipientName = clean(parts[idx].replace(recipientPhone, ''));
-        productDetail = parts.filter((_, i) => i !== idx).join(', ');
-      } else {
-        productDetail = parts.join(', ');
-      }
+    const productDetail = '';
+
+    if (contactos.length) {
+      const { telefono, resto } = sacarTelefono(contactos[0]);
+      recipientPhone = telefono;
+      // Lo que queda al sacarle el teléfono es el nombre, sin la coma que a
+      // veces los separa: "Noelia, 223 634-6427".
+      recipientName = clean(resto.replace(/[,;]/g, ' '));
+      // Un segundo contacto no se pierde: va a las notas.
+      notasSueltas.push(...contactos.slice(1));
     }
 
     // ¿Trae el retiro adentro de la misma línea?
@@ -382,6 +443,10 @@ export function parseWhatsappText(
         amountToCollect: second ? 0 : paymentMode === 'cobrar_destinatario' ? merchandiseAmount : 0,
         notes: [
           addr.rest,
+          // Las instrucciones entre paréntesis: "volver a rendir al terminar",
+          // "retira ropa de cambio". Son para el repartidor y sin esto se
+          // perdían adentro del campo de producto.
+          second ? '' : notasSueltas.join(' | '),
           stops.length > 1 ? `Envío de 2 paradas (${stops.join(' + ')}), precio conjunto.` : '',
           isReminder ? 'RECORDATORIO FLEX: se hace por la app de Mercado Libre.' : '',
         ]

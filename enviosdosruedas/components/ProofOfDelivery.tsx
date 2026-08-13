@@ -92,6 +92,41 @@ const fecha = (iso: string) =>
   });
 
 /**
+ * Qué se le explica al que abre el seguimiento, según cómo esté el envío.
+ *
+ * Antes había una sola frase para todo lo que no fuera "en camino" o
+ * "retirado": "tu envío está en curso, volvé a consultar más tarde". Debajo de
+ * un sello que decía CANCELADO, eso era directamente falso, y en los estados
+ * que necesitan que la persona haga algo —cancelado, no entregado— no decía
+ * qué hacer.
+ *
+ * El orden importa: un envío cancelado está cancelado aunque antes haya tenido
+ * un intento fallido, así que eso se mira primero.
+ */
+function explicacion(data: TrackResult): string {
+  if (data.status === 'cancelado') {
+    return 'Tu envío fue cancelado. Comunicate con el vendedor o con la mensajería si creés que es un error.';
+  }
+
+  if (data.proof?.event === 'entregado') return '';
+
+  if (data.proof?.event === 'no_entregado') {
+    return 'Tu envío no pudo ser entregado. Comunicate con tu vendedor o con la mensajería para coordinar la entrega.';
+  }
+
+  switch (data.status) {
+    case 'en_camino':
+      return 'El repartidor ya salió con tu envío.';
+    case 'retirado':
+      return 'Ya lo retiramos del comercio.';
+    case 'pendiente_entrega':
+      return 'Tu envío está pendiente de entrega. Esto sucede porque se reprogramó una nueva visita para otro día.';
+    default:
+      return 'Tu envío está en curso. Volvé a consultar más tarde.';
+  }
+}
+
+/**
  * Comprobante de entrega (POD) para el cliente final.
  *
  * Sigue el formato habitual de la industria: sello de estado bien grande,
@@ -161,6 +196,7 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
     };
   }, [data.status, data.code]);
 
+  const cancelado = data.status === 'cancelado';
   const entregado = data.proof?.event === 'entregado';
   const fallido = data.proof?.event === 'no_entregado';
   const mapa = data.lat && data.lng ? mapaEmbedUrl(data.lat, data.lng) : null;
@@ -230,34 +266,33 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
       <div className="px-5 pt-5">
         <div
           className={`rounded-xl border-4 px-4 py-4 text-center ${
-            entregado
-              ? 'border-emerald-400 bg-emerald-500/15'
-              : fallido
-                ? 'border-orange-400 bg-orange-500/15'
-                : 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/10'
+            cancelado
+              ? 'border-red-400 bg-red-500/15'
+              : entregado
+                ? 'border-emerald-400 bg-emerald-500/15'
+                : fallido
+                  ? 'border-orange-400 bg-orange-500/15'
+                  : 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/10'
           }`}
         >
           <div className="text-3xl font-black leading-none tracking-wide">
-            {entregado
-              ? 'ENTREGADO'
-              : fallido
-                ? 'NO ENTREGADO'
-                : (HITOS[data.status] ?? STATUS_LABEL[data.status] ?? '').toUpperCase()}
+            {cancelado
+              ? 'CANCELADO'
+              : entregado
+                ? 'ENTREGADO'
+                : fallido
+                  ? 'NO ENTREGADO'
+                  : (HITOS[data.status] ?? STATUS_LABEL[data.status] ?? '').toUpperCase()}
           </div>
           {data.proof && (
             <div className="mt-2 text-sm font-bold text-[var(--edr-muted)]">
               {fecha(data.proof.happenedAt)}
             </div>
           )}
-          {!data.proof && (
-            <div className="mt-2 text-sm font-bold text-[var(--edr-muted)]">
-              {data.status === 'en_camino'
-                ? 'El repartidor ya salió con tu envío.'
-                : data.status === 'retirado'
-                  ? 'Ya lo retiramos del comercio.'
-                  : 'Tu envío está en curso. Volvé a consultar más tarde.'}
-            </div>
-          )}
+
+          <div className="mt-2 text-sm font-bold text-[var(--edr-muted)]">
+            {explicacion(data)}
+          </div>
         </div>
       </div>
 

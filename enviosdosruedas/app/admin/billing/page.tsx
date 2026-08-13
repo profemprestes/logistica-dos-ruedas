@@ -153,7 +153,24 @@ export default function BillingPage() {
     if (!driverId) return;
     setError('');
 
+    /*
+     * Sin sesión no se intenta siquiera.
+     *
+     * El 13/08/2026 el cierre falló con "new row violates row-level security
+     * policy for table settlements", que no le dice nada a nadie. La causa era
+     * ésta: la pestaña llevaba horas abierta y se había quedado sin sesión, así
+     * que lo que llegaba a la base era un anónimo. Como anónimo no sos admin, y
+     * el permiso —bien puesto— rechaza la escritura.
+     *
+     * Costó encontrarlo porque el mensaje apunta al permiso, que era lo único
+     * que estaba bien. Un aviso claro acá habría ahorrado la vuelta entera.
+     */
     const { data: me } = await supabase.auth.getUser();
+    if (!me.user) {
+      setError('Se cerró tu sesión. Recargá la página, volvé a entrar y cerrá la caja de nuevo.');
+      return;
+    }
+
     const { error: dbError } = await supabase.from('settlements').upsert(
       {
         driver_id: driverId,
@@ -173,7 +190,14 @@ export default function BillingPage() {
 
     if (dbError) {
       console.error('[liquidación] no se pudo cerrar el día', dbError);
-      setError(dbError.message);
+      setError(
+        // Por si la sesión se cayó entre el control de arriba y esta línea, o
+        // si algún día se rompe un permiso de verdad: que el cartel diga qué
+        // hacer, y no cómo se llama la tabla.
+        dbError.message.includes('row-level security')
+          ? 'La base rechazó el cierre. Suele ser la sesión: recargá la página, volvé a entrar y probá de nuevo.'
+          : dbError.message,
+      );
       return;
     }
 

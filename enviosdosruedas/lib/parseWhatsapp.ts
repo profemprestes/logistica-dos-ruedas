@@ -44,6 +44,15 @@ export interface ParsedRow {
   notes: string;
   warnings: string[];
   rawLine: string;
+  /**
+   * Punto confirmado a mano antes de guardar. En null lo busca el servidor.
+   *
+   * El parser nunca lo llena: sale de que alguien mire el mapa. Está acá para
+   * que ese punto viaje junto al envío desde que se revisa la tanda hasta que
+   * se guarda.
+   */
+  lat: number | null;
+  lng: number | null;
 }
 
 /* ------------------------------------------------------------------ utils */
@@ -380,6 +389,8 @@ export function parseWhatsappText(
           .join(' | '),
         warnings: [...warnings],
         rawLine: original,
+        lat: null,
+        lng: null,
       });
     });
   }

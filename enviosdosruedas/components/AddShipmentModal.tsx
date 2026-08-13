@@ -19,16 +19,45 @@ type Mode = 'manual' | 'pegar';
  */
 async function ubicarEnElMapa(ids: number[]) {
   if (!ids.length) return;
+
+  /*
+   * El servidor ubica de a seis por llamada —Nominatim pide una consulta por
+   * segundo y Vercel corta a los treinta— y avisa si quedaron más. Antes se
+   * llamaba una sola vez: una tanda de veinte envíos pegada de WhatsApp
+   * terminaba con seis ubicados y catorce sin punto, sin que nada lo dijera.
+   *
+   * El tope de vueltas es un cinturón: si el servidor contestara siempre que
+   * quedan más, esto quedaría dando vueltas para siempre.
+   */
+  const MAX_VUELTAS = 12;
+
   try {
     const { data } = await supabase.auth.getSession();
-    await fetch('/api/geocode', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${data.session?.access_token ?? ''}`,
-      },
-      body: JSON.stringify({ ids }),
-    });
+    const token = data.session?.access_token ?? '';
+
+    for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
+      const res = await fetch('/api/geocode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) return;
+
+      // Los ya ubicados quedan afuera solos: el servidor sólo mira los que
+      // tienen `lat` en null, así que mandar la lista entera no los repite.
+      const { quedanMas, guardados } = (await res.json()) as {
+        quedanMas?: boolean;
+        guardados?: number;
+      };
+
+      if (!quedanMas) return;
+
+      // Una vuelta que no ubicó nada quiere decir que lo que queda no lo
+      // resuelve el buscador: son direcciones sucias, y volver a preguntarlas
+      // devuelve lo mismo y gasta el cupo de Nominatim. Se cortan acá y quedan
+      // marcadas como "sin ubicar" para ponerles el punto a mano.
+      if (!guardados) return;
+    }
   } catch {
     // Sin punto en el mapa se trabaja igual. No se molesta a nadie con esto.
   }
@@ -246,6 +275,10 @@ function ShipmentForm({
       // de la base, que es UTC: una tanda cargada de noche nacía con la fecha de
       // mañana y, desde el paso 14, el repartidor no la podía tocar.
       scheduled_date: r.scheduledDate,
+      // El punto que se confirmó a mano, si se confirmó. El buscador automático
+      // no lo pisa: `/api/geocode` sólo toca los que tienen `lat` en null.
+      lat: r.lat,
+      lng: r.lng,
     }));
     const { data: guardados, error: dbError } = await supabase
       .from('shipments')
@@ -640,7 +673,19 @@ function ShipmentForm({
                               </Field>
 
                               <Field label="Dirección de entrega" className="sm:col-span-2">
-                                <input className={field} value={r.addressStreet} onChange={(e) => updateRow(r.tempId, { addressStreet: e.target.value })} />
+                                {/* Cambiar la dirección borra el punto confirmado: si no,
+                                    queda pegado el pin de la dirección anterior, que es
+                                    peor que no tener ninguno. */}
+                                <input
+                                  className={field}
+                                  value={r.addressStreet}
+                                  onChange={(e) =>
+                                    updateRow(r.tempId, {
+                                      addressStreet: e.target.value,
+                                      ...(r.lat != null ? { lat: null, lng: null } : {}),
+                                    })
+                                  }
+                                />
                               </Field>
                               <Field label="Piso / depto">
                                 <input className={field} value={r.addressExtra} onChange={(e) => updateRow(r.tempId, { addressExtra: e.target.value })} />
@@ -701,6 +746,26 @@ function ShipmentForm({
                               <Field label="Notas" className="sm:col-span-2">
                                 <input className={field} value={r.notes} onChange={(e) => updateRow(r.tempId, { notes: e.target.value })} />
                               </Field>
+                            </div>
+
+                            {/* El punto, envío por envío. Una tanda pegada de
+                                WhatsApp trae justo las direcciones más sucias
+                                —esquinas, referencias, "planta YPF"— que son las
+                                que el buscador no resuelve. Revisarlas acá evita
+                                mandar al repartidor a la otra punta. */}
+                            <div className="mt-3">
+                              <VerificarPunto
+                                direccion={r.addressStreet}
+                                ciudad={r.city}
+                                lat={r.lat}
+                                lng={r.lng}
+                                onPunto={(p) =>
+                                  updateRow(r.tempId, {
+                                    lat: p?.lat ?? null,
+                                    lng: p?.lng ?? null,
+                                  })
+                                }
+                              />
                             </div>
 
                             {r.warnings.length > 0 && (

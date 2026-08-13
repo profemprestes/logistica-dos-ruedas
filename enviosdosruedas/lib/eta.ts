@@ -100,15 +100,33 @@ export function estimarLlegada(
   };
 }
 
+/** Radio del círculo que se dibuja en el mapa, en metros. */
+export const RADIO_APROX_M = 500;
+
 /**
- * Redondea el punto antes de publicarlo: tres decimales son unos cien metros.
+ * Lleva el punto al centro de una celda de 500 metros.
  *
- * Alcanza para ver que la moto viene por el barrio y no para saber en qué
- * puerta está parada.
+ * Es lo que hace que la posición publicada sea aproximada de verdad y no una
+ * posición exacta dibujada en chiquito. Dos propiedades que importan:
+ *
+ *  - El centro que se publica NO es donde está la moto: es el centro de la
+ *    celda. La posición real queda en algún lugar adentro, hasta unos 350
+ *    metros del centro.
+ *  - No hay un corrimiento fijo. Un pin siempre desplazado la misma cantidad
+ *    se puede descubrir mirando dónde termina el reparto, y a partir de ahí
+ *    se sabe la posición exacta siempre. Con la celda no hay nada que restar:
+ *    dos posiciones distintas dentro de la misma manzana publican el mismo
+ *    punto.
+ *
+ * Y como el círculo que se dibuja es de 500 metros, siempre contiene a la moto.
+ * El mapa no miente: dice "anda por acá adentro", que es verdad.
  */
-export function redondearPunto(p: Punto): Punto {
+export function aproximarPunto(p: Punto): Punto {
+  const pasoLat = RADIO_APROX_M / 111_320;
+  const pasoLng = RADIO_APROX_M / (111_320 * Math.cos((p.lat * Math.PI) / 180));
+
   return {
-    lat: Math.round(p.lat * 1000) / 1000,
-    lng: Math.round(p.lng * 1000) / 1000,
+    lat: Math.round(p.lat / pasoLat) * pasoLat,
+    lng: Math.round(p.lng / pasoLng) * pasoLng,
   };
 }

@@ -1,6 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { TrackResult } from '@/components/ProofOfDelivery';
-import { estimarLlegada, redondearPunto } from '@/lib/eta';
+import {
+  aproximarPunto,
+  estimarLlegada,
+  MINUTOS_QUE_VENCE,
+  RADIO_APROX_M,
+} from '@/lib/eta';
 
 /**
  * Búsqueda del seguimiento público, del lado del servidor.
@@ -16,18 +21,6 @@ import { estimarLlegada, redondearPunto } from '@/lib/eta';
 
 /** EDR + dígitos + sufijo de ciudad (ej: EDR00001015MDQ). */
 export const CODE_RE = /^EDR\d{6,10}[A-Z]{0,4}$/i;
-
-/**
- * Cuántos minutos de atraso lleva la posición que se publica.
- *
- * No se muestra dónde está la moto: se muestra dónde estaba. El que abre el
- * link ve por dónde viene, que es lo que necesita, y no alcanza para salir a
- * cruzarse a alguien que anda con paquetes y plata encima.
- *
- * El atraso se aplica acá, en el servidor. No hay ningún parámetro que lo
- * saque ni forma de pedir la posición fresca desde afuera.
- */
-const RETRASO_MINUTOS = 3;
 
 interface ShipmentRow {
   id: number;
@@ -138,14 +131,16 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
   let courier: TrackResult['courier'] = null;
 
   if (shipment.status === 'en_camino' && shipment.assigned_driver) {
-    const corte = new Date(Date.now() - RETRASO_MINUTOS * 60_000).toISOString();
+    // Una posición vieja no sirve para nada: el repartidor pudo haber cerrado
+    // la app o quedado sin señal hace media hora. Mostrar eso como "por acá
+    // viene" es peor que no mostrar nada.
+    const vence = new Date(Date.now() - MINUTOS_QUE_VENCE * 60_000).toISOString();
 
-    // La más nueva de las que YA tienen el atraso cumplido.
     const { data: pos } = await admin
       .from('driver_positions')
       .select('lat, lng, taken_at')
       .eq('driver_id', shipment.assigned_driver)
-      .lte('taken_at', corte)
+      .gte('taken_at', vence)
       .order('taken_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -157,15 +152,19 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
           ? { lat: Number(shipment.lat), lng: Number(shipment.lng) }
           : null;
 
-      // El tiempo se calcula con el punto exacto y recién después se redondea
-      // el que se publica: redondear primero metería cien metros de error en
-      // la cuenta sin ganar nada, porque el número que sale igual es un rango.
+      // El tiempo se calcula con el punto exacto y recién después se aproxima
+      // el que se publica: aproximar primero metería medio kilómetro de error
+      // en la cuenta sin ganar nada, porque lo que sale es un rango igual.
       const eta = estimarLlegada(crudo, destino, pos.taken_at as string);
-      const publicado = redondearPunto(crudo);
+
+      // Lo ÚNICO que sale de acá es el centro de la celda de 500 metros. La
+      // posición exacta no se devuelve nunca, ni siquiera redondeada de menos.
+      const publicado = aproximarPunto(crudo);
 
       courier = {
         lat: publicado.lat,
         lng: publicado.lng,
+        radio: RADIO_APROX_M,
         takenAt: pos.taken_at as string,
         eta: eta ? { texto: eta.texto, desde: eta.desde, hasta: eta.hasta } : null,
       };

@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
@@ -35,13 +36,15 @@ export interface TrackResult {
   lat: number | null;
   lng: number | null;
   /**
-   * Por dónde venía la moto, con unos minutos de atraso a propósito.
-   * Sólo viene cuando el envío está en camino; el resto del tiempo es null.
+   * La zona por la que anda la moto: el centro de una celda de 500 metros, no
+   * su posición exacta. Sólo viene cuando el envío está en camino.
    */
   courier: {
+    /** Centro de la celda de 500 m, NO la posición exacta de la moto. */
     lat: number;
     lng: number;
-    /** Cuándo se tomó ese punto. Es varios minutos antes de ahora. */
+    /** Metros del círculo que se dibuja alrededor. */
+    radio: number;
     takenAt: string;
     eta: { texto: string; desde: number; hasta: number } | null;
   } | null;
@@ -76,10 +79,6 @@ const HITOS: Record<string, string> = {
   cancelado: 'Cancelado',
 };
 
-/** Sólo la hora: en el mapa, la fecha sobra y ocupa la mitad del globito. */
-const hora = (iso: string) =>
-  new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-
 const fecha = (iso: string) =>
   new Date(iso).toLocaleString('es-AR', {
     day: '2-digit',
@@ -96,15 +95,57 @@ const fecha = (iso: string) =>
  * los datos del envío en dos columnas, la prueba (quién recibió y la foto) y
  * el pie con los datos de la empresa.
  */
-export default function ProofOfDelivery({ data }: { data: TrackResult }) {
+export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }) {
+  /**
+   * El envío en camino se refresca solo: quien lo abre lo deja abierto
+   * esperando, y una pantalla que no se mueve obliga a recargar a mano para
+   * enterarse de que ya llegó.
+   */
+  const [data, setData] = useState(inicial);
+
+  useEffect(() => {
+    if (data.status !== 'en_camino') return;
+    let vivo = true;
+
+    const pedir = () => {
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: data.code }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((nuevo) => {
+          if (vivo && nuevo) setData(nuevo as TrackResult);
+        })
+        .catch(() => {
+          // Sin señal se queda con lo último que vio. No hay nada que avisar.
+        });
+    };
+
+    const timer = window.setInterval(pedir, 45_000);
+
+    // Volver a la pestaña después de un rato es el momento en que más importa
+    // que el dato esté fresco.
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') pedir();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [data.status, data.code]);
+
   const entregado = data.proof?.event === 'entregado';
   const fallido = data.proof?.event === 'no_entregado';
   const mapa = data.lat && data.lng ? mapaEmbedUrl(data.lat, data.lng) : null;
 
   /**
-   * Los dos puntos del mapa mientras el envío viaja: adónde va y por dónde
-   * venía la moto. Sin repartidor en la calle esto queda en null y se sigue
-   * usando el recuadro de siempre.
+   * Los dos puntos del mapa mientras el envío viaja: adónde va y la zona por
+   * la que anda la moto. Sin repartidor en la calle esto queda en null y se
+   * sigue usando el recuadro de siempre.
    */
   const puntos: PuntoMapa[] | null =
     data.courier && data.lat != null && data.lng != null
@@ -122,10 +163,11 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
             id: 2,
             lat: data.courier.lat,
             lng: data.courier.lng,
+            radio: data.courier.radio,
             etiqueta: '🛵',
             color: '#ea580c',
-            titulo: 'Por acá venía el repartidor',
-            detalle: `Hace unos minutos · ${hora(data.courier.takenAt)}`,
+            titulo: 'Por acá anda el repartidor',
+            detalle: 'Posición aproximada',
           },
         ]
       : null;
@@ -211,13 +253,12 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
               {data.courier ? (
                 <>
                   Es un estimado: puede cambiar por el tránsito o por las entregas que tenga
-                  antes que la tuya. La posición en el mapa se muestra con unos minutos de
-                  demora.
+                  antes que la tuya. En el mapa, el círculo marca la zona por donde anda.
                 </>
               ) : (
                 <>
-                  Ya salió con tu envío. En cuanto tengamos su posición vas a ver por dónde
-                  viene y cuánto falta; se muestra con unos minutos de demora.
+                  Ya salió con tu envío. En cuanto tengamos su posición vas a ver por qué zona
+                  viene y cuánto falta.
                 </>
               )}
             </p>
@@ -272,7 +313,7 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
           {mapa && (
             <figure className={soloMapa ? 'sm:col-span-2' : undefined}>
               <figcaption className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
-                {puntos ? 'Tu envío y por dónde viene' : 'Punto de entrega'}
+                {puntos ? 'Tu envío y la zona del repartidor' : 'Punto de entrega'}
               </figcaption>
 
               {/* Con la moto en la calle hacen falta dos puntos, y el recuadro

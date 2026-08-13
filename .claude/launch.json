@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "enviosdosruedas", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "dosruedas-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "enviosdosruedas", "run", "start", "--", "-p", "3001"],
+      "port": 3001
     }
   ]
 }

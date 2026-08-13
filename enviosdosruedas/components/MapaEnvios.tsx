@@ -28,6 +28,13 @@ export interface PuntoMapa {
   color: string;
   titulo: string;
   detalle: string;
+  /**
+   * Metros de incertidumbre. Con esto se dibuja un círculo alrededor del punto
+   * en vez de un pin a secas: es la diferencia entre decir "está acá" y decir
+   * "anda por acá adentro". Se usa para la moto, cuya posición se publica
+   * aproximada a propósito.
+   */
+  radio?: number;
 }
 
 export default function MapaEnvios({
@@ -84,12 +91,15 @@ export default function MapaEnvios({
       capaYo.current = L.layerGroup().addTo(m);
 
       // Nace dentro de una pantalla que todavía se está acomodando: sin esto
-      // mide mal el alto y quedan las baldosas grises de un costado.
-      setTimeout(() => m.invalidateSize(), 60);
+      // mide mal el alto y quedan las baldosas grises de un costado. El id se
+      // guarda para poder cancelarlo: si la pantalla se cierra en esos 60 ms,
+      // el temporizador encuentra un mapa ya desarmado y tira error.
+      const ajuste = window.setTimeout(() => m.invalidateSize(), 60);
 
       setListo(true);
 
       limpiar = () => {
+        window.clearTimeout(ajuste);
         m.remove();
         mapa.current = null;
         capa.current = null;
@@ -116,6 +126,19 @@ export default function MapaEnvios({
     if (puntos.length === 0) return;
 
     for (const p of puntos) {
+      // El círculo va primero para que quede DEBAJO del icono: dibujado
+      // después, se come los clics del marcador que tiene adentro.
+      if (p.radio) {
+        L.circle([p.lat, p.lng], {
+          radius: p.radio,
+          color: p.color,
+          weight: 2,
+          opacity: 0.7,
+          fillColor: p.color,
+          fillOpacity: 0.12,
+        }).addTo(g);
+      }
+
       const icono = L.divIcon({
         className: '',
         html:
@@ -144,7 +167,50 @@ export default function MapaEnvios({
     // movería el mapa abajo de la mano al que está mirando una zona.
     if (!encuadrado.current) {
       const limites = L.latLngBounds(puntos.map((p) => [p.lat, p.lng] as [number, number]));
-      m.fitBounds(limites, { padding: [40, 40], maxZoom: 16 });
+
+      // Un círculo de 500 metros no entra en el encuadre de su propio centro:
+      // sin esto queda cortado por los bordes del mapa.
+      //
+      // Se calcula con `toBounds`, que es pura geometría. Pedirle los límites a
+      // un `L.circle` recién creado NO funciona: un círculo que todavía no
+      // está agregado a ningún mapa no tiene con qué convertir metros a
+      // píxeles y revienta con "layerPointToLatLng of undefined". Eso rompía
+      // la pantalla entera, no sólo el encuadre.
+      for (const p of puntos) {
+        if (p.radio) limites.extend(L.latLng(p.lat, p.lng).toBounds(p.radio * 2));
+      }
+
+      /*
+       * Encuadrar recién cuando el mapa sepa cuánto mide.
+       *
+       * Nace adentro de una pantalla que todavía se está armando, y en ese
+       * momento su caja puede medir cero. Un `fitBounds` con esa medida da un
+       * centro y un zoom cualquiera, y como después no se vuelve a encuadrar,
+       * los puntos quedaban FUERA de la vista: el mapa se veía bien pero
+       * mostraba otro pedazo de la ciudad. Pasaba en el seguimiento, donde el
+       * mapa vive dentro de una grilla que se acomoda después.
+       *
+       * Se reintenta unas pocas veces y se abandona: mejor un encuadre feo que
+       * un temporizador dando vueltas para siempre en el celular de alguien.
+       */
+      let intentos = 0;
+      const encuadrar = () => {
+        if (mapa.current !== m) return; // la pantalla se cerró mientras tanto
+        m.invalidateSize();
+
+        if (m.getSize().x < 50 && intentos < 10) {
+          intentos++;
+          window.setTimeout(encuadrar, 80);
+          return;
+        }
+
+        // Sin animación a propósito. Con la animación puesta, el zoom arrancaba
+        // a moverse y quedaba a mitad de camino: el mapa terminaba en el zoom
+        // inicial mostrando media ciudad, con los puntos afuera de la vista.
+        m.fitBounds(limites, { padding: [30, 30], maxZoom: 16, animate: false });
+      };
+
+      encuadrar();
       encuadrado.current = true;
     }
   }, [puntos, listo]);

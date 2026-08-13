@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import ProofOfDelivery from '@/components/ProofOfDelivery';
 import SiteFooter from '@/components/SiteFooter';
-import { buscarEnvio } from '@/lib/trackServer';
+import { buscarEnvioConLimite } from '@/lib/trackLimite';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
 
 /**
@@ -31,7 +32,7 @@ export async function generateMetadata({
   params: Promise<{ codigo: string }>;
 }): Promise<Metadata> {
   const { codigo } = await params;
-  const r = await buscarEnvio(codigo);
+  const r = await buscarEnvioConLimite(codigo, await headers());
 
   if (!r.ok) {
     return { title: 'Seguimiento · Envíos DosRuedas' };
@@ -61,7 +62,7 @@ export default async function SeguimientoPorCodigoPage({
   params: Promise<{ codigo: string }>;
 }) {
   const { codigo } = await params;
-  const resultado = await buscarEnvio(codigo);
+  const resultado = await buscarEnvioConLimite(codigo, await headers());
 
   return (
     <div className="min-h-dvh px-4 py-8">

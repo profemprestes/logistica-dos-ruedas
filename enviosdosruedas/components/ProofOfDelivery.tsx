@@ -165,6 +165,7 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
             lng: data.courier.lng,
             radio: data.courier.radio,
             etiqueta: '🛵',
+            imagen: '/logo-simple.webp',
             color: '#ea580c',
             titulo: 'Por acá anda el repartidor',
             detalle: 'Posición aproximada',

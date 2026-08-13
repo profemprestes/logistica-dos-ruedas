@@ -35,6 +35,11 @@ export interface PuntoMapa {
    * aproximada a propósito.
    */
   radio?: number;
+  /**
+   * Imagen para el punto, en lugar de la etiqueta. Se usa para el logo en el
+   * seguimiento: el que espera reconoce de quién es la moto que se le acerca.
+   */
+  imagen?: string;
 }
 
 export default function MapaEnvios({
@@ -139,14 +144,22 @@ export default function MapaEnvios({
         }).addTo(g);
       }
 
+      // El logo va más grande que un punto numerado: a 26 píxeles es una
+      // mancha. A 44 tampoco se le lee el texto, pero se reconoce la forma y
+      // el color, que es lo que hace falta para saber de quién es la moto.
+      const lado = p.imagen ? 44 : 26;
+
       const icono = L.divIcon({
         className: '',
-        html:
-          `<div style="width:26px;height:26px;border-radius:50%;background:${p.color};` +
-          `border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);color:#fff;` +
-          `font:700 12px/22px system-ui,sans-serif;text-align:center">${p.etiqueta}</div>`,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
+        html: p.imagen
+          ? `<img src="${p.imagen}" alt="" style="width:${lado}px;height:${lado}px;` +
+            `border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.55);` +
+            `background:#fff;object-fit:cover;display:block">`
+          : `<div style="width:${lado}px;height:${lado}px;border-radius:50%;background:${p.color};` +
+            `border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);color:#fff;` +
+            `font:700 12px/22px system-ui,sans-serif;text-align:center">${p.etiqueta}</div>`,
+        iconSize: [lado, lado],
+        iconAnchor: [lado / 2, lado / 2],
       });
 
       const marca = L.marker([p.lat, p.lng], { icon: icono }).addTo(g);

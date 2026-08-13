@@ -116,7 +116,8 @@ begin
   for r in
     select tablename, policyname, cmd
       from pg_policies
-     where schemaname = 'public' and not permissive
+     -- `permissive` es texto, no un si/no: dice 'PERMISSIVE' o 'RESTRICTIVE'.
+     where schemaname = 'public' and permissive = 'RESTRICTIVE'
      order by tablename, policyname
   loop
     hubo := true;

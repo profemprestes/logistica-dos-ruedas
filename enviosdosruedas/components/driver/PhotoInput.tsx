@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import CamaraModal from '@/components/driver/CamaraModal';
 import { compressPhoto } from '@/lib/driver/photo';
 
 /**
@@ -10,13 +11,18 @@ import { compressPhoto } from '@/lib/driver/photo';
  * stream de video: sale más rápido, enfoca mejor y no pelea con el lector de QR
  * por el uso de la cámara.
  *
- * DOS BOTONES Y NO UNO. Sacar la foto y elegirla de la galería son dos campos
- * distintos, aunque parezcan lo mismo. El truco sería sacarle el `capture` al
- * único que hay: ahí el celular pregunta cada vez "¿cámara o galería?", y el
- * caso normal —sacar la foto parado en la puerta— pasa de un toque a dos. Con
- * un botón para cada cosa, el de siempre sigue siendo directo y el otro está
- * cuando hace falta: la foto ya sacada con la cámara del celular, o la que
- * mandó el comercio por WhatsApp.
+ * LA FOTO SE SACA ADENTRO DE LA APP. Abrir la cámara del celular la mandaba al
+ * fondo, y ahí Android la mataba para darle memoria: a los repartidores les
+ * pasaba dos y tres veces seguidas. Sacándola acá adentro no hay cambio de app
+ * y no hay ocasión de matarla. Ver `CamaraModal`.
+ *
+ * La cámara del celular queda de respaldo, para cuando la de adentro no
+ * arranca. Nunca se deja al repartidor sin forma de sacar la foto.
+ *
+ * Y ELEGIR DE LA GALERÍA sigue siendo un botón aparte: la foto ya sacada con la
+ * cámara del celular, o la que mandó el comercio por WhatsApp. Ojo que ésa sí
+ * abre otra app, así que ahí el cierre puede seguir pasando — para eso está el
+ * borrador que guarda la entrega a medio cargar.
  *
  * El tope de dos no es capricho: cada foto se sube desde la calle, con la señal
  * que haya. Dejar que se saquen diez es garantizar entregas que nunca terminan
@@ -37,6 +43,7 @@ export default function PhotoInput({
   const camaraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [camaraAbierta, setCamaraAbierta] = useState(false);
   const [busy, setBusy] = useState(false);
   const [aviso, setAviso] = useState('');
 
@@ -58,6 +65,16 @@ export default function PhotoInput({
     previewsRef.current = urls;
     setPreviews(urls);
     onPhotos(nuevas);
+  }
+
+  /** Suma una foto ya lista —venga de donde venga— y la muestra. */
+  function agregar(blob: Blob) {
+    try {
+      aplicar([...photos, blob], [...previewsRef.current, URL.createObjectURL(blob)]);
+    } catch (e) {
+      console.error('[foto] no se pudo usar la foto', e);
+      setAviso('No se pudo tomar la foto. Cerrá alguna app que tengas abierta y probá de nuevo.');
+    }
   }
 
   /**
@@ -82,14 +99,8 @@ export default function PhotoInput({
       setAviso('El celular no pudo achicar la foto. Se guardó igual, entera: va a tardar más en subir.');
     }
 
-    try {
-      aplicar([...photos, blob], [...previewsRef.current, URL.createObjectURL(blob)]);
-    } catch (e) {
-      console.error('[foto] no se pudo usar la foto', e);
-      setAviso('No se pudo tomar la foto. Cerrá alguna app que tengas abierta y probá de nuevo.');
-    } finally {
-      setBusy(false);
-    }
+    agregar(blob);
+    setBusy(false);
   }
 
   function quitar(i: number) {
@@ -156,7 +167,7 @@ export default function PhotoInput({
       {!completo && (
         <button
           type="button"
-          onClick={() => camaraRef.current?.click()}
+          onClick={() => setCamaraAbierta(true)}
           disabled={busy}
           className={`w-full rounded-xl px-4 py-5 text-lg font-black active:scale-[0.99] disabled:opacity-60 ${
             photos.length > 0
@@ -193,6 +204,22 @@ export default function PhotoInput({
         <p className="mt-2 rounded-xl bg-amber-400 px-3 py-2 text-center text-sm font-bold text-black">
           {aviso}
         </p>
+      )}
+
+      {camaraAbierta && (
+        <CamaraModal
+          onFoto={(foto) => {
+            // Ya sale de la cámara achicada al tamaño final: pasarla otra vez
+            // por el compresor sería decodificarla de nuevo para nada.
+            agregar(foto);
+            setCamaraAbierta(false);
+          }}
+          onCerrar={() => setCamaraAbierta(false)}
+          onSinCamara={() => {
+            setCamaraAbierta(false);
+            camaraRef.current?.click();
+          }}
+        />
       )}
     </div>
   );

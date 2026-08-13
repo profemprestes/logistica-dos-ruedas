@@ -12,6 +12,7 @@ import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
 import CerrarEnvio from '@/components/admin/CerrarEnvio';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
+import { trackUrl } from '@/lib/trackUrl';
 import { hoyLocal } from '@/lib/scheduled';
 import { dayShift } from '@/lib/settlement';
 import {
@@ -149,6 +150,7 @@ export default function AdminPage() {
   /** Los envíos tildados para asignarlos de una. */
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [asignandoLote, setAsignandoLote] = useState(false);
+  const [copiados, setCopiados] = useState(false);
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -255,6 +257,43 @@ export default function AdminPage() {
       else s.add(id);
       return s;
     });
+
+  /**
+   * Los seguimientos de todo lo tildado, listos para pegar en WhatsApp.
+   *
+   * Un comercio con seis envíos en el día pide los seis links, y mandarlos de
+   * a uno es abrir seis veces la misma pantalla. Va la dirección arriba de
+   * cada link porque el que los recibe necesita saber cuál es cuál: seis
+   * códigos EDR pelados no se distinguen entre sí.
+   *
+   * En el orden de la tabla y no en el que se fueron tildando: así la lista
+   * que se pega coincide con la que se está mirando.
+   */
+  function textoSeguimientos(): string {
+    return visible
+      .filter((s) => seleccion.has(s.id))
+      .map((s) =>
+        [
+          [s.address_street, s.address_extra].filter(Boolean).join(' '),
+          trackUrl(s.tracking_code),
+        ].join('\n'),
+      )
+      .join('\n\n');
+  }
+
+  async function copiarSeguimientos() {
+    const texto = textoSeguimientos();
+    if (!texto) return;
+
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiados(true);
+      setTimeout(() => setCopiados(false), 2500);
+    } catch {
+      // Sin permiso de portapapeles: mostrarlo alcanza para copiarlo a mano.
+      prompt('Copiá los seguimientos:', texto);
+    }
+  }
 
   /**
    * Asigna todos los tildados a la vez.
@@ -660,6 +699,15 @@ export default function AdminPage() {
               <option value="libre">Sacarles el repartidor</option>
             </select>
             {asignandoLote && <span className="text-xs text-[var(--edr-muted)]">Asignando…</span>}
+
+            <button
+              onClick={copiarSeguimientos}
+              title="Copiar dirección y link de seguimiento de todos los tildados"
+              className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-yellow)] hover:bg-[var(--edr-surface)]"
+            >
+              {copiados ? '✓ Copiados' : '🔗 Copiar seguimientos'}
+            </button>
+
             <button
               onClick={() => setSeleccion(new Set())}
               className="ml-auto rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface)]"

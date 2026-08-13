@@ -8,7 +8,7 @@ import { readCachedRoute } from '@/lib/driver/db';
 import { getFix, type Fix } from '@/lib/driver/geo';
 import { useOnline } from '@/lib/driver/useOnline';
 import { partirRuta } from '@/lib/scheduled';
-import { STATUS_COLOR, STATUS_LABEL, type Shipment } from '@/lib/format';
+import { marcaDeEstado, STATUS_LABEL, type Shipment } from '@/lib/format';
 import type { PuntoMapa } from '@/components/MapaEnvios';
 
 const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
@@ -91,15 +91,19 @@ export default function MapaRepartidorPage() {
 
   const puntos: PuntoMapa[] = useMemo(
     () =>
-      conPunto.map((s, i) => ({
-        id: s.id,
-        lat: Number(s.lat),
-        lng: Number(s.lng),
-        etiqueta: String(i + 1),
-        color: STATUS_COLOR[s.status],
-        titulo: `${i + 1}. ${s.address_street}`,
-        detalle: `${s.recipient_name} · ${STATUS_LABEL[s.status]}`,
-      })),
+      conPunto.map((s) => {
+        const marca = marcaDeEstado(s.status);
+        return {
+          id: s.id,
+          lat: Number(s.lat),
+          lng: Number(s.lng),
+          etiqueta: marca.simbolo,
+          color: marca.color,
+          colorTexto: marca.colorTexto,
+          titulo: s.address_street,
+          detalle: `${s.recipient_name} · ${STATUS_LABEL[s.status]}`,
+        };
+      }),
     [conPunto],
   );
 

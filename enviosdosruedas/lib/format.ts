@@ -95,23 +95,43 @@ export const STATUS_CLASS: Record<ShipmentStatus, string> = {
   cancelado: 'bg-red-50 text-red-800 ring-red-300',
 };
 
+export interface MarcaMapa {
+  color: string;
+  /** Lo que va dibujado adentro del punto. Vacío para los pendientes. */
+  simbolo: string;
+  /** Color del símbolo: sobre amarillo, el blanco no se lee. */
+  colorTexto: string;
+  /** Cómo se llama ese grupo en la referencia del mapa. */
+  grupo: string;
+}
+
 /**
- * El mismo semáforo que `STATUS_CLASS`, en hexadecimal.
+ * Cómo se dibuja un envío en el mapa.
  *
- * Los puntos del mapa los dibuja Leaflet con HTML suelto, fuera del alcance de
- * Tailwind, así que necesita el color escrito. Van al lado del otro para que
- * cambiar un estado de color sea mirar dos líneas seguidas y no acordarse de
- * que existe un archivo de mapas.
+ * Tres grupos y no siete estados. En un mapa lo que se mira de un vistazo es
+ * qué falta hacer, no en qué casilla exacta está cada envío: el detalle está
+ * en la tabla y en el globito de cada punto.
+ *
+ *   amarillo         todo lo que todavía hay que entregar
+ *   verde con tilde  entregado
+ *   rojo con equis   no se pudo entregar
+ *
+ * El cancelado va en gris y aparte: no es ninguna de las tres cosas, ya no se
+ * hace. Pintarlo de rojo lo confundiría con un intento fallido, que es un
+ * envío que todavía se puede salvar.
  */
-export const STATUS_COLOR: Record<ShipmentStatus, string> = {
-  creado: '#737373',
-  pendiente_retiro: '#d97706',
-  retirado: '#0284c7',
-  en_camino: '#1d4ed8',
-  entregado: '#059669',
-  pendiente_entrega: '#ea580c',
-  cancelado: '#dc2626',
-};
+export function marcaDeEstado(status: ShipmentStatus): MarcaMapa {
+  if (status === 'entregado') {
+    return { color: '#059669', simbolo: '✓', colorTexto: '#ffffff', grupo: 'Entregado' };
+  }
+  if (status === 'pendiente_entrega') {
+    return { color: '#dc2626', simbolo: '✕', colorTexto: '#ffffff', grupo: 'No entregado' };
+  }
+  if (status === 'cancelado') {
+    return { color: '#737373', simbolo: '–', colorTexto: '#ffffff', grupo: 'Cancelado' };
+  }
+  return { color: '#facc15', simbolo: '', colorTexto: '#111827', grupo: 'Pendiente de entrega' };
+}
 
 /**
  * Plata que toca el repartidor en cada envío.

@@ -7,7 +7,7 @@ import { useAdminGuard } from '@/lib/adminGuard';
 import AdminNav from '@/components/AdminNav';
 import { dayShift, today } from '@/lib/settlement';
 import {
-  STATUS_COLOR,
+  marcaDeEstado,
   STATUS_LABEL,
   money,
   shipmentCash,
@@ -206,17 +206,21 @@ export default function MapaAdminPage() {
   }, [enCalle, driverId, desde, hasta]);
 
   const puntos: PuntoMapa[] = useMemo(() => {
-    const envios: PuntoMapa[] = conPunto.map((s, i) => ({
-      id: s.id,
-      lat: Number(s.lat),
-      lng: Number(s.lng),
-      etiqueta: String(i + 1),
-      color: STATUS_COLOR[s.status],
-      titulo: `${i + 1}. ${s.address_street}`,
-      detalle:
-        `${s.recipient_name} · ${STATUS_LABEL[s.status]}` +
-        (s.client_name_raw ? ` · ${s.client_name_raw}` : ''),
-    }));
+    const envios: PuntoMapa[] = conPunto.map((s) => {
+      const marca = marcaDeEstado(s.status);
+      return {
+        id: s.id,
+        lat: Number(s.lat),
+        lng: Number(s.lng),
+        etiqueta: marca.simbolo,
+        color: marca.color,
+        colorTexto: marca.colorTexto,
+        titulo: s.address_street,
+        detalle:
+          `${s.recipient_name} · ${STATUS_LABEL[s.status]}` +
+          (s.client_name_raw ? ` · ${s.client_name_raw}` : ''),
+      };
+    });
 
     // Las motos van con id negativo para no chocar con el de ningún envío:
     // tocar una no tiene que abrir la ficha de un envío cualquiera.
@@ -234,11 +238,24 @@ export default function MapaAdminPage() {
     return [...envios, ...repartidores];
   }, [conPunto, motos]);
 
-  const porEstado = useMemo(() => {
-    const cuenta = new Map<ShipmentStatus, number>();
-    for (const s of visibles) cuenta.set(s.status, (cuenta.get(s.status) ?? 0) + 1);
-    return [...cuenta.entries()].sort((a, b) => b[1] - a[1]);
-  }, [visibles]);
+  /**
+   * La referencia va por grupo y no por estado: son los tres colores que
+   * aparecen en el mapa, ni uno más. Una referencia con siete estados de los
+   * que se dibujan tres es ruido.
+   */
+  const porGrupo = useMemo(() => {
+    const cuenta = new Map<string, { color: string; simbolo: string; n: number }>();
+    for (const s of conPunto) {
+      const m = marcaDeEstado(s.status);
+      const previo = cuenta.get(m.grupo);
+      cuenta.set(m.grupo, {
+        color: m.color,
+        simbolo: m.simbolo,
+        n: (previo?.n ?? 0) + 1,
+      });
+    }
+    return [...cuenta.entries()].sort((a, b) => b[1].n - a[1].n);
+  }, [conPunto]);
 
   if (!ready) return null;
 
@@ -344,15 +361,17 @@ export default function MapaAdminPage() {
             </div>
           )}
 
-          {porEstado.length > 0 && (
+          {porGrupo.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-              {porEstado.map(([estado, n]) => (
-                <span key={estado} className="flex items-center gap-1.5 text-xs">
+              {porGrupo.map(([grupo, g]) => (
+                <span key={grupo} className="flex items-center gap-1.5 text-xs">
                   <span
-                    className="inline-block h-3 w-3 rounded-full ring-1 ring-white/40"
-                    style={{ background: STATUS_COLOR[estado] }}
-                  />
-                  {STATUS_LABEL[estado]}: <strong>{n}</strong>
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ring-1 ring-white/40"
+                    style={{ background: g.color, color: grupo === 'Pendiente de entrega' ? '#111827' : '#fff' }}
+                  >
+                    {g.simbolo}
+                  </span>
+                  {grupo}: <strong>{g.n}</strong>
                 </span>
               ))}
             </div>

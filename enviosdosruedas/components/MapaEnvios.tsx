@@ -26,6 +26,8 @@ export interface PuntoMapa {
   etiqueta: string;
   /** Color del punto, en hexadecimal (Leaflet dibuja HTML, no clases). */
   color: string;
+  /** Color de lo que va escrito adentro. Sobre amarillo, el blanco no se lee. */
+  colorTexto?: string;
   titulo: string;
   detalle: string;
   /**
@@ -156,8 +158,9 @@ export default function MapaEnvios({
             `border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.55);` +
             `background:#fff;object-fit:cover;display:block">`
           : `<div style="width:${lado}px;height:${lado}px;border-radius:50%;background:${p.color};` +
-            `border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);color:#fff;` +
-            `font:700 12px/22px system-ui,sans-serif;text-align:center">${p.etiqueta}</div>`,
+            `border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);` +
+            `color:${p.colorTexto ?? '#fff'};` +
+            `font:700 14px/22px system-ui,sans-serif;text-align:center">${p.etiqueta}</div>`,
         iconSize: [lado, lado],
         iconAnchor: [lado / 2, lado / 2],
       });

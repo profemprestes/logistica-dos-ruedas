@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
@@ -10,6 +10,7 @@ import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
 import Logo from '@/components/Logo';
 import { useToast } from '@/components/driver/Toast';
+import { seguirEnviando } from '@/lib/driver/posicion';
 import {
   cacheRoute,
   dropBlocked,
@@ -179,6 +180,22 @@ export default function DriverDashboardPage() {
     const timer = window.setInterval(refreshPending, 15_000);
     return () => window.clearInterval(timer);
   }, [refreshPending]);
+
+  /**
+   * Mientras haya algo en camino, avisar por dónde va.
+   *
+   * La hoja de ruta se lee por referencia y no por dependencia a propósito: si
+   * el efecto se rearmara con cada cambio de la ruta, mandaría una posición de
+   * más cada vez que se toca un envío.
+   */
+  const rutaRef = useRef(route);
+  useEffect(() => {
+    rutaRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    return seguirEnviando(() => rutaRef.current.some((s) => s.status === 'en_camino'));
+  }, []);
 
   // --- escaneo -----------------------------------------------------------
   const handleDetected = useCallback(

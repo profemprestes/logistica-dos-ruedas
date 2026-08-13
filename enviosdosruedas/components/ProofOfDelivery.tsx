@@ -1,9 +1,25 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
 import { mapaEmbedUrl } from '@/lib/mapa';
+import type { PuntoMapa } from '@/components/MapaEnvios';
+
+/**
+ * Leaflet toca `window` al cargar, y esto es una página pública que se
+ * renderiza en el servidor. Además así sólo lo bajan los que abren un
+ * seguimiento con la moto en la calle, que son los menos.
+ */
+const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-[var(--edr-border)] text-sm text-[var(--edr-muted)]">
+      Abriendo el mapa…
+    </div>
+  ),
+});
 
 export interface TrackResult {
   code: string;
@@ -18,6 +34,17 @@ export interface TrackResult {
   deliveredAt: string | null;
   lat: number | null;
   lng: number | null;
+  /**
+   * Por dónde venía la moto, con unos minutos de atraso a propósito.
+   * Sólo viene cuando el envío está en camino; el resto del tiempo es null.
+   */
+  courier: {
+    lat: number;
+    lng: number;
+    /** Cuándo se tomó ese punto. Es varios minutos antes de ahora. */
+    takenAt: string;
+    eta: { texto: string; desde: number; hasta: number } | null;
+  } | null;
   proof: {
     event: 'entregado' | 'no_entregado';
     happenedAt: string;
@@ -49,6 +76,10 @@ const HITOS: Record<string, string> = {
   cancelado: 'Cancelado',
 };
 
+/** Sólo la hora: en el mapa, la fecha sobra y ocupa la mitad del globito. */
+const hora = (iso: string) =>
+  new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
 const fecha = (iso: string) =>
   new Date(iso).toLocaleString('es-AR', {
     day: '2-digit',
@@ -69,6 +100,35 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
   const entregado = data.proof?.event === 'entregado';
   const fallido = data.proof?.event === 'no_entregado';
   const mapa = data.lat && data.lng ? mapaEmbedUrl(data.lat, data.lng) : null;
+
+  /**
+   * Los dos puntos del mapa mientras el envío viaja: adónde va y por dónde
+   * venía la moto. Sin repartidor en la calle esto queda en null y se sigue
+   * usando el recuadro de siempre.
+   */
+  const puntos: PuntoMapa[] | null =
+    data.courier && data.lat != null && data.lng != null
+      ? [
+          {
+            id: 1,
+            lat: data.lat,
+            lng: data.lng,
+            etiqueta: '🏠',
+            color: '#0636a5',
+            titulo: 'Tu domicilio',
+            detalle: data.address,
+          },
+          {
+            id: 2,
+            lat: data.courier.lat,
+            lng: data.courier.lng,
+            etiqueta: '🛵',
+            color: '#ea580c',
+            titulo: 'Por acá venía el repartidor',
+            detalle: `Hace unos minutos · ${hora(data.courier.takenAt)}`,
+          },
+        ]
+      : null;
 
   /**
    * Sin foto, el mapa ocupa todo el ancho.
@@ -132,6 +192,26 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
         </div>
       </div>
 
+      {/* ---------- Cuánto falta ---------- */}
+      {data.courier && (
+        <div className="px-5 pt-4">
+          <div className="rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/10 px-4 py-4 text-center">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--edr-muted)]">
+              {data.courier.eta ? 'Llega aproximadamente en' : 'El repartidor está en la calle'}
+            </div>
+            <div className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
+              {data.courier.eta?.texto ?? 'En camino'}
+            </div>
+            {/* Decirlo, y no dejar que lo descubra: el número es una cuenta, no
+                una promesa, y la posición del mapa no es la de ahora. */}
+            <p className="mt-2 text-xs leading-snug text-[var(--edr-muted)]">
+              Es un estimado: puede cambiar por el tránsito o por las entregas que tenga antes
+              que la tuya. La posición en el mapa se muestra con unos minutos de demora.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ---------- Datos ---------- */}
       <div className="grid grid-cols-1 gap-3 px-5 py-5 sm:grid-cols-2">
         <Dato label="Destinatario" value={data.recipient} />
@@ -179,14 +259,22 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
           {mapa && (
             <figure className={soloMapa ? 'sm:col-span-2' : undefined}>
               <figcaption className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
-                Punto de entrega
+                {puntos ? 'Tu envío y por dónde viene' : 'Punto de entrega'}
               </figcaption>
-              <iframe
-                src={mapa}
-                title="Punto de entrega"
-                className="h-64 w-full rounded-xl border-2 border-[var(--edr-border)]"
-                loading="lazy"
-              />
+
+              {/* Con la moto en la calle hacen falta dos puntos, y el recuadro
+                  de OpenStreetMap sólo dibuja uno. Cuando no hay nada que
+                  seguir se deja el recuadro, que es más liviano. */}
+              {puntos ? (
+                <MapaEnvios puntos={puntos} alto="h-64" />
+              ) : (
+                <iframe
+                  src={mapa}
+                  title="Punto de entrega"
+                  className="h-64 w-full rounded-xl border-2 border-[var(--edr-border)]"
+                  loading="lazy"
+                />
+              )}
             </figure>
           )}
         </div>

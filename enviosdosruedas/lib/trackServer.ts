@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { TrackResult } from '@/components/ProofOfDelivery';
+import { estimarLlegada, redondearPunto } from '@/lib/eta';
 
 /**
  * Búsqueda del seguimiento público, del lado del servidor.
@@ -16,10 +17,23 @@ import type { TrackResult } from '@/components/ProofOfDelivery';
 /** EDR + dígitos + sufijo de ciudad (ej: EDR00001015MDQ). */
 export const CODE_RE = /^EDR\d{6,10}[A-Z]{0,4}$/i;
 
+/**
+ * Cuántos minutos de atraso lleva la posición que se publica.
+ *
+ * No se muestra dónde está la moto: se muestra dónde estaba. El que abre el
+ * link ve por dónde viene, que es lo que necesita, y no alcanza para salir a
+ * cruzarse a alguien que anda con paquetes y plata encima.
+ *
+ * El atraso se aplica acá, en el servidor. No hay ningún parámetro que lo
+ * saque ni forma de pedir la posición fresca desde afuera.
+ */
+const RETRASO_MINUTOS = 3;
+
 interface ShipmentRow {
   id: number;
   tracking_code: string;
   status: string;
+  assigned_driver: string | null;
   recipient_name: string;
   address_street: string;
   address_extra: string | null;
@@ -77,8 +91,9 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
   const { data: fila, error } = await admin
     .from('shipments')
     .select(
-      'id, tracking_code, status, recipient_name, address_street, address_extra, city, ' +
-        'delivery_window, scheduled_date, created_at, delivered_at, is_flex, lat, lng',
+      'id, tracking_code, status, assigned_driver, recipient_name, address_street, ' +
+        'address_extra, city, delivery_window, scheduled_date, created_at, delivered_at, ' +
+        'is_flex, lat, lng',
     )
     .eq('tracking_code', code)
     .maybeSingle();
@@ -113,10 +128,55 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
     photoUrl = signed?.signedUrl ?? null;
   }
 
+  /**
+   * Por dónde viene la moto, sólo mientras el envío está en camino.
+   *
+   * Fuera de ese estado no se consulta ni se devuelve: el que mira un envío
+   * ya entregado, o uno que todavía está en el comercio, no tiene ninguna
+   * razón para saber dónde anda un repartidor.
+   */
+  let courier: TrackResult['courier'] = null;
+
+  if (shipment.status === 'en_camino' && shipment.assigned_driver) {
+    const corte = new Date(Date.now() - RETRASO_MINUTOS * 60_000).toISOString();
+
+    // La más nueva de las que YA tienen el atraso cumplido.
+    const { data: pos } = await admin
+      .from('driver_positions')
+      .select('lat, lng, taken_at')
+      .eq('driver_id', shipment.assigned_driver)
+      .lte('taken_at', corte)
+      .order('taken_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pos) {
+      const crudo = { lat: Number(pos.lat), lng: Number(pos.lng) };
+      const destino =
+        shipment.lat != null && shipment.lng != null
+          ? { lat: Number(shipment.lat), lng: Number(shipment.lng) }
+          : null;
+
+      // El tiempo se calcula con el punto exacto y recién después se redondea
+      // el que se publica: redondear primero metería cien metros de error en
+      // la cuenta sin ganar nada, porque el número que sale igual es un rango.
+      const eta = estimarLlegada(crudo, destino, pos.taken_at as string);
+      const publicado = redondearPunto(crudo);
+
+      courier = {
+        lat: publicado.lat,
+        lng: publicado.lng,
+        takenAt: pos.taken_at as string,
+        eta: eta ? { texto: eta.texto, desde: eta.desde, hasta: eta.hasta } : null,
+      };
+    }
+  }
+
   return {
     ok: true,
     data: {
       code: shipment.tracking_code,
+      courier,
       status: shipment.status as TrackResult['status'],
       isFlex: Boolean(shipment.is_flex),
       recipient: shipment.recipient_name,

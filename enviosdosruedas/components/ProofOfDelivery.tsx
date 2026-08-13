@@ -1,11 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
 import { mapaEmbedUrl } from '@/lib/mapa';
+import { MINUTOS_SIN_NOVEDAD } from '@/lib/eta';
 import type { PuntoMapa } from '@/components/MapaEnvios';
 
 /**
@@ -46,6 +47,8 @@ export interface TrackResult {
     /** Metros del círculo que se dibuja alrededor. */
     radio: number;
     takenAt: string;
+    /** Hace cuántos minutos se tomó. Viene calculado del servidor. */
+    haceMinutos: number;
     eta: { texto: string; desde: number; hasta: number } | null;
   } | null;
   proof: {
@@ -103,6 +106,15 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
    */
   const [data, setData] = useState(inicial);
 
+  /**
+   * El estimado cambia solo, y cuando cambia hay que decirlo: si no, la
+   * persona que vio "10 minutos" y ahora lee "25" cree que el sistema le
+   * mintió. Explicarle por qué cambió es la diferencia entre un aviso y un
+   * enojo.
+   */
+  const [cambioDeTiempo, setCambioDeTiempo] = useState(false);
+  const etaAnterior = useRef(inicial.courier?.eta?.texto ?? null);
+
   useEffect(() => {
     if (data.status !== 'en_camino') return;
     let vivo = true;
@@ -114,8 +126,19 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
         body: JSON.stringify({ code: data.code }),
       })
         .then((r) => (r.ok ? r.json() : null))
-        .then((nuevo) => {
-          if (vivo && nuevo) setData(nuevo as TrackResult);
+        .then((nuevo: TrackResult | null) => {
+          if (!vivo || !nuevo) return;
+
+          const ahora = nuevo.courier?.eta?.texto ?? null;
+          // Sólo si ya había un estimado antes: la primera vez que aparece no
+          // es un cambio, es la primera noticia.
+          if (ahora && etaAnterior.current && ahora !== etaAnterior.current) {
+            setCambioDeTiempo(true);
+            window.setTimeout(() => setCambioDeTiempo(false), 40_000);
+          }
+          etaAnterior.current = ahora;
+
+          setData(nuevo);
         })
         .catch(() => {
           // Sin señal se queda con lo último que vio. No hay nada que avisar.
@@ -168,7 +191,10 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
             imagen: '/logo-simple.webp',
             color: '#ea580c',
             titulo: 'Por acá anda el repartidor',
-            detalle: 'Posición aproximada',
+            detalle:
+              data.courier.haceMinutos >= MINUTOS_SIN_NOVEDAD
+                ? `Zona aproximada · hace ${data.courier.haceMinutos} min`
+                : 'Zona aproximada',
           },
         ]
       : null;
@@ -263,6 +289,23 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
                 </>
               )}
             </p>
+
+            {/* De cuándo es lo que se está mostrando. Recién se dice cuando ya
+                pasó un rato: aclarar "hace 1 minuto" es ruido, y callarlo a los
+                veinte es dejar que alguien salga a la vereda al pedo. */}
+            {data.courier && data.courier.haceMinutos >= MINUTOS_SIN_NOVEDAD && (
+              <p className="mt-2 rounded-lg bg-[var(--edr-surface-2)] px-3 py-2 text-xs font-bold">
+                Última señal del repartidor hace {data.courier.haceMinutos} minutos. Puede estar
+                más cerca de lo que marca el mapa.
+              </p>
+            )}
+
+            {cambioDeTiempo && (
+              <p className="mt-2 rounded-lg border border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/15 px-3 py-2 text-xs font-bold">
+                Actualizamos el tiempo de entrega. Puede pasar por demoras que tenga el
+                repartidor con otros envíos anteriores al tuyo.
+              </p>
+            )}
           </div>
         </div>
       )}

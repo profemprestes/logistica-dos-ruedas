@@ -49,12 +49,14 @@ const VELOCIDAD = 22;
 const MINUTOS_PUERTA = 3;
 
 /**
- * A partir de qué antigüedad la posición ya no sirve para estimar nada.
+ * A partir de cuántos minutos sin noticias conviene decirlo en pantalla.
  *
- * Si el repartidor cerró la app o se quedó sin señal, el último punto puede
- * ser de hace media hora. Dar un tiempo calculado sobre eso es inventar.
+ * No se deja de mostrar la posición —esconderla es peor que mostrarla vieja—
+ * pero sí se aclara de cuándo es. Si el repartidor cerró la app o se quedó sin
+ * señal, el último punto puede ser de hace rato, y quien mira tiene que
+ * saberlo para no ir a buscarlo ahí.
  */
-export const MINUTOS_QUE_VENCE = 15;
+export const MINUTOS_SIN_NOVEDAD = 6;
 
 export interface Estimacion {
   /** Metros por la calle, ya con el desvío aplicado. */
@@ -66,8 +68,9 @@ export interface Estimacion {
 }
 
 /**
- * Devuelve `null` cuando no se puede estimar con honestidad: sin alguno de los
- * dos puntos, o con una posición vieja.
+ * Devuelve `null` sólo cuando falta alguno de los dos puntos. Con una posición
+ * vieja igual estima: el que espera prefiere un número aproximado y saber que
+ * hace rato no hay novedades, antes que una pantalla muda.
  */
 export function estimarLlegada(
   repartidor: Punto | null,
@@ -78,14 +81,26 @@ export function estimarLlegada(
   if (!repartidor || !destino || !tomadaEl) return null;
 
   const antiguedadMin = (ahora.getTime() - new Date(tomadaEl).getTime()) / 60000;
-  if (!Number.isFinite(antiguedadMin) || antiguedadMin > MINUTOS_QUE_VENCE) return null;
+  if (!Number.isFinite(antiguedadMin)) return null;
 
   const metros = distanciaMetros(repartidor, destino) * VUELTA;
+  const minutosDeViaje = (metros / 1000 / VELOCIDAD) * 60;
 
-  // La posición que se usa ya viene con unos minutos de atraso: en ese rato la
-  // moto siguió andando, así que ese tiempo se descuenta del viaje. Sin esto
-  // el estimado siempre sobra.
-  const minutosViaje = (metros / 1000 / VELOCIDAD) * 60 - antiguedadMin;
+  /*
+   * En el rato que pasó desde esa posición la moto siguió andando, así que ese
+   * tiempo se descuenta del viaje. Pero SÓLO mientras hay noticias frescas.
+   *
+   * Descontar sin tope es asumir que siguió viniendo, y eso no se sabe: puede
+   * estar parado en una entrega larga, sin señal, o con la app cerrada. Sin el
+   * tope, una posición de hace 45 minutos daba "menos de 10 minutos" —el
+   * mensaje más peligroso posible, porque manda a alguien a esperar en la
+   * puerta— cuando en realidad hace 45 minutos que no sabemos nada.
+   *
+   * Pasado ese rato el estimado se congela en el último que se pudo calcular,
+   * y la pantalla aclara de cuándo es la última señal.
+   */
+  const descuento = Math.min(antiguedadMin, MINUTOS_SIN_NOVEDAD, minutosDeViaje);
+  const minutosViaje = minutosDeViaje - descuento;
   const total = Math.max(1, minutosViaje + MINUTOS_PUERTA);
 
   // Rango de a cinco minutos, que es la precisión que esto tiene de verdad.

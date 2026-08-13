@@ -1,11 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { TrackResult } from '@/components/ProofOfDelivery';
-import {
-  aproximarPunto,
-  estimarLlegada,
-  MINUTOS_QUE_VENCE,
-  RADIO_APROX_M,
-} from '@/lib/eta';
+import { aproximarPunto, estimarLlegada, RADIO_APROX_M } from '@/lib/eta';
 
 /**
  * Búsqueda del seguimiento público, del lado del servidor.
@@ -131,16 +126,14 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
   let courier: TrackResult['courier'] = null;
 
   if (shipment.status === 'en_camino' && shipment.assigned_driver) {
-    // Una posición vieja no sirve para nada: el repartidor pudo haber cerrado
-    // la app o quedado sin señal hace media hora. Mostrar eso como "por acá
-    // viene" es peor que no mostrar nada.
-    const vence = new Date(Date.now() - MINUTOS_QUE_VENCE * 60_000).toISOString();
-
+    // La última que haya, sin importar de cuándo sea. Esconderla por vieja
+    // deja una pantalla muda, que es peor: lo que corresponde es mostrarla y
+    // decir de cuándo es. La tabla se limpia sola a las tres horas, así que
+    // más viejo que eso no hay.
     const { data: pos } = await admin
       .from('driver_positions')
       .select('lat, lng, taken_at')
       .eq('driver_id', shipment.assigned_driver)
-      .gte('taken_at', vence)
       .order('taken_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -161,11 +154,20 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
       // posición exacta no se devuelve nunca, ni siquiera redondeada de menos.
       const publicado = aproximarPunto(crudo);
 
+      // Los minutos se calculan en el servidor y viajan hechos: si los sacara
+      // el navegador, el número del HTML que llega y el que dibuja React
+      // después no coincidirían, y React se queja de eso al hidratar.
+      const minutos = Math.max(
+        0,
+        Math.round((Date.now() - new Date(pos.taken_at as string).getTime()) / 60_000),
+      );
+
       courier = {
         lat: publicado.lat,
         lng: publicado.lng,
         radio: RADIO_APROX_M,
         takenAt: pos.taken_at as string,
+        haceMinutos: minutos,
         eta: eta ? { texto: eta.texto, desde: eta.desde, hasta: eta.hasta } : null,
       };
     }

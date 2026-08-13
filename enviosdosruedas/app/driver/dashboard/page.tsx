@@ -10,7 +10,11 @@ import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
 import Logo from '@/components/Logo';
 import { useToast } from '@/components/driver/Toast';
-import { avisarPosicionYa, seguirEnviando } from '@/lib/driver/posicion';
+import {
+  avisarPosicionSiCorresponde,
+  avisarPosicionYa,
+  seguirEnviando,
+} from '@/lib/driver/posicion';
 import {
   cacheRoute,
   dropBlocked,
@@ -132,6 +136,9 @@ export default function DriverDashboardPage() {
   /** Vuelve a pedir la hoja de ruta sin recargar la página. */
   const recargar = useCallback(() => {
     if (!driver) return;
+    // La app está en pantalla justo ahora: buen momento para refrescar dónde
+    // anda. Ver `avisarPosicionSiCorresponde`.
+    avisarPosicionSiCorresponde();
     setLoading(true);
     fetchRoute(driver.id).then(({ data, error }) => {
       setLoading(false);
@@ -182,7 +189,12 @@ export default function DriverDashboardPage() {
   }, [refreshPending]);
 
   /**
-   * Mientras haya algo en camino, avisar por dónde va.
+   * Mientras le quede trabajo del día, avisar por dónde va.
+   *
+   * Antes era "sólo con algo en camino", y en el mapa casi nunca se veía a
+   * nadie: retira ocho paquetes, arranca, y hasta que no toca "salgo en
+   * camino" en alguno no se registraba nada. Ahora cuenta toda la jornada,
+   * igual que la regla del servidor (paso 25), que es la que decide de verdad.
    *
    * La hoja de ruta se lee por referencia y no por dependencia a propósito: si
    * el efecto se rearmara con cada cambio de la ruta, mandaría una posición de
@@ -194,7 +206,7 @@ export default function DriverDashboardPage() {
   }, [route]);
 
   useEffect(() => {
-    return seguirEnviando(() => rutaRef.current.some((s) => s.status === 'en_camino'));
+    return seguirEnviando(() => partirRuta(rutaRef.current).deHoy.length > 0);
   }, []);
 
   // --- escaneo -----------------------------------------------------------
@@ -206,6 +218,8 @@ export default function DriverDashboardPage() {
         toast('Sin señal: para sumar un paquete hace falta internet.', 'error');
         return;
       }
+
+      avisarPosicionSiCorresponde();
 
       const { data, error } = await supabase.rpc('scan_and_assign', { p_code: code });
 
@@ -254,6 +268,7 @@ export default function DriverDashboardPage() {
 
   // --- cierre de entrega -------------------------------------------------
   function handleResolved(shipmentId: number) {
+    avisarPosicionSiCorresponde();
     setRoute((prev) => prev.filter((s) => s.id !== shipmentId));
     setSelected(null);
     setResolving(null);

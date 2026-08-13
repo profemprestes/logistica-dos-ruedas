@@ -48,13 +48,20 @@ interface Repartidor {
 }
 
 /**
- * Desde cuándo se lo considera desconectado.
+ * Hasta cuándo se sigue mostrando la última posición conocida.
  *
- * La app manda la posición cada dos minutos mientras haya algo en camino, y
- * también al volver al frente. Con diez sin noticias, o cerró la app o se
- * quedó sin señal: mostrarlo como si estuviera ahí sería mentir.
+ * Eran diez minutos y casi nunca se veía a nadie. El motivo no es la regla
+ * sino cómo funciona un navegador: la app manda la posición mientras está EN
+ * PANTALLA, y el celular congela los temporizadores de una pestaña que quedó
+ * atrás. El repartidor se pasa el día en Maps y en WhatsApp, así que entre
+ * señal y señal pasan más de diez minutos casi siempre.
+ *
+ * Con tres cuartos de hora, la moto que se vio hace veinte minutos sigue
+ * apareciendo — y al lado dice a qué hora fue, que es lo que permite decidir
+ * si ese punto todavía sirve. Esconderla no la hace más precisa: deja la
+ * pantalla vacía y sin explicación.
  */
-const MINUTOS_CONECTADO = 10;
+const MINUTOS_CONECTADO = 45;
 
 /**
  * El día entero sobre el mapa.
@@ -349,8 +356,9 @@ export default function MapaAdminPage() {
               está en la calle o si algo dejó de andar. */}
           {motos.length === 0 && desde <= today() && today() <= hasta && (
             <p className="mt-3 border-t border-[var(--edr-border)] pt-3 text-xs text-[var(--edr-muted)]">
-              Ningún repartidor está mandando su posición en este momento. Aparecen acá cuando
-              tienen un envío <strong>en camino</strong> y la app abierta.
+              Ningún repartidor mandó su posición en la última hora. Aparecen acá mientras
+              tengan envíos del día sin cerrar y hayan abierto la app: el celular sólo la manda
+              con la app en pantalla, así que la señal llega cuando la usan.
             </p>
           )}
 

@@ -95,10 +95,31 @@ export function seguirEnviando(hayEnCamino: () => boolean): () => void {
  * Manda una posición ahora mismo, salteando la espera del intervalo.
  *
  * Es lo que se llama al marcar "salgo en camino": sin esto, el que abre el
- * seguimiento en ese momento no ve nada hasta el próximo tic, y con el atraso
- * de publicación eso son varios minutos mirando una pantalla que parece rota.
+ * seguimiento en ese momento no ve nada hasta el próximo tic, y eso son varios
+ * minutos mirando una pantalla que parece rota.
  */
 export function avisarPosicionYa(): void {
+  ultimoEnvio = Date.now();
+  void avisarPosicion();
+}
+
+/**
+ * Manda una posición si ya pasó el rato, aprovechando que la app está en uso.
+ *
+ * ES LO QUE HACE QUE EL MAPA SIRVA. El reloj de dos minutos no corre cuando la
+ * pantalla está atrás —el celular lo congela— y el repartidor se pasa el día
+ * en Maps y en WhatsApp. Los momentos en que la app SÍ está adelante son
+ * pocos y conocidos: cuando vuelve, cuando escanea un paquete, cuando cierra
+ * una entrega, cuando actualiza la hoja de ruta. Enganchándose a todos ellos,
+ * la posición se refresca cada vez que toca algo, que en una jornada es
+ * bastante más seguido que nunca.
+ *
+ * Respeta el mismo espaciado que el reloj: tocar cinco botones seguidos no
+ * dispara cinco lecturas de GPS.
+ */
+export function avisarPosicionSiCorresponde(): void {
+  if (typeof navigator === 'undefined' || !navigator.onLine) return;
+  if (Date.now() - ultimoEnvio < CADA_MS) return;
   ultimoEnvio = Date.now();
   void avisarPosicion();
 }

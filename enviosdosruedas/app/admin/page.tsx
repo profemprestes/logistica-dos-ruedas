@@ -143,7 +143,14 @@ export default function AdminPage() {
   const [ubicando, setUbicando] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shipment | null>(null);
-  const [toPrint, setToPrint] = useState<Shipment | null>(null);
+  /**
+   * Las etiquetas que se están por imprimir.
+   *
+   * Es una lista y no una sola porque la hoja de estilos ya sabe separar
+   * etiquetas con un salto de página: imprimir ocho de una era cuestión de
+   * dibujarlas todas, en vez de abrir ocho veces el mismo cuadro de impresión.
+   */
+  const [toPrint, setToPrint] = useState<Shipment[]>([]);
   const [proof, setProof] = useState<Shipment | null>(null);
   /** El envío que se está cerrando a mano desde el panel. */
   const [cerrando, setCerrando] = useState<Shipment | null>(null);
@@ -151,6 +158,7 @@ export default function AdminPage() {
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [asignandoLote, setAsignandoLote] = useState(false);
   const [copiados, setCopiados] = useState(false);
+  const [copiando, setCopiando] = useState(false);
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -269,20 +277,55 @@ export default function AdminPage() {
    * En el orden de la tabla y no en el que se fueron tildando: así la lista
    * que se pega coincide con la que se está mirando.
    */
-  function textoSeguimientos(): string {
-    return visible
-      .filter((s) => seleccion.has(s.id))
+  async function textoSeguimientos(): Promise<string> {
+    const elegidos = visible.filter((s) => seleccion.has(s.id));
+    if (!elegidos.length) return '';
+
+    /*
+     * El link de la etiqueta lo firma el servidor. No se puede armar acá: la
+     * firma sale de un secreto que, si viajara al navegador, dejaría a
+     * cualquiera fabricar la etiqueta de cualquier envío.
+     */
+    const { data: sesion } = await supabase.auth.getSession();
+    const res = await fetch('/api/etiquetas', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sesion.session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({ codigos: elegidos.map((s) => s.tracking_code) }),
+    });
+
+    const etiquetas = new Map<string, string>();
+    if (res.ok) {
+      const { links } = (await res.json()) as { links?: { codigo: string; url: string }[] };
+      for (const l of links ?? []) etiquetas.set(l.codigo, l.url);
+    }
+
+    return elegidos
       .map((s) =>
         [
           [s.address_street, s.address_extra].filter(Boolean).join(' '),
-          trackUrl(s.tracking_code),
-        ].join('\n'),
+          `Seguimiento: ${trackUrl(s.tracking_code)}`,
+          // Si el servidor no contestó va el seguimiento igual: media lista
+          // sirve, ninguna no.
+          etiquetas.has(s.tracking_code) ? `Etiqueta: ${etiquetas.get(s.tracking_code)}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
       )
       .join('\n\n');
   }
 
   async function copiarSeguimientos() {
-    const texto = textoSeguimientos();
+    setCopiando(true);
+    let texto = '';
+    try {
+      texto = await textoSeguimientos();
+    } catch {
+      setError('No se pudieron armar los links de las etiquetas.');
+    }
+    setCopiando(false);
     if (!texto) return;
 
     try {
@@ -409,8 +452,11 @@ export default function AdminPage() {
     setUbicando(false);
   }
 
-  function print(s: Shipment) {
-    setToPrint(s);
+  function print(envios: Shipment[]) {
+    if (!envios.length) return;
+    setToPrint(envios);
+    // El respiro es para que React alcance a dibujar las etiquetas antes de
+    // que el navegador saque la foto de la página.
     setTimeout(() => window.print(), 250);
   }
 
@@ -702,10 +748,19 @@ export default function AdminPage() {
 
             <button
               onClick={copiarSeguimientos}
-              title="Copiar dirección y link de seguimiento de todos los tildados"
-              className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-yellow)] hover:bg-[var(--edr-surface)]"
+              disabled={copiando}
+              title="Copiar dirección, seguimiento y etiqueta de todos los tildados"
+              className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-yellow)] hover:bg-[var(--edr-surface)] disabled:opacity-50"
             >
-              {copiados ? '✓ Copiados' : '🔗 Copiar seguimientos'}
+              {copiando ? 'Armando…' : copiados ? '✓ Copiados' : '🔗 Copiar seguimiento y etiqueta'}
+            </button>
+
+            <button
+              onClick={() => print(visible.filter((s) => seleccion.has(s.id)))}
+              title="Imprimir la etiqueta de todos los tildados, una atrás de otra"
+              className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold hover:bg-[var(--edr-surface)]"
+            >
+              🖨 Imprimir etiquetas
             </button>
 
             <button
@@ -743,7 +798,7 @@ export default function AdminPage() {
                 setEditing(x);
                 setModalOpen(true);
               }}
-              onPrint={print}
+              onPrint={(s) => print([s])}
               onDelete={remove}
               onStatus={changeStatus}
               onAssign={assignDriver}
@@ -923,7 +978,7 @@ export default function AdminPage() {
                         Editar
                       </button>
                       <button
-                        onClick={() => print(s)}
+                        onClick={() => print([s])}
                         className="rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
                       >
                         Imprimir
@@ -961,9 +1016,11 @@ export default function AdminPage() {
         />
       )}
 
-      {toPrint && (
+      {toPrint.length > 0 && (
         <PrintPortal>
-          <ShippingLabel shipment={toPrint} />
+          {toPrint.map((s) => (
+            <ShippingLabel key={s.id} shipment={s} />
+          ))}
         </PrintPortal>
       )}
     </div>

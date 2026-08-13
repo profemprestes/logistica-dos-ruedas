@@ -1,10 +1,12 @@
 /**
  * Base local del celular (IndexedDB, vía `idb`).
  *
- * Guarda dos cosas:
+ * Guarda tres cosas:
  *  - `pending`: entregas cerradas sin señal, esperando subir. NUNCA se borran
  *    hasta que Supabase confirma; es la única copia del comprobante.
  *  - `hoja`: la hoja de ruta cacheada, para poder ver direcciones en un sótano.
+ *  - `borrador`: la entrega a medio cerrar, por si Android mata la app mientras
+ *    el repartidor saca la foto. Ver `guardarBorrador`.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Shipment } from '@/lib/format';
@@ -48,6 +50,35 @@ export interface PendingDelivery {
   blocked?: boolean;
 }
 
+/**
+ * Una entrega a medio cargar.
+ *
+ * POR QUÉ EXISTE. Cuando la app abre la cámara, el celular la manda al fondo, y
+ * Android es libre de matarla ahí mismo para darle memoria a la cámara. Pasa de
+ * verdad: los repartidores avisaron que a veces tienen que reabrir la app dos y
+ * tres veces. El sistema operativo hace eso y no hay forma de prohibírselo desde
+ * una web.
+ *
+ * Lo que sí se puede es que no cueste nada. Con el borrador guardado, volver a
+ * entrar y tocar de nuevo la entrega devuelve todo como estaba: la foto que ya
+ * había sacado, quién recibió, el comentario. Sin esto, cada cierre de la app le
+ * borraba el trabajo y tenía que arrancar de cero — que es lo que hace que dos
+ * intentos se sientan diez.
+ */
+export interface BorradorEntrega {
+  /** Uno solo a la vez: no se cierran dos entregas en paralelo. */
+  id: 'actual';
+  shipmentId: number;
+  kind: DeliveryKind;
+  receiverName: string;
+  receiverDni: string;
+  comment: string;
+  reason: string;
+  photos: Blob[];
+  /** Para no resucitar el borrador de anteayer. */
+  guardadoEn: number;
+}
+
 interface DriverDB extends DBSchema {
   pending: {
     key: string;
@@ -57,10 +88,14 @@ interface DriverDB extends DBSchema {
     key: number;
     value: Shipment;
   };
+  borrador: {
+    key: string;
+    value: BorradorEntrega;
+  };
 }
 
 const DB_NAME = 'dosruedas-repartidor';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<DriverDB>> | null = null;
 
@@ -73,6 +108,12 @@ function getDB() {
         }
         if (!db.objectStoreNames.contains('hoja')) {
           db.createObjectStore('hoja', { keyPath: 'id' });
+        }
+        // Se agrega mirando si ya está, no según la versión anterior: así el
+        // celular que venía de la versión 1 y el que instala hoy terminan
+        // igual, y volver a correr esto nunca rompe nada.
+        if (!db.objectStoreNames.contains('borrador')) {
+          db.createObjectStore('borrador', { keyPath: 'id' });
         }
       },
     });
@@ -178,4 +219,52 @@ export async function readCachedRoute(): Promise<Shipment[]> {
 export async function dropFromRoute(shipmentId: number): Promise<void> {
   const db = await getDB();
   await db.delete('hoja', shipmentId);
+}
+
+
+/* ------------------------------------------------- entrega a medio cerrar */
+
+/** Más viejo que esto no se ofrece: es de otra jornada. */
+const BORRADOR_VIVE_MS = 12 * 60 * 60 * 1000;
+
+export async function guardarBorrador(
+  b: Omit<BorradorEntrega, 'id' | 'guardadoEn'>,
+): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.put('borrador', { ...b, id: 'actual', guardadoEn: Date.now() });
+  } catch (e) {
+    // Que falle guardar el borrador no puede frenar una entrega: es una red,
+    // no el camino principal.
+    console.warn('[borrador] no se pudo guardar', e);
+  }
+}
+
+/** El borrador de ESE envío, si es de hoy. Si no, nada. */
+export async function leerBorrador(
+  shipmentId: number,
+  kind: DeliveryKind,
+): Promise<BorradorEntrega | null> {
+  try {
+    const db = await getDB();
+    const b = await db.get('borrador', 'actual');
+    if (!b) return null;
+    if (b.shipmentId !== shipmentId || b.kind !== kind) return null;
+    if (Date.now() - b.guardadoEn > BORRADOR_VIVE_MS) {
+      await db.delete('borrador', 'actual');
+      return null;
+    }
+    return b;
+  } catch {
+    return null;
+  }
+}
+
+export async function borrarBorrador(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('borrador', 'actual');
+  } catch {
+    // Si no se pudo borrar, el que quede vence solo a las 12 horas.
+  }
 }

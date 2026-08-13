@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react';
 import PhotoInput from '@/components/driver/PhotoInput';
 import { useToast } from '@/components/driver/Toast';
 import { getFix, type Fix } from '@/lib/driver/geo';
-import { dropFromRoute, isQueued, queueDelivery, type DeliveryKind } from '@/lib/driver/db';
+import {
+  borrarBorrador,
+  dropFromRoute,
+  guardarBorrador,
+  isQueued,
+  leerBorrador,
+  queueDelivery,
+  type DeliveryKind,
+} from '@/lib/driver/db';
 import { flushPending } from '@/lib/driver/sync';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
 
@@ -44,6 +52,80 @@ export default function ResolveDeliveryModal({
   const [fix, setFix] = useState<Fix | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  /**
+   * Hasta que no se terminó de buscar el borrador no se guarda nada.
+   *
+   * Sin esta traba, el formulario recién abierto —vacío— se guardaría encima
+   * del borrador que estamos por leer, y la foto que queríamos rescatar
+   * desaparecería justo al abrir. El orden importa: primero leer, después
+   * empezar a escribir.
+   */
+  const [cargado, setCargado] = useState(false);
+  const [recuperado, setRecuperado] = useState(false);
+
+  /*
+   * RESCATE DE LO QUE HABÍA A MEDIO CARGAR.
+   *
+   * Cuando la app abre la cámara, el celular la manda al fondo y Android puede
+   * matarla ahí para darle memoria. Los repartidores avisaron que a veces
+   * tienen que reabrir dos y tres veces. Eso no se puede prohibir desde una
+   * web; lo que sí se puede es que no cueste nada: al volver a tocar la misma
+   * entrega, vuelve la foto que ya había sacado y lo que había escrito.
+   */
+  useEffect(() => {
+    let vivo = true;
+
+    leerBorrador(shipment.id, kind).then((b) => {
+      if (!vivo) return;
+      if (b) {
+        setReceiverName(b.receiverName);
+        setReceiverDni(b.receiverDni);
+        setComment(b.comment);
+        setReason(b.reason);
+        setPhotos(b.photos);
+        setRecuperado(b.photos.length > 0 || Boolean(b.receiverName || b.comment || b.reason));
+      }
+      setCargado(true);
+    });
+
+    return () => {
+      vivo = false;
+    };
+  }, [shipment.id, kind]);
+
+  /*
+   * Se guarda con un respiro de medio segundo: escribir el nombre no tiene por
+   * qué disparar una escritura por letra. La foto, que es lo caro de rehacer,
+   * entra por el mismo camino.
+   */
+  useEffect(() => {
+    if (!cargado) return;
+
+    const t = setTimeout(() => {
+      void guardarBorrador({
+        shipmentId: shipment.id,
+        kind,
+        receiverName,
+        receiverDni,
+        comment,
+        reason,
+        photos,
+      });
+    }, 500);
+
+    return () => clearTimeout(t);
+  }, [cargado, shipment.id, kind, receiverName, receiverDni, comment, reason, photos]);
+
+  /** Descarta lo recuperado y deja el formulario limpio. */
+  function empezarDeNuevo() {
+    setReceiverName('');
+    setReceiverDni('');
+    setComment('');
+    setReason('');
+    setPhotos([]);
+    setRecuperado(false);
+    void borrarBorrador();
+  }
 
   // El GPS se toma en silencio apenas se abre el formulario: para cuando termine
   // de escribir el nombre, la posición ya está lista.
@@ -108,6 +190,9 @@ export default function ResolveDeliveryModal({
         lastError: null,
       });
 
+      // Ya está en la cola de verdad: el borrador no tiene nada más que hacer.
+      await borrarBorrador();
+
       // Se saca de la hoja de ruta apenas queda guardado en el celular:
       // el envío ya está cerrado aunque todavía no haya subido.
       await dropFromRoute(shipment.id);
@@ -168,6 +253,21 @@ export default function ResolveDeliveryModal({
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 pb-8">
+        {recuperado && (
+          <div className="rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-3">
+            <p className="text-base font-bold">
+              Recuperamos lo que habías cargado antes de que se cerrara la app.
+            </p>
+            <button
+              type="button"
+              onClick={empezarDeNuevo}
+              className="mt-2 text-sm font-bold underline"
+            >
+              Empezar de nuevo
+            </button>
+          </div>
+        )}
+
         <div className="rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-3">
           <div className="text-lg font-bold">{shipment.recipient_name}</div>
           <div className="text-base">{shipment.address_street}</div>

@@ -48,20 +48,22 @@ interface Repartidor {
 }
 
 /**
- * Hasta cuándo se sigue mostrando la última posición conocida.
+ * Desde cuándo la señal deja de ser "de recién".
  *
- * Eran diez minutos y casi nunca se veía a nadie. El motivo no es la regla
- * sino cómo funciona un navegador: la app manda la posición mientras está EN
- * PANTALLA, y el celular congela los temporizadores de una pestaña que quedó
- * atrás. El repartidor se pasa el día en Maps y en WhatsApp, así que entre
- * señal y señal pasan más de diez minutos casi siempre.
+ * No es un filtro: se muestra igual. Sólo cambia lo que dice al lado.
  *
- * Con tres cuartos de hora, la moto que se vio hace veinte minutos sigue
- * apareciendo — y al lado dice a qué hora fue, que es lo que permite decidir
- * si ese punto todavía sirve. Esconderla no la hace más precisa: deja la
- * pantalla vacía y sin explicación.
+ * Poner un tope fue un error que costó dos vueltas. Primero diez minutos,
+ * después cuarenta y cinco, y en las dos el mapa aparecía vacío teniendo una
+ * posición perfectamente útil guardada. El motivo no es la regla sino cómo
+ * funciona un navegador: la app manda la posición mientras está EN PANTALLA, y
+ * el celular congela los temporizadores de una pestaña que quedó atrás.
+ *
+ * El tope de verdad ya existe y está en la base: las posiciones se borran
+ * solas a las tres horas. O sea que lo que hay guardado es siempre del día. Lo
+ * correcto es mostrarlo y decir de cuándo es, que es lo que permite decidir si
+ * ese punto todavía sirve.
  */
-const MINUTOS_CONECTADO = 45;
+const MINUTOS_RECIENTE = 20;
 
 /**
  * El día entero sobre el mapa.
@@ -140,12 +142,11 @@ export default function MapaAdminPage() {
     let vivo = true;
 
     const traer = () => {
-      const desdeCuando = new Date(Date.now() - MINUTOS_CONECTADO * 60_000).toISOString();
-
+      // Sin filtro de tiempo: la tabla se limpia sola a las tres horas, así que
+      // lo que hay guardado es siempre de la jornada.
       supabase
         .from('driver_positions')
         .select('driver_id, lat, lng, taken_at, perfil:driver_id(full_name)')
-        .gte('taken_at', desdeCuando)
         .order('taken_at', { ascending: false })
         .limit(200)
         .then(({ data }) => {
@@ -244,7 +245,10 @@ export default function MapaAdminPage() {
       etiqueta: r.nombre.trim().charAt(0).toUpperCase() || '·',
       color: '#7c3aed',
       titulo: r.nombre,
-      detalle: `Última señal ${r.hora}` + (r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : ''),
+      detalle:
+        `Última señal ${r.hora}` +
+        (r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : '') +
+        (r.haceMinutos > MINUTOS_RECIENTE ? ' · puede haberse movido' : ''),
     }));
 
     return [...envios, ...repartidores];
@@ -356,9 +360,9 @@ export default function MapaAdminPage() {
               está en la calle o si algo dejó de andar. */}
           {motos.length === 0 && desde <= today() && today() <= hasta && (
             <p className="mt-3 border-t border-[var(--edr-border)] pt-3 text-xs text-[var(--edr-muted)]">
-              Ningún repartidor mandó su posición en la última hora. Aparecen acá mientras
-              tengan envíos del día sin cerrar y hayan abierto la app: el celular sólo la manda
-              con la app en pantalla, así que la señal llega cuando la usan.
+              Todavía no hay ninguna posición de hoy. Aparecen acá mientras tengan envíos del
+              día sin cerrar y hayan abierto la app: el celular la manda con la app en pantalla,
+              así que la señal llega cuando la usan.
             </p>
           )}
 
@@ -376,7 +380,13 @@ export default function MapaAdminPage() {
                     {r.nombre.trim().charAt(0).toUpperCase()}
                   </span>
                   <strong>{r.nombre}</strong>
-                  <span className="text-[var(--edr-muted)]">
+                  <span
+                    className={
+                      r.haceMinutos > MINUTOS_RECIENTE
+                        ? 'text-[var(--edr-muted)]'
+                        : 'font-bold text-emerald-400'
+                    }
+                  >
                     {r.hora}
                     {r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : ''}
                   </span>

@@ -26,18 +26,29 @@ import { getFix } from '@/lib/driver/geo';
  */
 export const CADA_MS = 120_000;
 
-/** Manda una posición. Devuelve si el servidor la aceptó. */
-export async function avisarPosicion(): Promise<boolean> {
-  try {
-    // Tolerante: no hace falta precisión de un metro para decir "viene por
-    // Independencia", y esperar el punto exacto gasta batería al pedo.
-    const fix = await getFix(15_000);
-    if (!fix) return false;
+/** Cuándo se mandó la última, para no repetir de gusto. */
+let ultimoEnvio = 0;
 
+/** Y desde dónde, para saber si vale la pena mandar de nuevo. */
+let ultimoPunto: { lat: number; lng: number } | null = null;
+
+/**
+ * Sube un punto ya tomado. Devuelve si el servidor lo aceptó.
+ *
+ * Está separado de `avisarPosicion` porque el seguimiento en vivo ya tiene la
+ * posición en la mano: pedirle otra al GPS para mandar la misma sería gastar
+ * batería para nada.
+ */
+export async function guardarPosicion(
+  lat: number,
+  lng: number,
+  accuracy?: number | null,
+): Promise<boolean> {
+  try {
     const { data, error } = await supabase.rpc('registrar_posicion', {
-      p_lat: fix.lat,
-      p_lng: fix.lng,
-      p_accuracy_m: fix.accuracy,
+      p_lat: lat,
+      p_lng: lng,
+      p_accuracy_m: accuracy ?? null,
     });
 
     if (error) {
@@ -50,8 +61,28 @@ export async function avisarPosicion(): Promise<boolean> {
   }
 }
 
-/** Cuándo se mandó la última, para no repetir de gusto. */
-let ultimoEnvio = 0;
+/** Pide una posición al GPS y la manda. */
+export async function avisarPosicion(): Promise<boolean> {
+  // Tolerante: no hace falta precisión de un metro para decir "viene por
+  // Independencia", y esperar el punto exacto gasta batería al pedo.
+  const fix = await getFix(15_000);
+  if (!fix) return false;
+  ultimoPunto = { lat: fix.lat, lng: fix.lng };
+  return guardarPosicion(fix.lat, fix.lng, fix.accuracy);
+}
+
+/** Nunca más de una por minuto, aunque el GPS avise cada dos segundos. */
+const MINIMO_ENTRE_ENVIOS = 60_000;
+
+/** Salvo que se haya movido esto, y entonces vale la pena aunque sea antes. */
+const METROS_PARA_MANDAR = 150;
+
+/** Distancia rápida y suficiente para decidir si mandar: no hace falta más. */
+function distanciaAprox(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = (b.lat - a.lat) * 111_320;
+  const dLng = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
 
 /**
  * Manda la posición cada tanto mientras `hayEnCamino()` diga que sí.
@@ -66,10 +97,16 @@ let ultimoEnvio = 0;
  * pantalla: cuando vuelve al frente, y cuando el repartidor toca "salgo en
  * camino" (eso lo dispara la hoja de ruta llamando a `avisarPosicion`).
  */
-export function seguirEnviando(hayEnCamino: () => boolean): () => void {
+export function seguirEnviando(hayTrabajo: () => boolean): () => void {
+  const mandar = (lat: number, lng: number, accuracy: number) => {
+    ultimoEnvio = Date.now();
+    ultimoPunto = { lat, lng };
+    void guardarPosicion(lat, lng, accuracy);
+  };
+
   const tic = () => {
     if (!navigator.onLine) return;
-    if (!hayEnCamino()) return;
+    if (!hayTrabajo()) return;
     if (Date.now() - ultimoEnvio < CADA_MS) return;
     ultimoEnvio = Date.now();
     void avisarPosicion();
@@ -77,6 +114,43 @@ export function seguirEnviando(hayEnCamino: () => boolean): () => void {
 
   tic();
   const timer = window.setInterval(tic, CADA_MS);
+
+  /*
+   * SEGUIMIENTO EN VIVO MIENTRAS LA APP ESTÁ EN PANTALLA.
+   *
+   * `watchPosition` avisa cada vez que el celular consigue una posición nueva,
+   * que andando en moto es seguido. Es bastante mejor que preguntar cada dos
+   * minutos: el reloj puede caer justo cuando está parado en un semáforo y
+   * perderse las diez cuadras de después.
+   *
+   * Lo que NO cambia es el límite de siempre: con la app atrás, el navegador
+   * también congela esto. Es seguimiento continuo mientras la usa, no
+   * continuo de verdad — para eso hace falta una app nativa.
+   *
+   * Se sube como mucho una posición por minuto, o antes si se movió más de
+   * 150 metros. Sin ese freno, andando se mandarían varias por minuto sin que
+   * el mapa se vea distinto.
+   */
+  let watchId: number | null = null;
+
+  if (typeof navigator !== 'undefined' && navigator.geolocation) {
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (!navigator.onLine || !hayTrabajo()) return;
+
+        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        const rato = Date.now() - ultimoEnvio >= MINIMO_ENTRE_ENVIOS;
+        const lejos =
+          ultimoPunto !== null && distanciaAprox(ultimoPunto, { lat, lng }) > METROS_PARA_MANDAR;
+
+        if (rato || lejos) mandar(lat, lng, accuracy);
+      },
+      () => {
+        // Sin permiso o sin señal de GPS: queda el reloj, que reintenta solo.
+      },
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 },
+    );
+  }
 
   // Volver a la app es el momento más confiable que hay para tomar posición:
   // la pantalla está prendida y el GPS despierto.
@@ -88,6 +162,7 @@ export function seguirEnviando(hayEnCamino: () => boolean): () => void {
   return () => {
     window.clearInterval(timer);
     document.removeEventListener('visibilitychange', alVolver);
+    if (watchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
   };
 }
 

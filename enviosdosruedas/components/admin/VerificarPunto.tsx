@@ -1,8 +1,9 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { encolarBusqueda } from '@/lib/colaGeocode';
 import { dentroDeLaCaja, parsearPunto, textoPunto, type Punto } from '@/lib/punto';
 
 /** Leaflet toca `window` al cargar: nunca en el servidor. */
@@ -61,6 +62,95 @@ export default function VerificarPunto({
   /** Modo a mano: el mapa de verdad, donde se toca para poner el punto. */
   const [aMano, setAMano] = useState(false);
   const [elegido, setElegido] = useState<Punto | null>(null);
+  /** Cómo salió la búsqueda automática, para contarlo en una línea. */
+  const [solo, setSolo] = useState<'buscando' | 'puesto' | 'dudoso' | 'nada' | null>(null);
+
+  /*
+   * BUSCAR SOLO, SIN QUE NADIE TOQUE NADA.
+   *
+   * Antes el punto se buscaba recién DESPUÉS de guardar, en segundo plano. Al
+   * que cargaba el envío eso no se le veía: el formulario decía "sin punto", y
+   * lo natural era abrir el mapa y ponerlo a mano. Tres clics por envío para
+   * un punto que en tres de cada cuatro casos el buscador iba a encontrar solo
+   * un minuto después. Eso es lo que hacía sentir que todo era manual.
+   *
+   * Ahora se busca mientras se carga y, si el resultado es una puerta con
+   * altura, se usa directamente. Sólo hay que intervenir cuando abajo dice que
+   * no lo encontró o que quedó dudoso.
+   *
+   * `onPunto` va por un ref porque el padre lo pasa como función nueva en cada
+   * render: metido en las dependencias, esto se repetiría para siempre.
+   */
+  const onPuntoRef = useRef(onPunto);
+  useEffect(() => {
+    onPuntoRef.current = onPunto;
+  }, [onPunto]);
+
+  /** Direcciones que ya se intentaron: una sola vez cada una. */
+  const intentadas = useRef(new Set<string>());
+
+  useEffect(() => {
+    const dir = (direccion ?? '').trim();
+
+    // Con punto puesto no hay nada que buscar, y una dirección a medio escribir
+    // tampoco: se espera a que tenga forma de dirección.
+    if (lat != null || dir.length < 6) return;
+
+    const clave = `${dir}|${ciudad ?? ''}`;
+    if (intentadas.current.has(clave)) return;
+
+    // Un respiro por si sigue tecleando: sin esto, "ALBERTI 27" se busca antes
+    // de que termine de escribir "ALBERTI 2791".
+    const t = setTimeout(() => {
+      if (intentadas.current.has(clave)) return;
+      intentadas.current.add(clave);
+      setSolo('buscando');
+
+      void encolarBusqueda(async () => {
+        try {
+          const { data } = await supabase.auth.getSession();
+          const res = await fetch('/api/geocode', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${data.session?.access_token ?? ''}`,
+            },
+            body: JSON.stringify({ consulta: dir, ciudad }),
+          });
+
+          const json = (await res.json()) as {
+            origen?: 'memoria' | 'buscador';
+            punto?: { lat: number; lng: number; etiqueta: string; exacta: boolean };
+          };
+
+          if (!res.ok || !json.punto) {
+            setSolo('nada');
+            return { origen: json?.origen };
+          }
+
+          setEncontrado(json.punto);
+
+          if (json.punto.exacta) {
+            // Con altura, el punto cae en la puerta: se usa y listo.
+            setElegido({ lat: json.punto.lat, lng: json.punto.lng });
+            onPuntoRef.current({ lat: json.punto.lat, lng: json.punto.lng });
+            setSolo('puesto');
+          } else {
+            // Sin altura puede estar a varias cuadras. Se muestra pero NO se
+            // usa: que lo mire alguien.
+            setSolo('dudoso');
+          }
+
+          return { origen: json.origen };
+        } catch {
+          setSolo('nada');
+          return {};
+        }
+      });
+    }, 700);
+
+    return () => clearTimeout(t);
+  }, [direccion, ciudad, lat]);
 
   async function buscar() {
     const consulta = (texto.trim() || direccion).trim();
@@ -139,7 +229,23 @@ export default function VerificarPunto({
             Punto confirmado
           </span>
         )}
-        {lat == null && (
+        {lat != null && solo === 'puesto' && (
+          <span className="text-[11px] text-[var(--edr-muted)]">Lo ubicó solo.</span>
+        )}
+        {lat == null && solo === 'buscando' && (
+          <span className="text-[11px] text-[var(--edr-muted)]">Buscando el punto…</span>
+        )}
+        {lat == null && solo === 'dudoso' && (
+          <span className="rounded bg-amber-950 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100 ring-1 ring-amber-400">
+            Encontró la calle, no la altura — miralo
+          </span>
+        )}
+        {lat == null && solo === 'nada' && (
+          <span className="rounded bg-amber-950 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100 ring-1 ring-amber-400">
+            No lo encontró — ponelo a mano
+          </span>
+        )}
+        {lat == null && !solo && (
           <span className="text-[11px] text-[var(--edr-muted)]">
             Si no lo confirmás, se busca solo al guardar.
           </span>

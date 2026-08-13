@@ -106,6 +106,22 @@ export async function buscarPunto(
   }
 }
 
+/**
+ * La misma dirección escrita de dos formas.
+ *
+ * "Av. Dorrego 172", "AV DORREGO 172" y "av dorrego  172" son la misma puerta.
+ * Sirve para reconocer una dirección que ya ubicamos antes, aunque el comercio
+ * la haya escrito distinto esta vez.
+ */
+export function normalizarDireccion(texto: string): string {
+  return String(texto ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+}
+
 /** Saca acentos: en OSM "González Chaves" figura sin ellos la mitad de las veces. */
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -125,6 +141,25 @@ const sinAcentos = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,
  */
 const GENERICAS =
   /\b(calle|av|avda|avenida|ruta|camino|cno|diagonal|diag|barrio|manzana|mza|lote|km|esquina|esq|entre|casi|altura|sn)\b/g;
+
+/**
+ * La puerta, sin lo que venga colgando atrás.
+ *
+ * "AV DORREGO 172 PLANTA YPF" y "AV DORREGO 172" son la misma puerta: lo de
+ * atrás es una referencia para el repartidor, no otra dirección. Sirve para
+ * reconocer una que ya ubicamos aunque esta vez venga con más texto.
+ *
+ * Devuelve `null` cuando no hay una puerta clara —sin altura, o con un nombre
+ * que no nombra a nadie—. "CALLE 20 Y CALLE 491" cae acá: se parte como calle
+ * "CALLE" y altura "20", y dar eso por bueno haría coincidir esquinas
+ * distintas entre sí. Preferimos no reconocerla antes que confundirla.
+ */
+export function claveDePuerta(texto: string): string | null {
+  const partes = partirDireccion(texto);
+  if (!partes?.calle || !partes.altura) return null;
+  if (nombrePropio(partes.calle).replace(/\s/g, '').length < 3) return null;
+  return normalizarDireccion(`${partes.calle} ${partes.altura}`);
+}
 
 function nombrePropio(calle: string): string {
   return sinAcentos(calle)

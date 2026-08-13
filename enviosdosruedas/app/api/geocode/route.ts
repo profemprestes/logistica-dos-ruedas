@@ -1,6 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { buscarPunto, geocodificar } from '@/lib/geocode';
+import {
+  buscarPunto,
+  claveDePuerta,
+  geocodificar,
+  normalizarDireccion,
+  partirDireccion,
+  type Punto,
+} from '@/lib/geocode';
 
 /**
  * Le pone coordenadas a los envíos que no las tienen.
@@ -66,6 +73,63 @@ interface Fila {
   city: string | null;
 }
 
+/**
+ * ¿Esta dirección ya la ubicamos alguna vez?
+ *
+ * ES LO QUE MÁS TIEMPO AHORRA. Nominatim no conoce "AV DORREGO 172 PLANTA YPF"
+ * ni "J NEWBERY 5005", y no las va a conocer nunca: son las que hoy hay que
+ * poner a mano. Pero se repiten —el mismo comercio, la misma planta, el mismo
+ * edificio— y ponerlas a mano cada vez es hacer dos veces el mismo trabajo.
+ *
+ * Mirando lo que ya está guardado, cada punto puesto a mano queda aprendido
+ * para siempre. Además sale al instante y sin consultar afuera, así que no
+ * gasta el cupo de una consulta por segundo.
+ *
+ * Se compara la dirección normalizada, no letra por letra: el comercio escribe
+ * "Av. Dorrego 172" un día y "AV DORREGO 172" al otro.
+ */
+async function puntoRecordado(
+  admin: SupabaseClient,
+  direccion: string,
+  ciudad: string,
+): Promise<Punto | null> {
+  const objetivo = normalizarDireccion(direccion);
+  if (objetivo.length < 5) return null;
+
+  // La altura acota la búsqueda a un puñado de filas en vez de traer la tabla
+  // entera. Son sólo dígitos, así que no se puede colar nada raro en el patrón.
+  const altura = partirDireccion(direccion)?.altura;
+
+  let q = admin
+    .from('shipments')
+    .select('address_street, city, lat, lng')
+    .not('lat', 'is', null)
+    .limit(300);
+
+  if (altura) q = q.ilike('address_street', `%${altura}%`);
+
+  const { data } = await q;
+
+  const ciudadObjetivo = normalizarDireccion(ciudad);
+  // La misma puerta escrita con una referencia atrás: "AV DORREGO 172 PLANTA
+  // YPF" tiene que reconocer al "AV DORREGO 172" que ya ubicamos.
+  const puerta = claveDePuerta(direccion);
+
+  const fila = (data ?? []).find((f) => {
+    const r = f as { address_street: string; city: string | null };
+    const suya = normalizarDireccion(r.address_street);
+    const suPuerta = claveDePuerta(r.address_street);
+    const coincide = suya === objetivo || (puerta !== null && puerta === suPuerta);
+    if (!coincide) return false;
+    // Misma calle y altura en otra ciudad es otra puerta. Si alguno de los dos
+    // no dice ciudad, no se descarta por eso.
+    const c = normalizarDireccion(r.city ?? '');
+    return !c || !ciudadObjetivo || c === ciudadObjetivo;
+  }) as { lat: number; lng: number } | undefined;
+
+  return fila ? { lat: Number(fila.lat), lng: Number(fila.lng) } : null;
+}
+
 export async function POST(request: Request) {
   const admin = getAdminClient();
   if (!admin) {
@@ -85,8 +149,22 @@ export async function POST(request: Request) {
   // Modo verificación: busca y devuelve el punto sin guardar nada. Lo usa el
   // formulario para que el que carga lo vea en el mapa antes de confirmar.
   if (consulta) {
+    const recordado = await puntoRecordado(admin, consulta, ciudad ?? 'Mar del Plata');
+    if (recordado) {
+      return NextResponse.json({
+        origen: 'memoria',
+        punto: {
+          ...recordado,
+          etiqueta: 'Esta dirección ya la habías ubicado antes',
+          // Sale de un punto que alguien ya dio por bueno: no hay que avisar
+          // que puede estar a varias cuadras, porque no lo está.
+          exacta: true,
+        },
+      });
+    }
+
     const punto = await buscarPunto(consulta, ciudad ?? 'Mar del Plata');
-    return NextResponse.json({ punto });
+    return NextResponse.json({ origen: 'buscador', punto });
   }
 
   // Sólo los que no tienen punto: geocodificar dos veces lo mismo es gastar
@@ -110,11 +188,17 @@ export async function POST(request: Request) {
   let guardados = 0;
   let sinPunto = 0;
 
-  for (let i = 0; i < tanda.length; i++) {
-    const fila = tanda[i];
-    if (i > 0) await dormir(ESPERA_MS);
+  for (const fila of tanda) {
+    const ciudadFila = fila.city ?? 'Mar del Plata';
 
-    const punto = await geocodificar(fila.address_street, fila.city ?? 'Mar del Plata');
+    // Primero la memoria: es instantánea y no gasta el cupo del buscador. Sólo
+    // se espera el segundo de rigor cuando de verdad hubo que preguntar afuera.
+    let punto = await puntoRecordado(admin, fila.address_street, ciudadFila);
+
+    if (!punto) {
+      await dormir(ESPERA_MS);
+      punto = await geocodificar(fila.address_street, ciudadFila);
+    }
 
     if (!punto) {
       sinPunto++;

@@ -10,6 +10,7 @@ import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
+import MarcarNoEntregado from '@/components/admin/MarcarNoEntregado';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import { hoyLocal } from '@/lib/scheduled';
 import { dayShift } from '@/lib/settlement';
@@ -141,6 +142,8 @@ export default function AdminPage() {
   const [editing, setEditing] = useState<Shipment | null>(null);
   const [toPrint, setToPrint] = useState<Shipment | null>(null);
   const [proof, setProof] = useState<Shipment | null>(null);
+  /** El envío al que se le va a registrar un intento fallido desde el panel. */
+  const [noEntregado, setNoEntregado] = useState<Shipment | null>(null);
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -547,6 +550,7 @@ export default function AdminPage() {
               onDelete={remove}
               onStatus={changeStatus}
               onAssign={assignDriver}
+              onNoEntregado={CERRADOS.includes(s.status) ? undefined : setNoEntregado}
             />
           ))}
         </div>
@@ -666,6 +670,17 @@ export default function AdminPage() {
                         Ver prueba
                       </button>
                     )}
+                    {/* Un envío ya entregado o cancelado no admite un intento
+                        fallido: sería reescribir una historia terminada. */}
+                    {!CERRADOS.includes(s.status) && (
+                      <button
+                        onClick={() => setNoEntregado(s)}
+                        title="Registrar un intento fallido"
+                        className="ml-1 rounded border border-orange-400 px-2 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-950"
+                      >
+                        No entregado
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setEditing(s);
@@ -703,6 +718,14 @@ export default function AdminPage() {
       />
 
       <ProofOfDeliveryModal shipment={proof} onClose={() => setProof(null)} />
+
+      {noEntregado && (
+        <MarcarNoEntregado
+          shipment={noEntregado}
+          onCerrar={() => setNoEntregado(null)}
+          onListo={load}
+        />
+      )}
 
       {toPrint && (
         <PrintPortal>

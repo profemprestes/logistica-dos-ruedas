@@ -50,21 +50,55 @@ export async function avisarPosicion(): Promise<boolean> {
   }
 }
 
+/** Cuándo se mandó la última, para no repetir de gusto. */
+let ultimoEnvio = 0;
+
 /**
  * Manda la posición cada tanto mientras `hayEnCamino()` diga que sí.
  * Devuelve la función para cortarlo.
+ *
+ * OJO CON EL RELOJ. El navegador de un celular frena los temporizadores de una
+ * pestaña que no está a la vista, y el repartidor se pasa el día saltando a
+ * Maps y a WhatsApp. O sea que este intervalo NO corre mientras trabaja: es la
+ * red de seguridad, no el mecanismo principal.
+ *
+ * Lo que de verdad manda posiciones son los momentos en que la app está en
+ * pantalla: cuando vuelve al frente, y cuando el repartidor toca "salgo en
+ * camino" (eso lo dispara la hoja de ruta llamando a `avisarPosicion`).
  */
 export function seguirEnviando(hayEnCamino: () => boolean): () => void {
   const tic = () => {
     if (!navigator.onLine) return;
     if (!hayEnCamino()) return;
+    if (Date.now() - ultimoEnvio < CADA_MS) return;
+    ultimoEnvio = Date.now();
     void avisarPosicion();
   };
 
-  // La primera sale enseguida: si no, el que abre el seguimiento justo después
-  // de que el repartidor sale no ve nada durante dos minutos.
   tic();
   const timer = window.setInterval(tic, CADA_MS);
 
-  return () => window.clearInterval(timer);
+  // Volver a la app es el momento más confiable que hay para tomar posición:
+  // la pantalla está prendida y el GPS despierto.
+  const alVolver = () => {
+    if (document.visibilityState === 'visible') tic();
+  };
+  document.addEventListener('visibilitychange', alVolver);
+
+  return () => {
+    window.clearInterval(timer);
+    document.removeEventListener('visibilitychange', alVolver);
+  };
+}
+
+/**
+ * Manda una posición ahora mismo, salteando la espera del intervalo.
+ *
+ * Es lo que se llama al marcar "salgo en camino": sin esto, el que abre el
+ * seguimiento en ese momento no ve nada hasta el próximo tic, y con el atraso
+ * de publicación eso son varios minutos mirando una pantalla que parece rota.
+ */
+export function avisarPosicionYa(): void {
+  ultimoEnvio = Date.now();
+  void avisarPosicion();
 }

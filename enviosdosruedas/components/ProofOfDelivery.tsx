@@ -193,20 +193,33 @@ export default function ProofOfDelivery({ data }: { data: TrackResult }) {
       </div>
 
       {/* ---------- Cuánto falta ---------- */}
-      {data.courier && (
+      {data.status === 'en_camino' && (
         <div className="px-5 pt-4">
           <div className="rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/10 px-4 py-4 text-center">
             <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--edr-muted)]">
-              {data.courier.eta ? 'Llega aproximadamente en' : 'El repartidor está en la calle'}
+              {data.courier?.eta ? 'Llega aproximadamente en' : 'El repartidor está en la calle'}
             </div>
             <div className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
-              {data.courier.eta?.texto ?? 'En camino'}
+              {data.courier?.eta?.texto ?? 'En camino'}
             </div>
-            {/* Decirlo, y no dejar que lo descubra: el número es una cuenta, no
-                una promesa, y la posición del mapa no es la de ahora. */}
+
+            {/* Sin posición publicable todavía —los primeros minutos siempre, y
+                cada vez que el repartidor tiene el celular guardado— hay que
+                decir por qué no hay mapa. Una pantalla que no explica su propio
+                vacío se lee como rota. */}
             <p className="mt-2 text-xs leading-snug text-[var(--edr-muted)]">
-              Es un estimado: puede cambiar por el tránsito o por las entregas que tenga antes
-              que la tuya. La posición en el mapa se muestra con unos minutos de demora.
+              {data.courier ? (
+                <>
+                  Es un estimado: puede cambiar por el tránsito o por las entregas que tenga
+                  antes que la tuya. La posición en el mapa se muestra con unos minutos de
+                  demora.
+                </>
+              ) : (
+                <>
+                  Ya salió con tu envío. En cuanto tengamos su posición vas a ver por dónde
+                  viene y cuánto falta; se muestra con unos minutos de demora.
+                </>
+              )}
             </p>
           </div>
         </div>

@@ -10,7 +10,7 @@ import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
 import Logo from '@/components/Logo';
 import { useToast } from '@/components/driver/Toast';
-import { seguirEnviando } from '@/lib/driver/posicion';
+import { avisarPosicionYa, seguirEnviando } from '@/lib/driver/posicion';
 import {
   cacheRoute,
   dropBlocked,
@@ -241,6 +241,12 @@ export default function DriverDashboardPage() {
       }
       setRoute((prev) => prev.map((x) => (x.id === shipment.id ? shipment : x)));
       setSelected((prev) => (prev && prev.id === shipment.id ? shipment : prev));
+
+      // Salir en camino es el momento exacto en que el que espera empieza a
+      // mirar el seguimiento: la primera posición se manda ahora y no en el
+      // próximo tic del reloj, que puede tardar dos minutos.
+      if (estado === 'en_camino') avisarPosicionYa();
+
       toast(estado === 'retirado' ? 'Marcado como retirado.' : 'Marcado en camino.', 'ok');
     },
     [toast],

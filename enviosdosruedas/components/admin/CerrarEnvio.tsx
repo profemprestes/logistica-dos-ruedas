@@ -39,8 +39,6 @@ export default function CerrarEnvio({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
-  const yaEntregado = shipment.status === 'entregado';
-
   async function guardar() {
     if (tipo === 'no_entregado' && !motivo) return setError('Elegí el motivo.');
 
@@ -65,15 +63,13 @@ export default function CerrarEnvio({
     if (rpcError) {
       const m = rpcError.message;
       setError(
-        m.includes('ENVIO_YA_CERRADO')
-          ? 'Ese envío ya está entregado o cancelado.'
-          : m.includes('ENVIO_YA_ENTREGADO')
-            ? 'Ese envío ya figura como entregado.'
-            : m.includes('SOLO_ADMIN')
-              ? 'Sólo un administrador puede hacer esto.'
-              : m.includes('programado')
-                ? 'Está cargado para otro día: cambiale la fecha de reparto antes de cerrarlo.'
-                : m,
+        m.includes('ENTREGA_YA_REGISTRADA')
+          ? 'La entrega de ese envío ya está registrada. Si se cerró por error, marcalo como no entregado.'
+          : m.includes('SOLO_ADMIN')
+            ? 'Sólo un administrador puede hacer esto.'
+            : m.includes('programado')
+              ? 'Está cargado para otro día: cambiale la fecha de reparto antes de cerrarlo.'
+              : m,
       );
       return;
     }
@@ -122,8 +118,7 @@ export default function CerrarEnvio({
           </button>
           <button
             onClick={() => setTipo('entregado')}
-            disabled={yaEntregado}
-            className={`${solapa('entregado', 'Entregado', 'bg-emerald-600 text-white')} disabled:opacity-40`}
+            className={solapa('entregado', 'Entregado', 'bg-emerald-600 text-white')}
           >
             Entregado
           </button>
@@ -181,7 +176,9 @@ export default function CerrarEnvio({
 
         <p className="mb-3 text-xs text-[var(--edr-muted)]">
           {tipo === 'no_entregado'
-            ? 'El motivo queda en el seguimiento del envío y en el comprobante. El envío pasa a "pendiente de entrega" para volver a intentarlo.'
+            ? shipment.status === 'entregado'
+              ? 'Este envío figura entregado: registrar un intento fallido lo devuelve a "pendiente de entrega" y le borra la fecha de entrega. Sirve para corregir un cierre equivocado.'
+              : 'El motivo queda en el seguimiento del envío y en el comprobante. El envío pasa a "pendiente de entrega" para volver a intentarlo.'
             : 'Queda registrado como entregado, con la fecha de ahora y sin foto: un cierre hecho desde el panel no tiene la prueba que saca el repartidor.'}
         </p>
 

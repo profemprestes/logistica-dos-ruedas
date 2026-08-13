@@ -443,7 +443,21 @@ export default function ResumenesPage() {
             </div>
 
             <div className="-mx-3 overflow-x-auto px-3">
-              <table className="w-full min-w-[640px] text-sm">
+              {/* Ancho fijo por columna y campos que llenan su celda.
+                  Con el ancho automático el navegador repartía el sobrante
+                  entre las columnas pero los campos adentro medían lo suyo:
+                  quedaban flotando a la izquierda de celdas anchas, con el
+                  título de "Cobrar" a setenta píxeles de su propio casillero.
+                  Y la dirección, que es la que más texto lleva, era la que
+                  menos lugar recibía. */}
+              <table className="w-full min-w-[680px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-40" />
+                  <col />
+                  <col className="w-28" />
+                  <col className="w-28" />
+                  <col className="w-12" />
+                </colgroup>
                 <thead>
                   <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--edr-muted)]">
                     <th className="pb-1 pr-2">Comercio</th>
@@ -458,7 +472,7 @@ export default function ResumenesPage() {
                     <tr key={p.tempId} className={p.esShippy ? 'bg-purple-950/30' : ''}>
                       <td className="py-1 pr-2">
                         <input
-                          className={`${campo} w-32 px-2 py-1 text-xs`}
+                          className={`${campo} w-full px-2 py-1 text-xs`}
                           value={p.comercioOriginal}
                           onChange={(e) => actualizar(p.tempId, 'comercioOriginal', e.target.value)}
                         />
@@ -473,7 +487,7 @@ export default function ResumenesPage() {
                       <td className="py-1 pr-2">
                         <input
                           type="number"
-                          className={`${campo} w-24 px-2 py-1 text-right text-xs`}
+                          className={`${campo} w-full px-2 py-1 text-right text-xs`}
                           value={p.cobrar}
                           onChange={(e) => actualizar(p.tempId, 'cobrar', e.target.value)}
                         />
@@ -483,7 +497,7 @@ export default function ResumenesPage() {
                             escribir, no un envío gratis: se marca en rojo. */}
                         <input
                           type="number"
-                          className={`${campo} w-24 px-2 py-1 text-right text-xs ${
+                          className={`${campo} w-full px-2 py-1 text-right text-xs ${
                             !p.esShippy && p.envio === 0 ? 'border-red-500' : ''
                           }`}
                           value={p.envio}

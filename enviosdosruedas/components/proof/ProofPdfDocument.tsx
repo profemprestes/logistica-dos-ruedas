@@ -257,7 +257,9 @@ export default function ProofPdfDocument({
           {shipment.is_flex && (
             <Celda
               label="MODALIDAD"
-              value="Mercado Libre Flex — el detalle también figura en la app de Flex"
+              /* Igual que en la pantalla: el PDF sale de ahí y no puede decir
+                 otra cosa. Ver `ProofOfDelivery`. */
+              value="MercadoLibre Flex"
               ancha
             />
           )}

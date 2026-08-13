@@ -393,7 +393,9 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
         {data.isFlex && (
           <Dato
             label="Modalidad"
-            value="Mercado Libre Flex — el detalle también figura en la app de Flex"
+            /* Sin la aclaración de que el detalle está en la app de Flex: el
+               que abre esto ya lo sabe, y en el comprobante sonaba a excusa. */
+            value="MercadoLibre Flex"
             className="sm:col-span-2"
           />
         )}

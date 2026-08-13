@@ -30,13 +30,35 @@ export interface ResumenGuardado {
   created_at: string;
 }
 
+/** Arma el renglón del resumen a partir de un movimiento y lo que recaudó. */
+function renglon(log: DeliveryLog, cobrar: number, envio: number, nota = ''): PedidoPegado {
+  const comercio = (log.shipment?.client_name_raw || 'GENERAL').toUpperCase();
+  const shippy = esShippy(comercio);
+  return {
+    tempId: crypto.randomUUID(),
+    comercio: shippy ? 'SHIPPY' : comercio,
+    comercioOriginal: comercio,
+    descripcion: (log.shipment?.address_street ?? '') + nota,
+    cobrar,
+    envio,
+    esShippy: shippy,
+    shipmentId: log.shipment?.id ?? null,
+    productos: [],
+  };
+}
+
 /**
- * Los envíos que el repartidor cerró en el período, como renglones del resumen.
+ * Los envíos que el repartidor movió en el período, como renglones del resumen.
  *
  * Sale de `delivery_logs` y no de `shipments` porque lo que se liquida es lo
- * que se entregó, con la plata que efectivamente entró: `logCash` es la misma
- * cuenta que usa el cierre de caja, así que los dos números no pueden
- * separarse.
+ * que pasó, con la plata que efectivamente entró: `logCash` es la misma cuenta
+ * que usa el cierre de caja, así que los dos números no pueden separarse.
+ *
+ * OJO CON EL RETIRO. En los envíos "cobrar al retirar" el repartidor le cobra
+ * el flete al comercio cuando pasa a buscar el paquete, y esa plata queda
+ * anotada en el movimiento de RETIRO, no en el de entrega. Pidiendo sólo las
+ * entregas —que es como estaba— esa recaudación no aparecía: con los datos de
+ * agosto eran $12.900 que faltaban en la caja del día sin que nada avisara.
  */
 export async function traerDelSistema(
   driverId: string,
@@ -49,30 +71,56 @@ export async function traerDelSistema(
     .from('delivery_logs')
     .select(LOG_SELECT)
     .eq('driver_id', driverId)
-    .eq('event', 'entregado')
+    .in('event', ['entregado', 'retirado'])
     .gte('happened_at', from)
     .lte('happened_at', to)
     .order('happened_at');
 
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as unknown as DeliveryLog[])
-    .filter((l) => l.shipment)
-    .map((l) => {
-      const comercio = (l.shipment?.client_name_raw || 'GENERAL').toUpperCase();
-      const shippy = esShippy(comercio);
-      return {
-        tempId: crypto.randomUUID(),
-        comercio: shippy ? 'SHIPPY' : comercio,
-        comercioOriginal: comercio,
-        descripcion: l.shipment?.address_street ?? '',
-        cobrar: logCash(l),
-        envio: Number(l.shipment?.shipping_fee ?? 0),
-        esShippy: shippy,
-        shipmentId: l.shipment?.id ?? null,
-        productos: [],
-      };
-    });
+  const logs = ((data ?? []) as unknown as DeliveryLog[]).filter((l) => l.shipment);
+
+  // Lo cobrado al retirar, por envío.
+  const alRetirar = new Map<number, { monto: number; log: DeliveryLog }>();
+  for (const l of logs) {
+    if (l.event !== 'retirado') continue;
+    const monto = logCash(l);
+    if (monto <= 0) continue;
+    const id = l.shipment!.id;
+    const previo = alRetirar.get(id);
+    alRetirar.set(id, { monto: (previo?.monto ?? 0) + monto, log: l });
+  }
+
+  // Una entrega por envío: si se cerró como no entregado y después se corrigió,
+  // quedan dos movimientos en el historial y vale el último.
+  const entregas = new Map<number, DeliveryLog>();
+  for (const l of logs) {
+    if (l.event === 'entregado') entregas.set(l.shipment!.id, l);
+  }
+
+  const renglones = [...entregas.values()].map((l) =>
+    renglon(
+      l,
+      logCash(l) + (alRetirar.get(l.shipment!.id)?.monto ?? 0),
+      Number(l.shipment?.shipping_fee ?? 0),
+    ),
+  );
+
+  /*
+   * Cobró al retirar pero el envío todavía no se entregó (o se entregó fuera
+   * del período). La plata la tiene igual, así que el renglón va: si no, la
+   * rendición cierra corta y nadie se entera hasta contar la caja.
+   *
+   * El valor del envío queda en cero a propósito. Que se le pague el flete de
+   * algo que todavía no entregó es una decisión que no me corresponde tomar
+   * sola: el renglón queda a la vista, marcado, y se completa a mano.
+   */
+  for (const [shipmentId, { monto, log }] of alRetirar) {
+    if (entregas.has(shipmentId)) continue;
+    renglones.push(renglon(log, monto, 0, ' (cobrado al retirar, sin entregar)'));
+  }
+
+  return renglones;
 }
 
 export async function guardarResumen(datos: {

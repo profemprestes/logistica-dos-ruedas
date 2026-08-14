@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { parsearPunto } from '@/lib/punto';
 import {
   buscarPunto,
   claveDePuerta,
@@ -71,6 +72,53 @@ interface Fila {
   id: number;
   address_street: string;
   city: string | null;
+}
+
+/**
+ * Los links de Google Maps que se comparten desde el celular.
+ *
+ * El link largo del navegador trae las coordenadas adentro y se leen sin pedirle
+ * nada a nadie. Pero el que sale al tocar "Compartir" en el teléfono es corto
+ * —maps.app.goo.gl/xxxx— y NO las tiene: hay que seguirlo para que aparezcan.
+ * Por eso pegarlo no funcionaba, aunque en pantalla dijera que se podía.
+ *
+ * Se sigue desde el servidor y sólo a esos dos dominios. Aceptar cualquier
+ * dirección sería dejar que, escribiendo un link, alguien haga que nuestro
+ * servidor entre a donde quiera.
+ */
+const ACORTADORES = new Set(['maps.app.goo.gl', 'goo.gl']);
+
+async function seguirLinkCorto(texto: string): Promise<Punto | null> {
+  const encontrado = String(texto ?? '').match(/https?:\/\/[^\s]+/);
+  if (!encontrado) return null;
+
+  let url: URL;
+  try {
+    url = new URL(encontrado[0]);
+  } catch {
+    return null;
+  }
+
+  if (!ACORTADORES.has(url.hostname)) return null;
+
+  try {
+    const res = await fetch(url.toString(), {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'EnviosDosRuedas/1.0 (+https://www.logisticadosruedas.com)' },
+    });
+
+    // Lo normal: el link corto redirige al largo, que sí trae el punto.
+    const delDestino = parsearPunto(res.url);
+    if (delDestino) return delDestino;
+
+    // A veces contesta una página que redirige por dentro. El punto está en el
+    // cuerpo igual; se mira sólo el principio, que es donde viene.
+    const cuerpo = (await res.text()).slice(0, 200_000);
+    return parsearPunto(cuerpo);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -149,6 +197,16 @@ export async function POST(request: Request) {
   // Modo verificación: busca y devuelve el punto sin guardar nada. Lo usa el
   // formulario para que el que carga lo vea en el mapa antes de confirmar.
   if (consulta) {
+    // Primero el link corto: si pegó uno, el punto ya está decidido y no hay
+    // nada que buscar.
+    const delLink = await seguirLinkCorto(consulta);
+    if (delLink) {
+      return NextResponse.json({
+        origen: 'memoria',
+        punto: { ...delLink, etiqueta: 'Punto tomado del link de Google Maps', exacta: true },
+      });
+    }
+
     const recordado = await puntoRecordado(admin, consulta, ciudad ?? 'Mar del Plata');
     if (recordado) {
       return NextResponse.json({

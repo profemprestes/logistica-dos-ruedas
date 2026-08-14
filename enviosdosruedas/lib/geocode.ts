@@ -67,6 +67,21 @@ export async function buscarPunto(
   const consulta = String(texto ?? '').trim();
   if (consulta.length < 3) return null;
 
+  // Segundo intento con las abreviaturas enteras: "Gral rivas 4351" no existe
+  // para el mapa, "general rivas 4351" sí. Acá se puede gastar una consulta
+  // más porque es una dirección sola, con alguien esperando la respuesta.
+  const expandida = expandirAbreviaturas(consulta);
+  if (expandida.toLowerCase() !== consulta.toLowerCase()) {
+    return (await unaBusqueda(consulta, ciudad)) ?? (await unaBusqueda(expandida, ciudad));
+  }
+  return unaBusqueda(consulta, ciudad);
+}
+
+async function unaBusqueda(
+  consulta: string,
+  ciudad: string,
+): Promise<(Punto & { etiqueta: string; exacta: boolean }) | null> {
+
   const params = new URLSearchParams({
     q: `${consulta}, ${ciudad || 'Mar del Plata'}, Argentina`,
     format: 'jsonv2',
@@ -120,6 +135,46 @@ export function normalizarDireccion(texto: string): string {
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, ' ')
     .trim();
+}
+
+/**
+ * Abreviaturas que en la calle se escriben cortas y en el mapa están enteras.
+ *
+ * "Gral rivas 4351" no lo encuentra; "General Rivas 4351" sí, al toque. En OSM
+ * las calles argentinas están con el nombre completo, y el que carga escribe
+ * como habla. Probado el 14/08/2026 contra Nominatim: la misma dirección, una
+ * forma no la conoce y la otra la ubica con altura y todo.
+ *
+ * Se expande SIEMPRE, no como intento aparte: agregar una consulta más por
+ * envío rompería el límite de una por segundo en las tandas grandes.
+ */
+const ABREVIATURAS: [RegExp, string][] = [
+  [/\bgral\b\.?/gi, 'general'],
+  [/\bgrl\b\.?/gi, 'general'],
+  [/\bcnel\b\.?/gi, 'coronel'],
+  [/\btte\b\.?/gi, 'teniente'],
+  [/\bsgto\b\.?/gi, 'sargento'],
+  [/\balte\b\.?/gi, 'almirante'],
+  [/\bbrig\b\.?/gi, 'brigadier'],
+  [/\bpte\b\.?/gi, 'presidente'],
+  [/\bpdte\b\.?/gi, 'presidente'],
+  [/\bdr\b\.?/gi, 'doctor'],
+  [/\bdra\b\.?/gi, 'doctora'],
+  [/\bing\b\.?/gi, 'ingeniero'],
+  [/\bprof\b\.?/gi, 'profesor'],
+  [/\bmons\b\.?/gi, 'monsenor'],
+  [/\bpje\b\.?/gi, 'pasaje'],
+  [/\bbv\b\.?/gi, 'bulevar'],
+  [/\bblvd\b\.?/gi, 'bulevar'],
+  [/\bavda\b\.?/gi, 'avenida'],
+  [/\bav\b\.?/gi, 'avenida'],
+];
+
+/** "Gral rivas" -> "general rivas". Lo que no reconoce lo deja igual. */
+export function expandirAbreviaturas(texto: string): string {
+  let r = String(texto ?? '');
+  for (const [re, entera] of ABREVIATURAS) r = r.replace(re, entera);
+  return r.replace(/\s+/g, ' ').trim();
 }
 
 /** Saca acentos: en OSM "González Chaves" figura sin ellos la mitad de las veces. */
@@ -197,9 +252,11 @@ export async function geocodificar(
   // una dirección así devolvía igual un punto, en cualquier lado.
   if (nombrePropio(partes.calle).replace(/\s/g, '').length < 3) return null;
 
+  const calle = expandirAbreviaturas(partes.calle);
+
   return (
-    (await consultar(partes.calle, partes.altura, ciudad)) ??
-    (await consultar(sinAcentos(partes.calle), partes.altura, ciudad))
+    (await consultar(calle, partes.altura, ciudad)) ??
+    (await consultar(sinAcentos(calle), partes.altura, ciudad))
   );
 }
 

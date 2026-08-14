@@ -14,6 +14,8 @@ import CerrarEnvio, { type Cierre } from '@/components/admin/CerrarEnvio';
 import ReprogramarEnvio from '@/components/admin/ReprogramarEnvio';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import { trackUrl } from '@/lib/trackUrl';
+import { armarZip } from '@/lib/zip';
+import { photoFileName, photoPaths, type ProofLog } from '@/lib/proof';
 import { hoyLocal } from '@/lib/scheduled';
 import { dayShift } from '@/lib/settlement';
 import {
@@ -177,6 +179,8 @@ export default function AdminPage() {
   const [asignandoLote, setAsignandoLote] = useState(false);
   const [copiados, setCopiados] = useState(false);
   const [copiando, setCopiando] = useState(false);
+  /** Cómo va la bajada de fotos: "12 de 30". Vacío cuando no está bajando. */
+  const [bajandoFotos, setBajandoFotos] = useState('');
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -386,6 +390,90 @@ export default function AdminPage() {
     } catch {
       // Sin permiso de portapapeles: mostrarlo alcanza para copiarlo a mano.
       prompt('Copiá los seguimientos:', texto);
+    }
+  }
+
+  /**
+   * Baja las fotos de todos los tildados, en un solo archivo.
+   *
+   * De a una era imposible: una jornada son treinta fotos y treinta clics, y
+   * el navegador además frena las descargas seguidas por las dudas.
+   *
+   * Se bajan de a una y se juntan acá —el ZIP se arma en la computadora, no en
+   * el servidor— así no hay que subir nada ni esperar a que alguien lo prepare.
+   * Ver `lib/zip.ts`.
+   */
+  async function bajarFotos() {
+    const elegidos = visible.filter((s) => seleccion.has(s.id));
+    if (!elegidos.length) return;
+
+    setError('');
+    setBajandoFotos('buscando…');
+
+    try {
+      const { data, error: dbError } = await supabase
+        .from('delivery_logs')
+        .select('id, event, happened_at, photo_path, photo_path_2, shipment_id')
+        .in(
+          'shipment_id',
+          elegidos.map((s) => s.id),
+        )
+        .not('photo_path', 'is', null)
+        .order('happened_at');
+
+      if (dbError) throw new Error(dbError.message);
+
+      const codigo = new Map(elegidos.map((s) => [s.id, s.tracking_code]));
+      const logs = (data ?? []) as unknown as (ProofLog & { shipment_id: number })[];
+
+      // Cada movimiento puede traer hasta dos fotos.
+      const pendientes = logs.flatMap((log) =>
+        photoPaths(log).map((path, i) => ({
+          path,
+          nombre: photoFileName(codigo.get(log.shipment_id) ?? 'SIN-CODIGO', log, i),
+        })),
+      );
+
+      if (!pendientes.length) {
+        setBajandoFotos('');
+        setError('Los envíos tildados no tienen ninguna foto todavía.');
+        return;
+      }
+
+      const archivos: { nombre: string; datos: Uint8Array<ArrayBuffer> }[] = [];
+      const fallaron: string[] = [];
+
+      for (const [i, f] of pendientes.entries()) {
+        setBajandoFotos(`${i + 1} de ${pendientes.length}`);
+        const { data: blob } = await supabase.storage.from('delivery-photos').download(f.path);
+        if (!blob) {
+          fallaron.push(f.nombre);
+          continue;
+        }
+        archivos.push({ nombre: f.nombre, datos: new Uint8Array(await blob.arrayBuffer()) });
+      }
+
+      if (!archivos.length) throw new Error('No se pudo bajar ninguna de las fotos.');
+
+      const url = URL.createObjectURL(armarZip(archivos));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fotos-${desde}${hasta !== desde ? `-a-${hasta}` : ''}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Sin esto el archivo queda ocupando memoria hasta cerrar la pestaña.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+
+      // Si alguna no vino, se dice: un archivo con menos fotos de las que
+      // esperaba y sin avisar es peor que no bajarlo.
+      if (fallaron.length) {
+        setError(`Bajaron ${archivos.length} fotos. No se pudieron traer: ${fallaron.join(', ')}.`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron bajar las fotos.');
+    } finally {
+      setBajandoFotos('');
     }
   }
 
@@ -830,6 +918,15 @@ export default function AdminPage() {
               className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-yellow)] hover:bg-[var(--edr-surface)] disabled:opacity-50"
             >
               {copiando ? 'Armando…' : copiados ? '✓ Copiados' : '🔗 Copiar seguimiento y etiqueta'}
+            </button>
+
+            <button
+              onClick={bajarFotos}
+              disabled={Boolean(bajandoFotos)}
+              title="Bajar las fotos de entrega de todos los tildados, en un solo archivo"
+              className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold hover:bg-[var(--edr-surface)] disabled:opacity-50"
+            >
+              {bajandoFotos ? `Bajando fotos… ${bajandoFotos}` : '📷 Bajar fotos'}
             </button>
 
             <button

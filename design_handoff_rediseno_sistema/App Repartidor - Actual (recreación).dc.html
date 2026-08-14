@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/fonts.css">
+<style>body{margin:0;background:#efeee9;font-family:Outfit,system-ui,sans-serif}a{color:#0636a5}a:hover{color:#0950f6}</style>
+</helmet>
+
+<section style="padding:40px 44px 24px;border-bottom:1px solid rgba(0,0,0,.08)">
+  <div style="max-width:760px;display:flex;flex-direction:column;gap:14px">
+    <span style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.1em;padding:4px 8px;background:#0636a5;color:#ffec01;border-radius:4px;align-self:flex-start">RECREACIÓN 1:1 · /driver</span>
+    <h1 style="font-family:Anton,system-ui;font-weight:400;font-size:44px;line-height:.95;letter-spacing:-.02em;margin:0;text-transform:uppercase;color:#0f172a">Lo que hay hoy<br><span style="color:#0636a5">app del repartidor</span></h1>
+    <p style="margin:0;font-size:15px;line-height:1.55;color:#3b4457;max-width:62ch;text-wrap:pretty">Copiado del código, no de memoria: <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px">app/driver/{dashboard,mapa,profile}</code>, <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px">components/driver/*</code> y los tokens de <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px">app/globals.css</code>. Paleta real de la app: fondo <b>#0636A5</b>, tarjetas <b>#042C86</b>, encabezados <b>#072A72</b>, bordes <b>#2A58C4</b>, texto secundario <b>#B7CBFF</b>, tinta amarilla <b>#FFEC01</b> y el amarillo apagado <b>#F0CF1F</b> para bloques grandes. Tipografía Outfit (única que carga <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px">layout.tsx</code>), monoespaciada para códigos y plata.</p>
+    <p style="margin:0;font-size:14px;line-height:1.55;color:#6b7280;max-width:62ch">Lo que veo del diagnóstico, para discutir antes de rediseñar: la jerarquía la lleva todo el tiempo el amarillo flúor (tarjeta a cobrar, botón de escanear, resumen de caja) y compite consigo mismo; el emoji hace de iconografía en toda la app aunque la marca no use emoji en UI; el encabezado de la hoja de ruta amontona cinco controles en una fila de 44px; y no hay navegación persistente: mapa, perfil y ruta se saltan con links del header.</p>
+  </div>
+</section>
+
+<section style="padding:32px 44px 60px">
+  <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">app/login/page.tsx</div>
+      <div style="width:390px;height:600px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;align-items:center;justify-content:center;padding:0 16px;box-sizing:border-box">
+        <div style="width:100%;max-width:336px;border:1px solid #2a58c4;background:#042c86;border-radius:8px;padding:32px;box-sizing:border-box">
+          <img src="logo-completo.webp" alt="Envíos DosRuedas" style="display:block;width:80px;height:auto;margin:0 auto 16px">
+          <h1 style="margin:0;font-size:24px;font-weight:900;letter-spacing:-.02em;color:#ffec01">Envíos DosRuedas</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#b7cbff">Entrá con tu usuario y contraseña.</p>
+          <label style="display:block;margin-bottom:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#b7cbff">Usuario</label>
+          <div style="margin-bottom:16px;border:1px solid #2a58c4;border-radius:4px;padding:8px 12px;font-size:14px;color:#7f9de8">juan.perez</div>
+          <label style="display:block;margin-bottom:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#b7cbff">Contraseña</label>
+          <div style="margin-bottom:20px;border:1px solid #2a58c4;border-radius:4px;padding:8px 12px;font-size:14px;color:#ffec01">••••••••</div>
+          <div style="width:100%;border-radius:4px;background:#ffec01;padding:10px 0;text-align:center;font-size:14px;font-weight:900;color:#000">Entrar</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">driver/dashboard/page.tsx</div>
+      <div style="width:390px;height:844px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;flex-direction:column">
+        <div style="background:#fbbf24;color:#000;padding:8px 16px;text-align:center;font-size:14px;font-weight:900">SIN CONEXIÓN — seguí trabajando, se guarda todo en el celular</div>
+        <div style="background:#072a72;color:#fff;padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="logo-simple.webp" alt="" style="width:34px;height:34px;flex:none;border-radius:4px;background:rgba(4,44,134,.95);padding:2px;box-sizing:border-box">
+            <div style="min-width:0;flex:1">
+              <h1 style="margin:0;font-size:18px;font-weight:900;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Juan Pérez</h1>
+              <p style="margin:0;font-size:12px;color:rgba(255,255,255,.7)">6 envío(s) por hacer · 2 para después · sin señal</p>
+            </div>
+            <div style="flex:none;border-radius:8px;background:rgba(255,255,255,.15);padding:8px 12px;font-size:20px;line-height:1">⟳</div>
+            <div style="flex:none;border-radius:8px;background:rgba(4,44,134,.15);padding:8px 12px;font-size:14px;font-weight:700">🗺️ Mapa</div>
+            <div style="flex:none;border-radius:8px;background:rgba(4,44,134,.15);padding:8px 12px;font-size:14px;font-weight:700">👤</div>
+          </div>
+          <div style="margin-top:8px;border-radius:8px;background:#f0cf1f;color:#000;padding:8px 12px;text-align:center">
+            <span style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.03em">A cobrar hoy: </span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:18px;font-weight:900">$ 84.500</span>
+          </div>
+          <div style="margin-top:8px;border-radius:8px;background:#fbbf24;color:#000;padding:8px 12px;text-align:center;font-size:14px;font-weight:900">2 entrega(s) sin enviar · tocá para reintentar</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:12px">
+          <div style="border:4px solid #000;background:#f0cf1f;color:#000;border-radius:16px;padding:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:rgba(0,0,0,.7)">EDR-2K48F1</span>
+              <span style="border-radius:999px;background:rgba(0,0,0,.1);padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase">En camino</span>
+            </div>
+            <div style="margin-top:4px;font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.03em;color:rgba(0,0,0,.7)">Bazar Rivadavia</div>
+            <div style="margin-top:4px;font-size:24px;font-weight:900;line-height:1.2">Falucho 1832</div>
+            <div style="font-size:18px;font-weight:700">Piso 4 · Depto B</div>
+            <div style="font-size:16px;font-weight:600;color:rgba(0,0,0,.8)">Marcela Ferreyra · 14 a 18 hs</div>
+            <div style="margin-top:12px;border-radius:12px;background:#000;color:#fff;padding:12px;text-align:center">
+              <div style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Cobrar</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:36px;font-weight:900;line-height:1">$ 62.000</div>
+            </div>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:16px;padding:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:#b7cbff">EDR-9QM03T</span>
+              <span style="border-radius:999px;background:rgba(0,0,0,.1);padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;color:#ffec01">Pendiente de retiro</span>
+            </div>
+            <div style="margin-top:4px;font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.03em;color:#ffec01">Pañalera Sol</div>
+            <div style="margin-top:4px;font-size:24px;font-weight:900;line-height:1.2">Alberti 3455</div>
+            <div style="font-size:16px;font-weight:600;color:#b7cbff">Diego Sosa</div>
+            <div style="margin-top:8px;border-radius:8px;background:#072a72;padding:8px 12px;font-size:14px;font-weight:700">📦 Retirar en: Güemes 2871</div>
+            <div style="margin-top:12px;border-radius:12px;background:#0284c7;color:#fff;padding:12px 16px;text-align:center;font-size:16px;font-weight:900">📦 Ya lo retiré</div>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:16px;padding:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:#b7cbff">EDR-77BX20</span>
+              <span style="border-radius:999px;background:rgba(0,0,0,.1);padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;color:#ffec01">Retirado</span>
+            </div>
+            <div style="margin-top:8px;border:4px solid #000;background:#ffec01;color:#000;border-radius:12px;padding:8px 12px;text-align:center">
+              <div style="font-size:20px;font-weight:900;line-height:1;letter-spacing:.03em">ENVÍO FLEX</div>
+              <div style="margin-top:4px;font-size:14px;font-weight:900;line-height:1.2">COMPLETAR EN LA APP DE ENVÍOS FLEX</div>
+              <div style="margin-top:4px;border-top:2px solid rgba(0,0,0,.3);padding-top:4px;font-size:14px;font-weight:900;line-height:1.2">📷 LA FOTO VA EN ESTA APP Y ES OBLIGATORIA</div>
+            </div>
+            <div style="margin-top:4px;font-size:24px;font-weight:900;line-height:1.2">Rodríguez Peña 4120</div>
+            <div style="font-size:16px;font-weight:600;color:#b7cbff">Laura Giménez</div>
+            <div style="margin-top:12px;border-radius:12px;background:#0636a5;color:#fff;padding:12px 16px;text-align:center;font-size:16px;font-weight:900">🛵 Salgo en camino</div>
+          </div>
+        </div>
+        <div style="border-top:2px solid #2a58c4;background:#042c86;padding:12px">
+          <div style="border-radius:16px;background:#ffec01;color:#000;padding:28px 24px;text-align:center;font-size:30px;font-weight:900">📷 ESCANEAR PAQUETE</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">driver/ShipmentSheet.tsx</div>
+      <div style="width:390px;height:844px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#072a72;color:#fff;padding:12px 16px">
+          <div style="min-width:0">
+            <h2 style="margin:0;font-size:20px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Falucho 1832</h2>
+            <p style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;color:#ffec01">Bazar Rivadavia</p>
+            <p style="margin:0;font-family:ui-monospace,Menlo,monospace;font-size:12px;opacity:.8">EDR-2K48F1</p>
+          </div>
+          <div style="border-radius:8px;background:rgba(4,44,134,.15);padding:8px 16px;font-size:16px;font-weight:700">Volver</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="border:4px solid #000;background:#f0cf1f;color:#000;border-radius:16px;padding:16px;text-align:center">
+            <div style="font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Cobrar en la puerta</div>
+            <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:48px;font-weight:900;line-height:1">$ 62.000</div>
+            <div style="font-family:ui-monospace,Menlo,monospace;margin-top:4px;font-size:14px;font-weight:700">envío $ 4.200 + mercadería $ 57.800</div>
+          </div>
+          <div style="border:2px solid #38bdf8;background:#042c86;border-radius:12px;padding:12px 16px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#38bdf8">Retirar en</div>
+            <div style="font-size:18px;font-weight:900;line-height:1.35">Rivadavia 3120, local 4</div>
+            <div style="margin-top:4px;font-size:14px;color:#b7cbff">Preguntar por Vanina, entrada por el pasillo</div>
+            <div style="margin-top:8px;border:1px solid #38bdf8;border-radius:8px;padding:8px 12px;text-align:center;font-size:14px;font-weight:900;color:#38bdf8">🗺️ Cómo llegar al retiro</div>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:12px 16px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Destinatario</div>
+            <div style="font-size:18px;font-weight:600;line-height:1.35">Marcela Ferreyra</div>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:12px 16px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Localidad</div>
+            <div style="font-size:18px;font-weight:600;line-height:1.35">Mar del Plata · 14 a 18 hs</div>
+          </div>
+          <div>
+            <div style="height:150px;border:2px solid #2a58c4;background:#072a72;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#b7cbff">mapa OSM embebido</div>
+            <p style="margin:4px 0 0;text-align:center;font-size:12px;font-weight:600;color:#b7cbff">Referencia aproximada · para navegar usá “Cómo llegar a destino”</p>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="border:2px solid #ffec01;background:#042c86;border-radius:12px;padding:16px;text-align:center;font-size:18px;font-weight:900">📞 Llamar</div>
+            <div style="border:2px solid #34d399;background:#059669;color:#fff;border-radius:12px;padding:16px;text-align:center;font-size:18px;font-weight:900">💬 WhatsApp</div>
+            <div style="grid-column:span 2;border:2px solid #ffec01;background:#042c86;border-radius:12px;padding:16px;text-align:center;font-size:18px;font-weight:900">🗺️ Cómo llegar a destino</div>
+          </div>
+        </div>
+        <div style="border-top:2px solid #2a58c4;background:#042c86;padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="border-radius:16px;background:#059669;color:#fff;padding:24px;text-align:center;font-size:24px;font-weight:900">✅ Entregado</div>
+          <div style="border-radius:16px;background:#ea580c;color:#fff;padding:20px 24px;text-align:center;font-size:20px;font-weight:900">⚠️ No entregado</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">ResolveDeliveryModal.tsx · entregado</div>
+      <div style="width:390px;height:844px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#059669;color:#fff;padding:12px 16px">
+          <div><h2 style="margin:0;font-size:20px;font-weight:900">Entregado</h2><p style="margin:0;font-family:ui-monospace,Menlo,monospace;font-size:12px;opacity:.9">EDR-2K48F1</p></div>
+          <div style="border-radius:8px;background:rgba(0,0,0,.2);padding:8px 16px;font-size:16px;font-weight:700">Volver</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:16px">
+          <div style="border:2px solid #ffec01;background:#042c86;border-radius:12px;padding:12px 16px">
+            <p style="margin:0;font-size:16px;font-weight:700">Recuperamos lo que habías cargado antes de que se cerrara la app.</p>
+            <div style="margin-top:8px;font-size:14px;font-weight:700;text-decoration:underline">Empezar de nuevo</div>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:12px 16px">
+            <div style="font-size:18px;font-weight:700">Marcela Ferreyra</div>
+            <div style="font-size:16px">Falucho 1832</div>
+          </div>
+          <div style="border:4px solid #000;background:#ffec01;color:#000;border-radius:12px;padding:12px 16px;text-align:center">
+            <div style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.03em">Cobrar antes de entregar</div>
+            <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:36px;font-weight:900">$ 62.000</div>
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Nombre de quien recibe *</label>
+            <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:16px;font-size:18px">Marcela Ferreyra</div>
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">DNI *</label>
+            <div style="border:2px solid #ffec01;background:#042c86;border-radius:12px;padding:16px;font-family:ui-monospace,Menlo,monospace;font-size:18px">32.104.887</div>
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Comentario (opcional)</label>
+            <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:16px;font-size:18px;color:#7f9de8">Recibió el encargado del edificio</div>
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px">
+              <div style="border:2px solid #2a58c4;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;color:#b7cbff">Recibió el encargado</div>
+              <div style="border:2px solid #2a58c4;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;color:#b7cbff">Dejado en portería</div>
+              <div style="border:2px solid #2a58c4;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;color:#b7cbff">Recibió un vecino</div>
+            </div>
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Comprobante *</label>
+            <div style="border-radius:12px;background:#0636a5;color:#fff;padding:20px 16px;text-align:center;font-size:18px;font-weight:900">📷 Sacar foto (obligatoria)</div>
+            <div style="margin-top:8px;border:2px solid #2a58c4;border-radius:12px;padding:12px 16px;text-align:center;font-size:16px;font-weight:700;color:#b7cbff">🖼️ Elegir de la galería</div>
+          </div>
+          <p style="margin:0;text-align:center;font-size:14px;font-weight:600;color:#b7cbff">📍 Ubicación tomada (±12 m)</p>
+        </div>
+        <div style="border-top:2px solid #2a58c4;background:#042c86;padding:16px">
+          <div style="border-radius:16px;background:#059669;color:#fff;padding:24px;text-align:center;font-size:24px;font-weight:900">Confirmar entrega</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">ResolveDeliveryModal.tsx · no entregado</div>
+      <div style="width:390px;height:640px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#ea580c;color:#fff;padding:12px 16px">
+          <div><h2 style="margin:0;font-size:20px;font-weight:900">No entregado</h2><p style="margin:0;font-family:ui-monospace,Menlo,monospace;font-size:12px;opacity:.9">EDR-77BX20</p></div>
+          <div style="border-radius:8px;background:rgba(0,0,0,.2);padding:8px 16px;font-size:16px;font-weight:700">Volver</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:16px">
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:12px 16px">
+            <div style="font-size:18px;font-weight:700">Laura Giménez</div>
+            <div style="font-size:16px">Rodríguez Peña 4120</div>
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Motivo *</label>
+            <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:16px;font-size:18px;display:flex;justify-content:space-between">Ausente <span>▾</span></div>
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Comentario (opcional)</label>
+            <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:16px;font-size:18px;color:#7f9de8">Toqué timbre tres veces, nadie contestó</div>
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px">
+              <div style="border:2px solid #2a58c4;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;color:#b7cbff">Nadie contestó</div>
+              <div style="border:2px solid #2a58c4;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;color:#b7cbff">No vive más ahí</div>
+              <div style="border:2px solid #2a58c4;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;color:#b7cbff">No quiso recibirlo</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="height:160px;border:2px solid #2a58c4;border-radius:12px;background:#072a72;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#b7cbff">foto 1</div>
+            <div style="height:160px;border:2px solid #2a58c4;border-radius:12px;background:#072a72;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#b7cbff">foto 2</div>
+          </div>
+          <p style="margin:0;border-radius:12px;background:#dc2626;color:#fff;padding:12px 16px;text-align:center;font-size:16px;font-weight:700">Falta la foto del comprobante.</p>
+        </div>
+        <div style="border-top:2px solid #2a58c4;background:#042c86;padding:16px">
+          <div style="border-radius:16px;background:#ea580c;color:#fff;padding:24px;text-align:center;font-size:24px;font-weight:900">Confirmar no entregado</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">QrScannerModal.tsx</div>
+      <div style="width:390px;height:640px;background:#000;color:#fff;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px">
+          <h2 style="margin:0;font-size:18px;font-weight:700">Escanear paquete</h2>
+          <div style="border-radius:8px;background:rgba(4,44,134,.15);padding:8px 16px;font-size:16px;font-weight:700">Cerrar</div>
+        </div>
+        <div style="flex:1;position:relative;background:#111;display:flex;align-items:center;justify-content:center">
+          <div style="width:75%;aspect-ratio:1;border:3px solid rgba(255,255,255,.75);border-radius:8px"></div>
+          <p style="position:absolute;left:0;right:0;bottom:16px;margin:0;text-align:center;font-size:16px;font-weight:600;text-shadow:0 1px 2px #000">Apuntá al QR de la etiqueta</p>
+        </div>
+        <div style="background:#0636a5;padding:16px;display:flex;gap:8px">
+          <div style="flex:1;min-width:0;border-radius:8px;background:rgba(4,44,134,.1);padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:16px;text-transform:uppercase;color:#b7cbff">Código a mano</div>
+          <div style="border-radius:8px;background:#042c86;padding:12px 20px;font-size:16px;font-weight:900;color:#000;opacity:.4">Usar</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">driver/mapa/page.tsx</div>
+      <div style="width:390px;height:700px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;flex-direction:column">
+        <div style="background:#072a72;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="min-width:0">
+            <h1 style="margin:0;font-size:18px;font-weight:900;line-height:1.15">Mapa del día</h1>
+            <p style="margin:0;font-size:12px;color:rgba(255,255,255,.7)">5 de 6 en el mapa</p>
+          </div>
+          <div style="flex:none;border-radius:8px;background:rgba(255,255,255,.15);padding:8px 16px;font-size:14px;font-weight:700">← Hoja de ruta</div>
+        </div>
+        <div style="padding:12px;display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden">
+          <p style="margin:0;border-radius:12px;background:#fbbf24;color:#000;padding:8px 12px;text-align:center;font-size:14px;font-weight:900">Sin señal: los puntos están, pero el mapa no se va a dibujar hasta que vuelva.</p>
+          <p style="margin:0;border:2px solid #2a58c4;border-radius:12px;padding:8px 12px;text-align:center;font-size:14px;font-weight:700;color:#b7cbff">1 envío(s) sin punto en el mapa. Están en la hoja de ruta con su dirección.</p>
+          <div style="height:380px;border-radius:8px;background:#e8e6df;position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 46px,rgba(0,0,0,.06) 46px 47px),repeating-linear-gradient(90deg,transparent 0 46px,rgba(0,0,0,.06) 46px 47px)"></div>
+            <div style="position:absolute;left:22%;top:28%;width:28px;height:28px;border-radius:999px;background:#facc15;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>
+            <div style="position:absolute;left:52%;top:18%;width:28px;height:28px;border-radius:999px;background:#facc15;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>
+            <div style="position:absolute;left:64%;top:52%;width:28px;height:28px;border-radius:999px;background:#059669;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900">✓</div>
+            <div style="position:absolute;left:34%;top:66%;width:28px;height:28px;border-radius:999px;background:#dc2626;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900">✕</div>
+            <div style="position:absolute;left:46%;top:44%;width:16px;height:16px;border-radius:999px;background:#0950f6;border:3px solid #fff;box-shadow:0 0 0 8px rgba(9,80,246,.2)"></div>
+          </div>
+          <div style="border:4px solid #ffec01;background:#042c86;border-radius:12px;padding:12px 16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+              <div style="min-width:0">
+                <div style="font-size:20px;font-weight:900;line-height:1.2">Falucho 1832</div>
+                <div style="font-size:16px;font-weight:700">Piso 4 · Depto B</div>
+                <div style="font-size:14px;color:#b7cbff">Marcela Ferreyra · En camino</div>
+              </div>
+              <div style="flex:none;font-size:30px;line-height:1;color:#b7cbff">×</div>
+            </div>
+            <div style="margin-top:12px;border-radius:12px;background:#0636a5;color:#fff;padding:12px 16px;text-align:center;font-size:16px;font-weight:900">🧭 Cómo llegar a destino</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">driver/profile/page.tsx</div>
+      <div style="width:390px;height:980px;background:#0636a5;color:#ffec01;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(6,54,165,.25);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#072a72;color:#fff;padding:12px 16px">
+          <div style="min-width:0">
+            <h1 style="margin:0;font-size:18px;font-weight:900;line-height:1.15">Juan Pérez</h1>
+            <p style="margin:0;font-size:12px;opacity:.75">juan.perez@enviosdosruedas.local</p>
+          </div>
+          <div style="flex:none;border-radius:8px;background:rgba(255,255,255,.15);padding:8px 12px;font-size:14px;font-weight:700">Hoja de ruta</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="border-radius:12px;background:#ffec01;color:#000;padding:12px 16px;text-align:center;font-size:16px;font-weight:900">Hoy</div>
+              <div style="border:2px solid #2a58c4;border-radius:12px;padding:12px 16px;text-align:center;font-size:16px;font-weight:900;color:#b7cbff">Ayer</div>
+              <div style="border:2px solid #2a58c4;border-radius:12px;padding:12px 16px;text-align:center;font-size:16px;font-weight:900;color:#b7cbff">Esta semana</div>
+              <div style="border:2px solid #2a58c4;border-radius:12px;padding:12px 16px;text-align:center;font-size:16px;font-weight:900;color:#b7cbff">Últimos 15 días</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div>
+                <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Desde</label>
+                <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:12px;font-size:16px">14/08/2026</div>
+              </div>
+              <div>
+                <label style="display:block;margin-bottom:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Hasta</label>
+                <div style="border:2px solid #2a58c4;background:#042c86;border-radius:12px;padding:12px;font-size:16px">14/08/2026</div>
+              </div>
+            </div>
+          </div>
+          <div style="border:2px solid #ffec01;background:#042c86;border-radius:16px;padding:16px">
+            <h2 style="margin:0;font-size:18px;font-weight:900">Hoy</h2>
+            <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="border-radius:12px;background:#059669;color:#fff;padding:12px 8px;text-align:center">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:30px;font-weight:900;line-height:1">14</div>
+                <div style="margin-top:4px;font-size:11px;font-weight:700;text-transform:uppercase;line-height:1.2">Entregados</div>
+                <div style="margin-top:4px;font-size:10px;opacity:.8">tocá para ver</div>
+              </div>
+              <div style="border-radius:12px;background:#f97316;color:#fff;padding:12px 8px;text-align:center">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:30px;font-weight:900;line-height:1">2</div>
+                <div style="margin-top:4px;font-size:11px;font-weight:700;text-transform:uppercase;line-height:1.2">No entregados</div>
+                <div style="margin-top:4px;font-size:10px;opacity:.8">tocá para ver</div>
+              </div>
+            </div>
+            <div style="margin-top:16px;border:4px solid #000;background:#ffec01;color:#000;border-radius:12px;padding:16px;text-align:center">
+              <div style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Tenés que rendir</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:48px;font-weight:900;line-height:1">$ 214.300</div>
+              <div style="margin-top:4px;font-size:12px;font-weight:700">efectivo cobrado</div>
+            </div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px;font-size:16px">
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid #2a58c4;padding-bottom:4px"><span style="color:#b7cbff">Cobrado en la puerta</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:700">$ 189.300</span></div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid #2a58c4;padding-bottom:4px"><span style="color:#b7cbff">Cobrado al retirar</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:700">$ 25.000</span></div>
+            </div>
+            <div style="margin-top:16px;border:2px solid #2a58c4;border-radius:12px;padding:12px 16px">
+              <div style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.03em;color:#b7cbff">Valor de los envíos hechos</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:30px;font-weight:900">$ 58.800</div>
+              <p style="margin:4px 0 0;font-size:12px;font-weight:600;color:#b7cbff">Sin descontar comisión. Lo ajusta la oficina en el cierre de caja.</p>
+            </div>
+            <div style="margin-top:16px;border:2px solid #ffec01;border-radius:12px;padding:12px 16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.03em">Cierre de caja</span>
+                <span style="border-radius:999px;background:#fbbf24;color:#000;padding:2px 8px;font-size:10px;font-weight:900;text-transform:uppercase">Borrador</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;font-size:16px">
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #2a58c4;padding-bottom:4px"><span style="color:#b7cbff">Efectivo cobrado</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:700">$ 214.300</span></div>
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #2a58c4;padding-bottom:4px"><span style="color:#b7cbff">Efectivo rendido / pagado</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:700">$ 150.000</span></div>
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #2a58c4;padding-bottom:4px"><span style="color:#b7cbff">Envíos a cobrar (comisión descontada)</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:700">$ 41.160</span></div>
+              </div>
+              <div style="margin-top:12px;border-radius:8px;background:#dc2626;color:#fff;padding:12px;text-align:center">
+                <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Total a rendir</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:30px;font-weight:900;line-height:1">$ 23.140</div>
+              </div>
+            </div>
+            <p style="margin:12px 0 0;border-radius:8px;background:#fbbf24;color:#000;padding:8px 12px;text-align:center;font-size:14px;font-weight:900">Ojo: 2 entrega(s) todavía no llegaron al sistema.</p>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:16px;padding:16px">
+            <h2 style="margin:0;font-size:18px;font-weight:900">Notificaciones</h2>
+            <p style="margin:4px 0 0;font-size:14px;color:#b7cbff">Te avisamos cuando la oficina te asigna un envío a mano y cuando te cierran la caja del día.</p>
+            <div style="margin-top:12px;border:2px solid #34d399;border-radius:12px;padding:20px;text-align:center;font-size:18px;font-weight:900;color:#34d399">🔔 Activadas · tocá para desactivar</div>
+          </div>
+          <div style="border:2px solid #2a58c4;background:#042c86;border-radius:16px;padding:16px;display:flex;align-items:center;justify-content:space-between;font-size:18px;font-weight:900">Cambiar contraseña <span style="font-size:24px;line-height:1">+</span></div>
+          <div style="border:2px solid #2a58c4;border-radius:12px;padding:16px 24px;text-align:center;font-size:18px;font-weight:900;color:#b7cbff">Salir de la cuenta</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">PermissionGate.tsx · bloqueado</div>
+      <div style="width:390px;height:600px;background:#dc2626;color:#fff;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(220,38,38,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:40px 24px;box-sizing:border-box;text-align:center">
+        <div style="font-size:72px;line-height:1">⛔</div>
+        <h1 style="margin:0;font-size:30px;font-weight:900;line-height:1.15">Permisos requeridos</h1>
+        <p style="margin:0;max-width:24rem;font-size:20px;font-weight:700">Debés habilitar cámara y GPS para trabajar.</p>
+        <div style="width:100%;max-width:24rem;display:flex;flex-direction:column;gap:8px;text-align:left">
+          <div style="border-radius:8px;background:rgba(0,0,0,.25);padding:12px 16px;font-size:16px;font-weight:600">Cámara: permiso denegado</div>
+          <div style="border-radius:8px;background:rgba(0,0,0,.25);padding:12px 16px;font-size:16px;font-weight:600">Ubicación: sin respuesta del GPS</div>
+        </div>
+        <div style="width:100%;max-width:24rem;border-radius:12px;background:#042c86;color:#b91c1c;padding:20px 24px;font-size:20px;font-weight:900">Reintentar</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

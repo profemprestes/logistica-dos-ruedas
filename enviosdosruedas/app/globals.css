@@ -28,6 +28,81 @@
   /* Relleno de bloques grandes: el amarillo puro a pantalla completa encandila
      y "come" el texto. Este es el mismo tono pero apagado. */
   --edr-fluo: #f0cf1f;
+
+  /* ---------------------------------------------------------------- rediseño
+     Lo que suma el rediseño de agosto de 2026. Ver
+     design_handoff_rediseno_sistema/README.md. */
+
+  /* El azul más profundo: shell de la app, barras y sidebar del panel. */
+  --edr-dark: #001035;
+  /* Acento vivo. Se reserva para "tu posición" en el mapa. */
+  --edr-accent: #0950f6;
+
+  /* PANELES CLAROS DEL ADMIN.
+     La oficina trabaja horas frente a la pantalla y con planillas: ahí el azul
+     pleno cansa. La calle sigue siendo azul; el escritorio pasa a blanco. */
+  --edr-panel: #ffffff; /* superficie */
+  --edr-panel-2: #f5f8ff; /* filas alternas */
+  --edr-panel-3: #eef3fe; /* separadores y chips neutros */
+  --edr-hairline: #c9d9fb; /* borde de 1px */
+  --edr-divisor: #dbe6fd; /* líneas internas */
+
+  /* Texto sobre claro, de más fuerte a más apagado. */
+  --edr-text: #0f172a;
+  --edr-text-2: #3b4457;
+  --edr-text-3: #5b6b85;
+  --edr-text-4: #7288ad;
+  --edr-text-5: #9aabc7;
+  --edr-text-link: #4b6bb5;
+
+  /* Semánticos de alerta, iguales en las tres superficies. */
+  --edr-rojo: #dc2626;
+  --edr-naranja: #ea580c;
+  --edr-verde: #059669;
+  --edr-whatsapp: #25d366;
+
+  /* La sombra de la marca: dura, sin desenfoque y azul. Nunca negra, y sólo
+     en la acción principal y en las tarjetas de plata. */
+  --edr-sombra: 4px 4px 0 #0742ca;
+
+  /* Curvas. `spring` pasa de largo y vuelve —para lo que aparece—; `smooth`
+     frena parejo, para lo que se mueve o cambia de tamaño. */
+  --edr-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --edr-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Tailwind v4 toma de acá las utilidades: `font-anton`, `font-bebas`,
+   `text-edr-text`, `bg-edr-panel`, y así con cada token de arriba. */
+@theme inline {
+  --font-anton: var(--font-anton), 'Arial Narrow', sans-serif;
+  --font-bebas: var(--font-bebas), 'Arial Narrow', sans-serif;
+  --font-outfit: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+
+  --color-edr-blue: var(--edr-blue);
+  --color-edr-blue-dark: var(--edr-blue-dark);
+  --color-edr-blue-soft: var(--edr-blue-soft);
+  --color-edr-yellow: var(--edr-yellow);
+  --color-edr-dark: var(--edr-dark);
+  --color-edr-accent: var(--edr-accent);
+  --color-edr-surface: var(--edr-surface);
+  --color-edr-surface-2: var(--edr-surface-2);
+  --color-edr-border: var(--edr-border);
+  --color-edr-muted: var(--edr-muted);
+  --color-edr-panel: var(--edr-panel);
+  --color-edr-panel-2: var(--edr-panel-2);
+  --color-edr-panel-3: var(--edr-panel-3);
+  --color-edr-hairline: var(--edr-hairline);
+  --color-edr-divisor: var(--edr-divisor);
+  --color-edr-text: var(--edr-text);
+  --color-edr-text-2: var(--edr-text-2);
+  --color-edr-text-3: var(--edr-text-3);
+  --color-edr-text-4: var(--edr-text-4);
+  --color-edr-text-5: var(--edr-text-5);
+  --color-edr-text-link: var(--edr-text-link);
+  --color-edr-rojo: var(--edr-rojo);
+  --color-edr-naranja: var(--edr-naranja);
+  --color-edr-verde: var(--edr-verde);
+  --color-edr-whatsapp: var(--edr-whatsapp);
 }
 
 /* ==========================================================================

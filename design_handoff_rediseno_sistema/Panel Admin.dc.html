@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/colors.css">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/typography.css">
+<script src="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/_ds_bundle.js"></script>
+<script src="https://unpkg.com/lucide@0.544.0/dist/umd/lucide.js"></script>
+<style>body{margin:0;background:#efeee9;font-family:Outfit,system-ui,sans-serif}a{color:#0636a5}a:hover{color:#0950f6}svg{display:block}</style>
+</helmet>
+
+<section style="padding:40px 44px 24px;max-width:900px;display:flex;flex-direction:column;gap:16px">
+  <span style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.1em;padding:4px 8px;background:#0636a5;color:#ffec01;border-radius:4px;align-self:flex-start">PANEL DE OFICINA · PROTOTIPO NAVEGABLE</span>
+  <h1 style="font-family:Anton;font-weight:400;font-size:46px;line-height:.92;letter-spacing:-.02em;margin:0;text-transform:uppercase;color:#0f172a">Cómo acomodaría<br><span style="color:#0636a5">el panel</span></h1>
+  <p style="margin:0;font-size:15px;line-height:1.6;color:#3b4457;text-wrap:pretty">Para 50 envíos, 3 repartidores y una sola persona en la oficina, el panel actual tiene un problema de orden más que de funciones: entrás a una tabla de 300 filas y ocho columnas, y las dos cosas que más te cuestan —saber qué se está atrasando y contestar "dónde está mi paquete"— no están en ninguna parte: hay que deducirlas mirando filas.</p>
+  <div style="display:flex;flex-direction:column;gap:11px;font-size:14px;line-height:1.5;color:#3b4457">
+    <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">01</span><span><b>Panel del día como pantalla de entrada.</b> Tres bloques y nada más: qué necesita atención, cómo van los tres repartidores, y el buscador de paquete. La tabla pasa a ser una sección, no la portada.</span></div>
+    <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">02</span><span><b>Los atrasos se calculan, no se buscan.</b> Cuatro reglas explícitas: sin asignar, sin retirar pasado el corte, en camino hace más de 90 minutos, y no entregado sin reprogramar. Cada aviso trae su acción al lado.</span></div>
+    <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">03</span><span><b>"Dónde está mi paquete" en un campo.</b> Buscás por código, teléfono o dirección y sale la línea de tiempo, el estimado de llegada (<code style="font-family:ui-monospace;font-size:12.5px">lib/eta.ts</code>), dónde anda la moto y la respuesta lista para pegar en WhatsApp.</span></div>
+    <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">04</span><span><b>Azul de marca en el marco, paneles claros para los datos.</b> Las siete secciones que se leen en tablas pasan a superficie blanca y #E6EEFE con hairline azul; el amarillo queda sólo para plata y acción principal.</span></div>
+    <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">05</span><span><b>Navegación al costado, no siete pestañas que se cortan.</b> Y desde el celular el mismo panel se vuelve una columna con los avisos arriba (abajo, a la derecha).</span></div>
+  </div>
+  <p style="margin:0;font-size:13px;line-height:1.5;color:#9aa1ad">Tocá la navegación: están las diez pantallas. El buscador y la tabla funcionan; la prueba de entrega abre desde el botón "Prueba".</p>
+</section>
+
+<section style="padding:0 44px 60px;display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap">
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">Escritorio · 1440 × 940</div>
+<div style="width:1440px;height:940px;border-radius:18px;overflow:hidden;display:flex;background:#e6eefe;box-shadow:0 18px 50px rgba(6,54,165,.2);position:relative">
+
+  <div style="width:236px;flex:none;background:#001035;display:flex;flex-direction:column;padding:20px 14px;gap:22px">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px">
+      <img src="logo-simple.webp" alt="" style="width:34px;height:34px">
+      <div style="font-family:Anton;font-size:16px;line-height:.9;letter-spacing:-.01em;text-transform:uppercase;color:#fff">Envíos<br><span style="color:#ffec01">DosRuedas</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="8">
+        <button onClick="{{ n.ir }}" style="display:flex;align-items:center;gap:11px;border:none;border-radius:10px;background:{{ n.fondo }};color:{{ n.color }};padding:11px 12px;text-align:left;font-family:Outfit;font-size:14.5px;font-weight:600;cursor:pointer" style-hover="background:rgba(255,255,255,.08)">
+          <i data-lucide="{{ n.icono }}" style="width:18px;height:18px;flex:none"></i>
+          <span style="flex:1">{{ n.label }}</span>
+          <sc-if value="{{ n.tieneBadge }}" hint-placeholder-val="{{ false }}">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;background:#dc2626;color:#fff;border-radius:999px;padding:2px 7px">{{ n.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:0 6px">
+      <div style="border-top:1px solid rgba(255,255,255,.12);padding-top:14px;display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:999px;background:#ffec01;color:#0636a5;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:13px">OF</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#fff">Oficina</div>
+          <div style="font-family:Outfit;font-size:11.5px;color:#7f9de8">admin</div>
+        </div>
+        <i data-lucide="log-out" style="width:16px;height:16px;color:#7f9de8"></i>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="flex:none;background:#0636a5;padding:14px 24px;display:flex;align-items:center;gap:16px">
+      <div style="flex:1;max-width:520px;position:relative;display:flex;align-items:center;gap:10px;background:#e6eefe;border-radius:999px;padding:11px 18px">
+        <i data-lucide="search" style="width:18px;height:18px;flex:none;color:#0636a5"></i>
+        <input value="{{ q }}" onInput="{{ setQ }}" placeholder="Código, teléfono, dirección o comercio" style="flex:1;border:none;background:none;outline:none;font-family:Outfit;font-size:15px;font-weight:500;color:#00277c">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.06em;color:#4b6bb5">DÓNDE ESTÁ MI PAQUETE</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-family:Outfit;font-size:13.5px;font-weight:600;color:#e6eefe">
+        <i data-lucide="calendar" style="width:16px;height:16px;color:#ffec01"></i>Jueves 14/08
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;border-radius:999px;background:rgba(255,255,255,.1);padding:8px 14px;font-family:Outfit;font-size:13px;font-weight:600;color:#e6eefe">
+        <span style="width:8px;height:8px;border-radius:999px;background:#34d399"></span>3 repartidores en la calle
+      </div>
+      <button onClick="{{ irNuevo }}" style="margin-left:auto;display:flex;align-items:center;gap:8px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:12px 20px;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)">
+        <i data-lucide="plus" style="width:18px;height:18px"></i>NUEVO ENVÍO
+      </button>
+    </div>
+
+    <div style="flex:1;min-height:0;overflow-y:auto;padding:22px 24px 32px;background:#e6eefe">
+
+      <sc-if value="{{ esPanel }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">
+            <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="5">
+              <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;padding:16px 18px">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.08em;color:#4b6bb5">{{ t.label }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:36px;font-weight:800;line-height:1.05;letter-spacing:-.03em;color:{{ t.color }}">{{ t.valor }}</div>
+                <div style="font-family:Outfit;font-size:12.5px;color:#7288ad">{{ t.nota }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 400px;gap:18px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:18px">
+              <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid #e0e9fd">
+                  <i data-lucide="alert-triangle" style="width:19px;height:19px;color:#dc2626"></i>
+                  <span style="font-family:Anton;font-size:19px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">Necesita atención</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;background:#dc2626;color:#fff;border-radius:999px;padding:2px 8px">{{ alertasCount }}</span>
+                  <span style="margin-left:auto;font-family:Outfit;font-size:12.5px;color:#7288ad">Se recalcula solo · reglas de atraso a la vista</span>
+                </div>
+                <sc-for list="{{ alertas }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid #eef3fe">
+                    <span style="width:5px;height:38px;border-radius:999px;background:{{ a.tono }};flex:none"></span>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.07em;color:{{ a.tono }}">{{ a.tipo }}</div>
+                      <div style="font-family:Outfit;font-size:15px;font-weight:600;color:#0f172a">{{ a.detalle }}</div>
+                      <div style="font-family:Outfit;font-size:12.5px;color:#7288ad">{{ a.desde }}</div>
+                    </div>
+                    <button onClick="{{ a.accionar }}" style="flex:none;display:flex;align-items:center;gap:7px;border:1px solid #0636a5;border-radius:999px;background:#fff;color:#0636a5;padding:9px 16px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer" style-hover="background:#e6eefe">
+                      <i data-lucide="{{ a.icono }}" style="width:15px;height:15px"></i>{{ a.accion }}
+                    </button>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;padding:18px 20px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                  <i data-lucide="bike" style="width:19px;height:19px;color:#0636a5"></i>
+                  <span style="font-family:Anton;font-size:19px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">Los tres, ahora</span>
+                  <button onClick="{{ irMapa }}" style="margin-left:auto;display:flex;align-items:center;gap:6px;border:none;background:none;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;color:#0636a5;cursor:pointer">VER EN EL MAPA<i data-lucide="arrow-up-right" style="width:15px;height:15px"></i></button>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+                  <sc-for list="{{ repartidores }}" as="r" hint-placeholder-count="3">
+                    <div style="background:#f5f8ff;border:1px solid #dbe6fd;border-radius:20px;padding:16px">
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <div style="width:38px;height:38px;flex:none;border-radius:999px;background:#0636a5;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:14px">{{ r.inicial }}</div>
+                        <div style="min-width:0">
+                          <div style="font-family:Outfit;font-size:15px;font-weight:700;color:#0f172a">{{ r.nombre }}</div>
+                          <div style="font-family:Outfit;font-size:12px;color:#7288ad">{{ r.zona }} · GPS {{ r.gps }}</div>
+                        </div>
+                      </div>
+                      <div style="margin-top:12px;display:flex;align-items:baseline;justify-content:space-between">
+                        <span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:800;letter-spacing:-.03em;color:#0f172a">{{ r.hechos }}/{{ r.total }}</span>
+                        <span style="font-family:Outfit;font-size:12px;font-weight:600;color:#7288ad">entregados</span>
+                      </div>
+                      <div style="margin-top:6px;height:7px;border-radius:999px;background:#dbe6fd;overflow:hidden">
+                        <div style="height:100%;width:{{ r.pct }};background:#0636a5;border-radius:999px"></div>
+                      </div>
+                      <sc-if value="{{ mostrarPlata }}" hint-placeholder-val="{{ true }}">
+                        <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;background:#ffec01;color:#0636a5;border-radius:12px;padding:8px 12px">
+                          <span style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em">LLEVA</span>
+                          <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.03em">{{ r.plataFmt }}</span>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ r.demorado }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:10px;font-family:Outfit;font-size:12px;font-weight:600;color:#dc2626">Sin novedades {{ r.gps }}</div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:18px">
+              <sc-if value="{{ mostrarPlata }}" hint-placeholder-val="{{ true }}">
+                <div style="background:#ffec01;color:#0636a5;border-radius:24px;padding:20px;box-shadow:4px 4px 0 #0742ca">
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.1em">A COBRAR HOY EN LA CALLE</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:44px;font-weight:800;line-height:1;letter-spacing:-.04em">{{ aCobrarFmt }}</div>
+                  <div style="font-family:Outfit;font-size:12.5px;font-weight:600;opacity:.8">{{ aCobrarNota }}</div>
+                </div>
+              </sc-if>
+
+              <div style="background:#001035;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <i data-lucide="package-search" style="width:19px;height:19px;color:#ffec01"></i>
+                  <span style="font-family:Anton;font-size:18px;letter-spacing:-.01em;text-transform:uppercase;color:#fff">Dónde está mi paquete</span>
+                </div>
+                <input value="{{ q }}" onInput="{{ setQ }}" placeholder="EDR-2K48F1 · 223 555… · Falucho 1832" style="border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.08);color:#fff;padding:13px 18px;font-family:Outfit;font-size:14.5px;outline:none">
+                <sc-if value="{{ hayResultado }}" hint-placeholder-val="{{ true }}">
+                  <div style="background:#fff;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                    <div>
+                      <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:#4b6bb5">{{ res.codigo }} · {{ res.comercio }}</div>
+                      <div style="font-family:Anton;font-size:22px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">{{ res.calle }}</div>
+                      <div style="font-family:Outfit;font-size:13.5px;color:#5b6b85">{{ res.dest }} · {{ res.tel }}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:0">
+                      <sc-for list="{{ res.pasos }}" as="p" hint-placeholder-count="4">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <span style="width:11px;height:11px;flex:none;border-radius:999px;background:{{ p.color }};box-shadow:0 0 0 3px {{ p.halo }}"></span>
+                          <span style="flex:1;font-family:Outfit;font-size:13.5px;font-weight:600;color:{{ p.texto }}">{{ p.label }}</span>
+                          <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#7288ad">{{ p.hora }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="background:#e6eefe;border-radius:14px;padding:12px">
+                      <div style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em;color:#0636a5">LLEGADA APROXIMADA</div>
+                      <div style="font-family:Outfit;font-size:17px;font-weight:700;color:#00277c">{{ res.eta }}</div>
+                      <div style="font-family:Outfit;font-size:12px;color:#5b6b85">{{ res.etaNota }}</div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <button onClick="{{ copiarRespuesta }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:999px;background:#0636a5;color:#fff;padding:11px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer">
+                        <i data-lucide="copy" style="width:15px;height:15px"></i>{{ labelCopiar }}
+                      </button>
+                      <button onClick="{{ abrirProof }}" style="flex:none;display:flex;align-items:center;gap:7px;border:1px solid #0636a5;border-radius:999px;background:#fff;color:#0636a5;padding:11px 14px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer">
+                        <i data-lucide="image" style="width:15px;height:15px"></i>PRUEBA
+                      </button>
+                    </div>
+                    <div style="font-family:Outfit;font-size:12px;line-height:1.45;color:#7288ad;background:#f5f8ff;border-radius:12px;padding:10px">{{ res.mensaje }}</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ sinResultado }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.25);border-radius:18px;padding:18px;font-family:Outfit;font-size:13.5px;line-height:1.5;color:#b7cbff">Ningún envío coincide con “{{ q }}”. Buscá por código EDR, teléfono del destinatario o calle.</div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esEnvios }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Envíos</h2>
+            <div style="display:flex;gap:6px">
+              <sc-for list="{{ atajos }}" as="at" hint-placeholder-count="4">
+                <button onClick="{{ at.elegir }}" style="border:1px solid {{ at.borde }};border-radius:999px;background:{{ at.fondo }};color:{{ at.color }};padding:8px 14px;font-family:'Bebas Neue',sans-serif;font-size:14.5px;letter-spacing:.06em;cursor:pointer">{{ at.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #c9d9fb;border-radius:999px;padding:8px 14px;font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">
+              <i data-lucide="user" style="width:15px;height:15px;color:#4b6bb5"></i>Todos los repartidores<i data-lucide="chevron-down" style="width:15px;height:15px;color:#4b6bb5"></i>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #c9d9fb;border-radius:999px;padding:8px 14px;font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">
+              <i data-lucide="filter" style="width:15px;height:15px;color:#4b6bb5"></i>Todos los estados<i data-lucide="chevron-down" style="width:15px;height:15px;color:#4b6bb5"></i>
+            </div>
+            <sc-if value="{{ mostrarPlata }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-left:auto;background:#ffec01;color:#0636a5;border-radius:999px;padding:9px 18px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;display:flex;align-items:center;gap:10px">A COBRAR<span style="font-family:ui-monospace,Menlo,monospace;font-size:16px;font-weight:800;letter-spacing:-.03em">{{ aCobrarFmt }}</span></div>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{ haySeleccion }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:10px;background:#001035;border-radius:16px;padding:12px 18px">
+              <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;color:#ffec01">{{ seleccionCount }} SELECCIONADOS</span>
+              <button onClick="{{ asignar }}" style="display:flex;align-items:center;gap:7px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:9px 16px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer"><i data-lucide="user-check" style="width:15px;height:15px"></i>ASIGNAR A JUAN PÉREZ</button>
+              <button onClick="{{ copiarSeguimientos }}" style="display:flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:transparent;color:#fff;padding:9px 16px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer"><i data-lucide="link" style="width:15px;height:15px"></i>{{ labelSeguimientos }}</button>
+              <button style="display:flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:transparent;color:#fff;padding:9px 16px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer"><i data-lucide="printer" style="width:15px;height:15px"></i>IMPRIMIR ETIQUETAS</button>
+              <button style="display:flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:transparent;color:#fff;padding:9px 16px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer"><i data-lucide="download" style="width:15px;height:15px"></i>BAJAR FOTOS</button>
+              <button onClick="{{ limpiarSeleccion }}" style="margin-left:auto;border:none;background:none;font-family:Outfit;font-size:13px;font-weight:600;color:#b7cbff;cursor:pointer">Limpiar</button>
+            </div>
+          </sc-if>
+
+          <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:34px 118px 1.3fr 1.6fr 150px 150px 110px 225px;gap:12px;padding:12px 18px;background:#f5f8ff;border-bottom:1px solid #dbe6fd;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#4b6bb5">
+              <span><i data-lucide="check-square" style="width:15px;height:15px"></i></span>
+              <span>CÓDIGO</span><span>DESTINATARIO</span><span>DIRECCIÓN</span><span>ESTADO</span><span>REPARTIDOR</span><span style="text-align:right">A COBRAR</span><span style="text-align:right">ACCIONES</span>
+            </div>
+            <sc-for list="{{ filas }}" as="f" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:34px 118px 1.3fr 1.6fr 150px 150px 110px 225px;gap:12px;padding:{{ padFila }} 18px;border-bottom:1px solid #eef3fe;align-items:center;background:{{ f.fondo }}">
+                <button onClick="{{ f.tildar }}" style="width:20px;height:20px;border:2px solid {{ f.tildeBorde }};border-radius:5px;background:{{ f.tildeFondo }};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0">
+                  <sc-if value="{{ f.tildado }}" hint-placeholder-val="{{ false }}"><i data-lucide="check" style="width:13px;height:13px"></i></sc-if>
+                </button>
+                <div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;color:#0f172a">{{ f.codigo }}</div>
+                  <sc-if value="{{ f.esFlex }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:inline-block;margin-top:3px;background:#ffec01;color:#0636a5;border-radius:5px;padding:1px 6px;font-family:'Bebas Neue',sans-serif;font-size:11.5px;letter-spacing:.06em">FLEX</span>
+                  </sc-if>
+                </div>
+                <div style="min-width:0">
+                  <div style="font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.dest }}</div>
+                  <div style="font-family:Outfit;font-size:12px;color:#7288ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.comercio }}</div>
+                </div>
+                <div style="min-width:0">
+                  <div style="font-family:Outfit;font-size:14px;font-weight:500;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.calle }}</div>
+                  <div style="font-family:Outfit;font-size:12px;color:#7288ad">{{ f.ciudad }}</div>
+                </div>
+                <div><span style="display:inline-block;border-radius:999px;background:{{ f.chipFondo }};color:{{ f.chipColor }};padding:5px 11px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em">{{ f.estado }}</span></div>
+                <div style="font-family:Outfit;font-size:13.5px;font-weight:500;color:{{ f.repColor }}">{{ f.repartidor }}</div>
+                <div style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:{{ f.plataColor }}">{{ f.cobrarFmt }}</div>
+                <div style="display:flex;justify-content:flex-end;gap:6px">
+                  <sc-if value="{{ f.tieneProof }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ abrirProof }}" style="border:1px solid #0636a5;border-radius:8px;background:#fff;color:#0636a5;padding:6px 10px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.05em;cursor:pointer">PRUEBA</button>
+                  </sc-if>
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#4b6bb5;padding:6px 9px;cursor:pointer"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#4b6bb5;padding:6px 9px;cursor:pointer"><i data-lucide="printer" style="width:14px;height:14px"></i></button>
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#4b6bb5;padding:6px 9px;cursor:pointer"><i data-lucide="link" style="width:14px;height:14px"></i></button>
+                  <button style="border:1px solid #f5c2c2;border-radius:8px;background:#fff;color:#dc2626;padding:6px 9px;cursor:pointer"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+                </div>
+              </div>
+            </sc-for>
+            <div style="padding:12px 18px;font-family:Outfit;font-size:12.5px;color:#7288ad">Mostrando {{ filasCount }} de 52 envíos del jueves 14/08 · las filas sin repartidor se pueden asignar en lote</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esNuevo }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Nuevo envío</h2>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+            <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <i data-lucide="message-square" style="width:18px;height:18px;color:#25d366"></i>
+                <span style="font-family:Anton;font-size:19px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">Pegá el mensaje del comercio</span>
+              </div>
+              <textarea value="{{ pegado }}" onInput="{{ setPegado }}" rows="9" style="border:1px solid #c9d9fb;border-radius:16px;background:#f5f8ff;padding:14px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.6;color:#0f172a;outline:none;resize:none"></textarea>
+              <button onClick="{{ interpretar }}" style="display:flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;background:#0636a5;color:#fff;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.06em;cursor:pointer" style-active="transform:scale(.97)">
+                <i data-lucide="wand-2" style="width:17px;height:17px;color:#ffec01"></i>INTERPRETAR {{ lineasPegadas }} LÍNEA(S)
+              </button>
+              <p style="margin:0;font-family:Outfit;font-size:12.5px;line-height:1.5;color:#7288ad">Reconoce dirección, piso, destinatario, teléfono, monto a cobrar y ventana horaria. Lo que no entienda queda marcado en amarillo para completar a mano.</p>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ interpretados }}" as="i" hint-placeholder-count="2">
+                <div style="background:#fff;border:1px solid {{ i.borde }};border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em;color:{{ i.tono }}">{{ i.estado }}</span>
+                    <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#7288ad">línea {{ i.n }}</span>
+                  </div>
+                  <div style="font-family:Anton;font-size:21px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">{{ i.calle }}</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div style="background:#f5f8ff;border-radius:10px;padding:8px 11px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">DESTINATARIO</div><div style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ i.dest }}</div></div>
+                    <div style="background:#f5f8ff;border-radius:10px;padding:8px 11px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">TELÉFONO</div><div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0f172a">{{ i.tel }}</div></div>
+                    <div style="background:#f5f8ff;border-radius:10px;padding:8px 11px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">A COBRAR</div><div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">{{ i.cobrar }}</div></div>
+                    <div style="background:{{ i.ventanaFondo }};border-radius:10px;padding:8px 11px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">VENTANA</div><div style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ i.ventana }}</div></div>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display:flex;gap:10px">
+                <button onClick="{{ guardarEnvios }}" style="flex:1;border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:15px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.97)">GUARDAR E IMPRIMIR ETIQUETAS</button>
+                <button style="border:1px solid #0636a5;border-radius:999px;background:#fff;color:#0636a5;padding:15px 20px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;cursor:pointer">CARGAR A MANO</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esMapa }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Mapa en vivo</h2>
+          <div style="display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start">
+            <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;overflow:hidden;height:600px;position:relative">
+              <div style="position:absolute;inset:0;background:#e8e6df"></div>
+              <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 58px,rgba(0,0,0,.06) 58px 59px),repeating-linear-gradient(90deg,transparent 0 58px,rgba(0,0,0,.06) 58px 59px)"></div>
+              <div style="position:absolute;left:-5%;top:62%;width:115%;height:34px;background:rgba(6,54,165,.1);transform:rotate(-6deg)"></div>
+              <div style="position:absolute;right:-8%;top:-10%;width:38%;height:130%;background:rgba(9,80,246,.07);transform:rotate(12deg)"></div>
+              <sc-for list="{{ puntosMapa }}" as="pm" hint-placeholder-count="9">
+                <span style="position:absolute;left:{{ pm.x }};top:{{ pm.y }};transform:translate(-50%,-50%);width:26px;height:26px;border:3px solid #fff;border-radius:999px;background:{{ pm.color }};box-shadow:0 3px 8px rgba(0,0,0,.3)"></span>
+              </sc-for>
+              <sc-for list="{{ motos }}" as="m" hint-placeholder-count="3">
+                <span style="position:absolute;left:{{ m.x }};top:{{ m.y }};transform:translate(-50%,-50%);width:46px;height:46px;border-radius:999px;background:#0636a5;border:4px solid #ffec01;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:15px;box-shadow:0 6px 16px rgba(6,54,165,.4)">{{ m.inicial }}</span>
+              </sc-for>
+              <div style="position:absolute;left:18px;bottom:18px;background:#fff;border:1px solid #c9d9fb;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-family:Outfit;font-size:12.5px;font-weight:600;color:#0f172a">
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:13px;height:13px;border-radius:999px;background:#ffec01"></span>Por entregar</span>
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:13px;height:13px;border-radius:999px;background:#059669"></span>Entregado</span>
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:13px;height:13px;border-radius:999px;background:#dc2626"></span>No entregado</span>
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:13px;height:13px;border-radius:999px;background:#0636a5;border:2px solid #ffec01"></span>Repartidor</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ repartidores }}" as="r" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:36px;height:36px;flex:none;border-radius:999px;background:#0636a5;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:13px">{{ r.inicial }}</div>
+                    <div><div style="font-family:Outfit;font-size:14.5px;font-weight:700;color:#0f172a">{{ r.nombre }}</div><div style="font-family:Outfit;font-size:12px;color:#7288ad">GPS {{ r.gps }} · {{ r.zona }}</div></div>
+                  </div>
+                  <div style="font-family:Outfit;font-size:13px;color:#5b6b85">Próxima parada: <b style="color:#0f172a">{{ r.proxima }}</b></div>
+                  <div style="display:flex;gap:7px">
+                    <button style="flex:1;border:1px solid #0636a5;border-radius:999px;background:#fff;color:#0636a5;padding:8px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;cursor:pointer">SEGUIR</button>
+                    <button style="flex:1;border:1px solid #25d366;border-radius:999px;background:#fff;color:#128c3e;padding:8px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;cursor:pointer">WHATSAPP</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esRepartidores }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Repartidores</h2>
+            <button style="margin-left:auto;display:flex;align-items:center;gap:8px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:11px 18px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer"><i data-lucide="user-plus" style="width:16px;height:16px"></i>NUEVO REPARTIDOR</button>
+          </div>
+          <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.4fr 140px 1fr 120px 110px 220px;gap:12px;padding:12px 18px;background:#f5f8ff;border-bottom:1px solid #dbe6fd;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#4b6bb5">
+              <span>NOMBRE</span><span>TELÉFONO</span><span>VEHÍCULO</span><span>HOY</span><span>ESTADO</span><span style="text-align:right">ACCIONES</span>
+            </div>
+            <sc-for list="{{ repartidores }}" as="r" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:1.4fr 140px 1fr 120px 110px 220px;gap:12px;padding:14px 18px;border-bottom:1px solid #eef3fe;align-items:center">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:34px;height:34px;flex:none;border-radius:999px;background:#0636a5;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:13px">{{ r.inicial }}</div>
+                  <span style="font-family:Outfit;font-size:14.5px;font-weight:600;color:#0f172a">{{ r.nombre }}</span>
+                </div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0f172a">{{ r.tel }}</span>
+                <span style="font-family:Outfit;font-size:13.5px;color:#5b6b85">{{ r.moto }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:13.5px;font-weight:700;color:#0f172a">{{ r.hechos }}/{{ r.total }}</span>
+                <span style="border-radius:999px;background:#dcfce7;color:#166534;padding:5px 11px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em;justify-self:start">ACTIVO</span>
+                <div style="display:flex;justify-content:flex-end;gap:6px">
+                  <button onClick="{{ irCaja }}" style="border:1px solid #0636a5;border-radius:8px;background:#fff;color:#0636a5;padding:7px 12px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.05em;cursor:pointer">CAJA DEL DÍA</button>
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#4b6bb5;padding:7px 12px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.05em;cursor:pointer">EDITAR</button>
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#4b6bb5;padding:7px 12px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.05em;cursor:pointer">DESACTIVAR</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esCaja }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Cierre de caja</h2>
+            <div style="display:flex;gap:6px">
+              <sc-for list="{{ chipsRepartidor }}" as="c" hint-placeholder-count="3">
+                <button onClick="{{ c.elegir }}" style="border:1px solid {{ c.borde }};border-radius:999px;background:{{ c.fondo }};color:{{ c.color }};padding:8px 16px;font-family:'Bebas Neue',sans-serif;font-size:14.5px;letter-spacing:.06em;cursor:pointer">{{ c.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #c9d9fb;border-radius:999px;padding:8px 14px;font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a"><i data-lucide="calendar" style="width:15px;height:15px;color:#4b6bb5"></i>14/08/2026</div>
+            <span style="margin-left:auto;border-radius:999px;background:#fef3c7;color:#92400e;padding:7px 14px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em">BORRADOR · SIN LIQUIDAR</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 420px;gap:18px;align-items:start">
+            <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;overflow:hidden">
+              <div style="padding:14px 18px;border-bottom:1px solid #e0e9fd;font-family:Anton;font-size:18px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">Movimientos de {{ cajaNombre }}</div>
+              <div style="display:grid;grid-template-columns:80px 130px 1.4fr 190px 120px;gap:12px;padding:11px 18px;background:#f5f8ff;border-bottom:1px solid #dbe6fd;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#4b6bb5">
+                <span>HORA</span><span>CÓDIGO</span><span>DESTINATARIO</span><span>MOVIMIENTO</span><span style="text-align:right">EFECTIVO</span>
+              </div>
+              <sc-for list="{{ movimientos }}" as="m" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:80px 130px 1.4fr 190px 120px;gap:12px;padding:12px 18px;border-bottom:1px solid #eef3fe;align-items:center">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#5b6b85">{{ m.hora }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;color:#0f172a">{{ m.codigo }}</span>
+                  <div style="min-width:0"><div style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ m.dest }}</div><div style="font-family:Outfit;font-size:12px;color:#7288ad">{{ m.calle }}</div></div>
+                  <span style="border-radius:999px;background:{{ m.chipFondo }};color:{{ m.chipColor }};padding:5px 11px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em;justify-self:start">{{ m.evento }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13.5px;font-weight:700;color:#0f172a">{{ m.plata }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:12px">
+                <div style="font-family:Anton;font-size:18px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a">Cerrar el día</div>
+                <sc-for list="{{ renglones }}" as="rg" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #eef3fe;padding-bottom:10px">
+                    <div>
+                      <div style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ rg.label }}</div>
+                      <div style="font-family:Outfit;font-size:11.5px;color:#7288ad">{{ rg.nota }}</div>
+                    </div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:16px;font-weight:800;letter-spacing:-.03em;color:#0f172a;background:#f5f8ff;border:1px solid #c9d9fb;border-radius:10px;padding:8px 12px;min-width:120px;text-align:right">{{ rg.valor }}</div>
+                  </div>
+                </sc-for>
+                <div style="border-radius:16px;background:{{ saldoFondo }};color:#fff;padding:16px;text-align:center">
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.1em">{{ saldoLabel }}</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:38px;font-weight:800;line-height:1;letter-spacing:-.04em">{{ saldoFmt }}</div>
+                </div>
+                <button onClick="{{ liquidar }}" style="border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:15px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.97)">{{ labelLiquidar }}</button>
+                <p style="margin:0;font-family:Outfit;font-size:12px;line-height:1.5;color:#7288ad">Al liquidar le llega el aviso al celular y lo ve en "Caja del día" con los mismos nombres de renglón.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esResumenes }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Resumen para WhatsApp</h2>
+          <div style="display:grid;grid-template-columns:1fr 420px;gap:18px;align-items:start">
+            <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:1.6fr 1fr 120px 120px 110px;gap:12px;padding:11px 18px;background:#f5f8ff;border-bottom:1px solid #dbe6fd;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#4b6bb5">
+                <span>DESCRIPCIÓN</span><span>COMERCIO</span><span style="text-align:right">COBRAR</span><span style="text-align:right">ENVÍO</span><span style="text-align:right">COMISIÓN</span>
+              </div>
+              <sc-for list="{{ pedidos }}" as="p" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1.6fr 1fr 120px 120px 110px;gap:12px;padding:12px 18px;border-bottom:1px solid #eef3fe;align-items:center">
+                  <span style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ p.descripcion }}</span>
+                  <span style="font-family:Outfit;font-size:13px;color:#5b6b85">{{ p.comercio }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0f172a">{{ p.cobrar }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0f172a">{{ p.envio }}</span>
+                  <span style="text-align:right;font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.06em;color:{{ p.tono }}">{{ p.regla }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:#001035;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <i data-lucide="message-circle" style="width:18px;height:18px;color:#25d366"></i>
+                <span style="font-family:Anton;font-size:18px;letter-spacing:-.01em;text-transform:uppercase;color:#fff">Texto listo</span>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <sc-for list="{{ modosResumen }}" as="mr" hint-placeholder-count="2">
+                    <button onClick="{{ mr.elegir }}" style="border:1px solid {{ mr.borde }};border-radius:999px;background:{{ mr.fondo }};color:{{ mr.color }};padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em;cursor:pointer">{{ mr.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <pre style="margin:0;background:#0b1220;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.7;color:#e6eefe;white-space:pre-wrap;max-height:420px;overflow:auto">{{ textoResumen }}</pre>
+              <button onClick="{{ copiarResumen }}" style="display:flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.06em;cursor:pointer"><i data-lucide="copy" style="width:16px;height:16px"></i>{{ labelCopiarResumen }}</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esStats }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Estadísticas · últimos 7 días</h2>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <sc-for list="{{ statTiles }}" as="s" hint-placeholder-count="4">
+              <div style="background:{{ s.fondo }};border:1px solid {{ s.borde }};border-radius:20px;padding:16px 18px">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.08em;color:{{ s.labelColor }}">{{ s.label }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:34px;font-weight:800;letter-spacing:-.03em;color:{{ s.color }}">{{ s.valor }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+            <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;padding:20px">
+              <div style="font-family:Anton;font-size:18px;letter-spacing:-.01em;text-transform:uppercase;color:#0f172a;margin-bottom:14px">En qué estado están</div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ barras }}" as="b" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <span style="width:150px;flex:none;font-family:Outfit;font-size:13px;font-weight:600;color:#0f172a">{{ b.label }}</span>
+                    <span style="flex:1;height:16px;border-radius:999px;background:#eef3fe;overflow:hidden"><span style="display:block;height:100%;width:{{ b.pct }};background:{{ b.color }};border-radius:999px"></span></span>
+                    <span style="width:46px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">{{ b.valor }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid #c9d9fb;border-radius:24px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:1.3fr 90px 110px 110px 120px;gap:10px;padding:11px 18px;background:#f5f8ff;border-bottom:1px solid #dbe6fd;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#4b6bb5">
+                <span>REPARTIDOR</span><span style="text-align:right">ENVÍOS</span><span style="text-align:right">ENTREG.</span><span style="text-align:right">EFECTIV.</span><span style="text-align:right">EFECTIVO</span>
+              </div>
+              <sc-for list="{{ statFilas }}" as="sf" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:1.3fr 90px 110px 110px 120px;gap:10px;padding:13px 18px;border-bottom:1px solid #eef3fe;align-items:center">
+                  <span style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ sf.nombre }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0f172a">{{ sf.total }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#059669">{{ sf.entregados }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">{{ sf.efectividad }}</span>
+                  <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">{{ sf.efectivo }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ esStock }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-family:Anton;font-size:26px;letter-spacing:-.02em;text-transform:uppercase;color:#0f172a">Stock del depósito</h2>
+            <div style="display:flex;align-items:center;gap:9px;background:#001035;border-radius:999px;padding:9px 16px">
+              <span style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em;color:#ffec01">CLIENTE</span>
+              <span style="font-family:Outfit;font-size:14px;font-weight:600;color:#fff">Pañalera Sol</span>
+              <i data-lucide="chevron-down" style="width:15px;height:15px;color:#b7cbff"></i>
+            </div>
+            <span style="font-family:Outfit;font-size:12.5px;color:#5b6b85">Prefijo <b style="font-family:ui-monospace,Menlo,monospace">PSO</b> · 14 productos · 386 unidades</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <sc-for list="{{ tabsStock }}" as="ts" hint-placeholder-count="4">
+              <button onClick="{{ ts.elegir }}" style="border:none;border-bottom:3px solid {{ ts.borde }};background:none;color:{{ ts.color }};padding:10px 16px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;cursor:pointer">{{ ts.label }}</button>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:130px 1.6fr 120px 120px 160px;gap:12px;padding:11px 18px;background:#f5f8ff;border-bottom:1px solid #dbe6fd;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#4b6bb5">
+              <span>CÓDIGO</span><span>PRODUCTO</span><span style="text-align:right">STOCK</span><span style="text-align:right">RESERVADO</span><span style="text-align:right">MOVER</span>
+            </div>
+            <sc-for list="{{ filasStock }}" as="fs" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:130px 1.6fr 120px 120px 160px;gap:12px;padding:13px 18px;border-bottom:1px solid #eef3fe;align-items:center">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;color:#0f172a">{{ fs.codigo }}</span>
+                <span style="font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ fs.nombre }}</span>
+                <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:800;color:{{ fs.color }}">{{ fs.stock }}</span>
+                <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#5b6b85">{{ fs.reservado }}</span>
+                <div style="display:flex;justify-content:flex-end;gap:6px">
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#0636a5;padding:6px 11px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.05em;cursor:pointer">+ INGRESO</button>
+                  <button style="border:1px solid #dbe6fd;border-radius:8px;background:#fff;color:#dc2626;padding:6px 11px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.05em;cursor:pointer">− EGRESO</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ verProof }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:rgba(0,16,53,.62);display:flex;align-items:center;justify-content:center;padding:40px">
+      <div style="width:840px;max-height:100%;overflow-y:auto;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35)">
+        <div style="display:flex;align-items:center;gap:12px;background:#0636a5;padding:16px 22px">
+          <i data-lucide="shield-check" style="width:20px;height:20px;color:#ffec01"></i>
+          <div style="flex:1">
+            <div style="font-family:Anton;font-size:20px;letter-spacing:-.01em;text-transform:uppercase;color:#fff">Prueba de entrega</div>
+            <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#b7cbff">EDR-118KKX · Colón 4550 · entregado 11:20</div>
+          </div>
+          <button onClick="{{ cerrarProof }}" style="border:1px solid rgba(255,255,255,.25);border-radius:999px;background:transparent;color:#fff;padding:8px 16px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer">CERRAR</button>
+        </div>
+        <div style="padding:22px;display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="height:210px;border-radius:16px;background:linear-gradient(135deg,#0950f6,#00277c);display:flex;align-items:flex-end;padding:12px"><span style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;color:#e6eefe">FOTO 1 · PAQUETE EN LA PUERTA</span></div>
+              <div style="height:210px;border-radius:16px;background:linear-gradient(135deg,#4b6bb5,#001035);display:flex;align-items:flex-end;padding:12px"><span style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;color:#e6eefe">FOTO 2 · FACHADA</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="background:#f5f8ff;border:1px solid #dbe6fd;border-radius:14px;padding:12px 14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;color:#4b6bb5">RECIBIÓ</div><div style="font-family:Outfit;font-size:15px;font-weight:700;color:#0f172a">Nicolás Vera</div></div>
+              <div style="background:#f5f8ff;border:1px solid #dbe6fd;border-radius:14px;padding:12px 14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;color:#4b6bb5">DNI</div><div style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;color:#0f172a">28.774.109</div></div>
+              <div style="background:#f5f8ff;border:1px solid #dbe6fd;border-radius:14px;padding:12px 14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;color:#4b6bb5">COBRÓ</div><div style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;color:#0f172a">$ 25.000</div></div>
+              <div style="background:#f5f8ff;border:1px solid #dbe6fd;border-radius:14px;padding:12px 14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;color:#4b6bb5">GPS</div><div style="font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a">±12 m · a 40 m del domicilio</div></div>
+            </div>
+            <div style="background:#f5f8ff;border:1px solid #dbe6fd;border-radius:14px;padding:12px 14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;color:#4b6bb5">COMENTARIO DEL REPARTIDOR</div><div style="font-family:Outfit;font-size:14.5px;color:#0f172a">Recibió el encargado del edificio, dejó constancia en portería.</div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="height:160px;border-radius:16px;background:#e8e6df;position:relative;overflow:hidden;border:1px solid #dbe6fd">
+              <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 34px,rgba(0,0,0,.07) 34px 35px),repeating-linear-gradient(90deg,transparent 0 34px,rgba(0,0,0,.07) 34px 35px)"></div>
+              <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:999px;background:#059669;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)"></span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ proofPasos }}" as="pp" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="width:11px;height:11px;flex:none;border-radius:999px;background:#0636a5"></span>
+                  <span style="flex:1;font-family:Outfit;font-size:13.5px;font-weight:600;color:#0f172a">{{ pp.label }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#7288ad">{{ pp.hora }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <button style="display:flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;background:#0636a5;color:#fff;padding:13px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;cursor:pointer"><i data-lucide="link" style="width:16px;height:16px;color:#ffec01"></i>COPIAR LINK PARA EL COMERCIO</button>
+            <button style="display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #0636a5;border-radius:999px;background:#fff;color:#0636a5;padding:13px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;cursor:pointer"><i data-lucide="download" style="width:16px;height:16px"></i>BAJAR COMPROBANTE PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hayToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:50%;bottom:24px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:#001035;color:#fff;border-radius:999px;padding:14px 22px;box-shadow:0 12px 30px rgba(0,0,0,.3)">
+      <i data-lucide="check-circle-2" style="width:18px;height:18px;color:#ffec01"></i>
+      <span style="font-family:Outfit;font-size:14.5px;font-weight:600">{{ toast }}</span>
+    </div>
+  </sc-if>
+
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+  <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">Celular · el mismo panel del día</div>
+  <div style="width:390px;height:844px;border-radius:32px;overflow:hidden;background:#e6eefe;box-shadow:0 18px 50px rgba(6,54,165,.24);display:flex;flex-direction:column">
+    <div style="background:#0636a5;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <img src="logo-simple.webp" alt="" style="width:30px;height:30px">
+        <div style="font-family:Anton;font-size:15px;line-height:.9;text-transform:uppercase;color:#fff;flex:1">Panel<br><span style="color:#ffec01">del día</span></div>
+        <span style="font-family:Outfit;font-size:12.5px;font-weight:600;color:#e6eefe">Jue 14/08</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;background:#e6eefe;border-radius:999px;padding:11px 16px">
+        <i data-lucide="search" style="width:17px;height:17px;color:#0636a5"></i>
+        <span style="font-family:Outfit;font-size:14px;color:#4b6bb5">Dónde está mi paquete</span>
+      </div>
+    </div>
+    <div style="flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:#fff;border:1px solid #c9d9fb;border-radius:16px;padding:12px"><div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#0f172a">52</div><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">ENVÍOS</div></div>
+        <div style="background:#fff;border:1px solid #c9d9fb;border-radius:16px;padding:12px"><div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#059669">26</div><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">ENTREG.</div></div>
+        <div style="background:#fff;border:1px solid #c9d9fb;border-radius:16px;padding:12px"><div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#dc2626">4</div><div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.07em;color:#4b6bb5">ATRASO</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #e0e9fd">
+          <i data-lucide="alert-triangle" style="width:17px;height:17px;color:#dc2626"></i>
+          <span style="font-family:Anton;font-size:16px;text-transform:uppercase;color:#0f172a">Necesita atención</span>
+        </div>
+        <div style="padding:12px 14px;border-bottom:1px solid #eef3fe">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em;color:#dc2626">SIN ASIGNAR</div>
+          <div style="font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a">6 envíos de hoy sin repartidor</div>
+          <button style="margin-top:8px;width:100%;min-height:48px;border:1px solid #0636a5;border-radius:999px;background:#fff;color:#0636a5;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;cursor:pointer">ASIGNAR AHORA</button>
+        </div>
+        <div style="padding:12px 14px">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em;color:#ea580c">EN CAMINO HACE 95 MIN</div>
+          <div style="font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a">EDR-2K48F1 · Falucho 1832</div>
+          <div style="font-family:Outfit;font-size:12.5px;color:#7288ad">Juan Pérez · GPS hace 3 min</div>
+        </div>
+      </div>
+      <div style="background:#ffec01;color:#0636a5;border-radius:20px;padding:16px;box-shadow:4px 4px 0 #0742ca">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.1em">A COBRAR HOY</div>
+        <div style="font-family:ui-monospace,Menlo,monospace;font-size:34px;font-weight:800;line-height:1;letter-spacing:-.04em">$ 148.200</div>
+      </div>
+      <div style="background:#fff;border:1px solid #c9d9fb;border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:10px">
+        <span style="font-family:Anton;font-size:16px;text-transform:uppercase;color:#0f172a">Los tres, ahora</span>
+        <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:999px;background:#0636a5;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:12px">JP</div><span style="flex:1;font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a">Juan Pérez</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">12/18</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:999px;background:#0636a5;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:12px">LR</div><span style="flex:1;font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a">Luciano Ríos</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">9/16</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:999px;background:#0636a5;color:#ffec01;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:12px">SQ</div><span style="flex:1;font-family:Outfit;font-size:14px;font-weight:600;color:#0f172a">Sabrina Quiroga</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#0f172a">5/14</span></div>
+      </div>
+    </div>
+    <div style="flex:none;background:#0636a5;border-top:1px solid rgba(255,255,255,.12);padding:10px 12px 18px;display:flex;justify-content:space-between">
+      <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#ffec01"><i data-lucide="layout-dashboard" style="width:22px;height:22px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em">PANEL</span></span>
+      <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#7f9de8"><i data-lucide="package" style="width:22px;height:22px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em">ENVÍOS</span></span>
+      <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#7f9de8"><i data-lucide="map" style="width:22px;height:22px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em">MAPA</span></span>
+      <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#7f9de8"><i data-lucide="wallet" style="width:22px;height:22px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em">CAJA</span></span>
+    </div>
+  </div>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1560,&quot;height&quot;:1100},&quot;densidad&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Cómoda&quot;,&quot;Compacta&quot;],&quot;default&quot;:&quot;Cómoda&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tabla&quot;},&quot;mostrarPlata&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Privacidad&quot;}}">
+const money = (n) => '$ ' + Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+
+const NAV = [
+  { id: 'panel', label: 'Panel del día', icono: 'layout-dashboard', badge: 4 },
+  { id: 'envios', label: 'Envíos', icono: 'package' },
+  { id: 'nuevo', label: 'Nuevo envío', icono: 'plus-circle' },
+  { id: 'mapa', label: 'Mapa en vivo', icono: 'map' },
+  { id: 'repartidores', label: 'Repartidores', icono: 'users' },
+  { id: 'caja', label: 'Cierre de caja', icono: 'wallet' },
+  { id: 'resumenes', label: 'Resúmenes', icono: 'message-circle' },
+  { id: 'stats', label: 'Estadísticas', icono: 'bar-chart-3' },
+  { id: 'stock', label: 'Stock', icono: 'warehouse' }
+];
+
+const ENVIOS = [
+  { codigo: 'EDR-2K48F1', dest: 'Marcela Ferreyra', tel: '223 555-1234', comercio: 'Bazar Rivadavia', calle: 'Falucho 1832', ciudad: 'Mar del Plata · 14 a 18 hs', estado: 'EN CAMINO', cobrar: 62000, rep: 'Juan Pérez' },
+  { codigo: 'EDR-4TT519', dest: 'Ana Ledesma', tel: '223 411-9080', comercio: 'Vet. Constitución', calle: 'Roca 2233', ciudad: 'Mar del Plata', estado: 'RETIRADO', cobrar: 22500, rep: 'Juan Pérez' },
+  { codigo: 'EDR-77BX20', dest: 'Laura Giménez', tel: '223 602-7711', comercio: 'Tienda Nube MDQ', calle: 'Rodríguez Peña 4120', ciudad: 'Mar del Plata · 9 a 13 hs', estado: 'RETIRADO', cobrar: 0, rep: 'Sabrina Quiroga', flex: true },
+  { codigo: 'EDR-9QM03T', dest: 'Diego Sosa', tel: '223 155-8890', comercio: 'Pañalera Sol', calle: 'Alberti 3455', ciudad: 'Mar del Plata', estado: 'PENDIENTE DE RETIRO', cobrar: 18000, rep: '' },
+  { codigo: 'EDR-51PLQ0', dest: 'Pablo Ruiz', tel: '223 500-1199', comercio: 'Kiosco 9 de Julio', calle: 'Jara 1490', ciudad: 'Mar del Plata', estado: 'CREADO', cobrar: 0, rep: '' },
+  { codigo: 'EDR-118KKX', dest: 'Nicolás Vera', tel: '223 344-2200', comercio: 'Bazar Rivadavia', calle: 'Colón 4550', ciudad: 'Mar del Plata', estado: 'ENTREGADO', cobrar: 25000, rep: 'Luciano Ríos' },
+  { codigo: 'EDR-20FZ9M', dest: 'Julieta Paz', tel: '223 677-1043', comercio: 'Pañalera Sol', calle: 'Olavarría 2310', ciudad: 'Mar del Plata', estado: 'ENTREGADO', cobrar: 0, rep: 'Luciano Ríos' },
+  { codigo: 'EDR-33HHQ1', dest: 'Marcos Iriarte', tel: '223 488-3321', comercio: 'Kiosco 9 de Julio', calle: 'Tejedor 1120', ciudad: 'Mar del Plata', estado: 'NO ENTREGADO', cobrar: 0, rep: 'Sabrina Quiroga' }
+];
+
+const CHIP = {
+  'EN CAMINO': ['#dbeafe', '#1e40af'],
+  RETIRADO: ['#e0f2fe', '#075985'],
+  'PENDIENTE DE RETIRO': ['#fef3c7', '#92400e'],
+  CREADO: ['#eef3fe', '#4b6bb5'],
+  ENTREGADO: ['#dcfce7', '#166534'],
+  'NO ENTREGADO': ['#ffedd5', '#9a3412'],
+  CANCELADO: ['#fee2e2', '#991b1b']
+};
+
+const REPARTIDORES = [
+  { nombre: 'Juan Pérez', inicial: 'JP', tel: '223 511-2233', moto: 'Honda Wave AB123CD', zona: 'Constitución', gps: 'hace 3 min', hechos: 12, total: 18, plata: 84500, proxima: 'Falucho 1832', x: '34%', y: '30%' },
+  { nombre: 'Luciano Ríos', inicial: 'LR', tel: '223 480-9911', moto: 'Yamaha YBR AC880LK', zona: 'Puerto', gps: 'hace 11 min', hechos: 9, total: 16, plata: 41200, demorado: true, proxima: 'Olavarría 2310', x: '22%', y: '68%' },
+  { nombre: 'Sabrina Quiroga', inicial: 'SQ', tel: '223 402-5567', moto: 'Honda Biz AD442MN', zona: 'Centro', gps: 'hace 1 min', hechos: 5, total: 14, plata: 22500, proxima: 'Rodríguez Peña 4120', x: '62%', y: '46%' }
+];
+
+const PEGADO_DEMO = `Bazar Rivadavia
+1) Falucho 1832 4to B - Marcela Ferreyra 2235551234 - cobrar 62000 - de 14 a 18
+2) Roca 2233 - Ana Ledesma 2234119080 - cobrar 22500 envio 3700`;
+
+const PEDIDOS = [
+  { descripcion: 'Falucho 1832', comercio: 'Bazar Rivadavia', cobrar: 62000, envio: 4200, shippy: false },
+  { descripcion: 'Roca 2233', comercio: 'Vet. Constitución', cobrar: 22500, envio: 3700, shippy: false },
+  { descripcion: 'Colón 4550', comercio: 'Bazar Rivadavia', cobrar: 25000, envio: 4200, shippy: false },
+  { descripcion: 'Olavarría 2310', comercio: 'Shippy', cobrar: 0, envio: 3000, shippy: true },
+  { descripcion: 'Jara 1490', comercio: 'Shippy', cobrar: 12000, envio: 3000, shippy: true }
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'panel', q: 'EDR-2K48F1', sel: [], toast: '', verProof: false,
+    caja: 'Juan Pérez', atajo: 'Hoy', modo: 'Detallado', tab: 'Stock',
+    pegado: PEGADO_DEMO, copiado: false, copiadoResumen: false, seguimientosCopiados: false, liquidado: false
+  };
+
+  componentDidMount() { this.iconos(); }
+  componentDidUpdate() { this.iconos(); }
+  iconos() {
+    if (window.lucide) window.lucide.createIcons();
+    else setTimeout(() => window.lucide && window.lucide.createIcons(), 300);
+  }
+
+  avisar(t) {
+    clearTimeout(this._t);
+    this.setState({ toast: t });
+    this._t = setTimeout(() => this.setState({ toast: '' }), 3200);
+  }
+
+  renderVals() {
+    const st = this.state;
+    const p = this.props;
+    const comoda = (p.densidad ?? 'Cómoda') === 'Cómoda';
+    const mostrarPlata = p.mostrarPlata ?? true;
+    const q = st.q.trim().toLowerCase();
+    const encontrado = q ? ENVIOS.find((e) => (e.codigo + e.tel + e.calle + e.dest + e.comercio).toLowerCase().includes(q)) : null;
+    const aCobrar = ENVIOS.filter((e) => e.estado !== 'ENTREGADO' && e.estado !== 'NO ENTREGADO').reduce((a, e) => a + e.cobrar, 0);
+    const rep = REPARTIDORES.find((r) => r.nombre === st.caja) || REPARTIDORES[0];
+    const cobrado = 214300;
+    const envios = 58800;
+    const comision = Math.round(envios * 0.3);
+    const rendido = 150000;
+    const saldo = cobrado - rendido - (envios - comision);
+
+    const pasosDe = (e) => {
+      const orden = ['CREADO', 'PENDIENTE DE RETIRO', 'RETIRADO', 'EN CAMINO', 'ENTREGADO'];
+      const idx = orden.indexOf(e.estado === 'NO ENTREGADO' ? 'EN CAMINO' : e.estado);
+      const horas = ['09:12', '09:40', '10:04', '11:20', '—'];
+      return orden.map((label, i) => ({
+        label: label.charAt(0) + label.slice(1).toLowerCase(),
+        hora: i <= idx ? horas[i] : '—',
+        color: i <= idx ? '#0636a5' : '#c9d9fb',
+        halo: i <= idx ? 'rgba(6,54,165,.15)' : 'transparent',
+        texto: i <= idx ? '#0f172a' : '#9aabc7'
+      }));
+    };
+
+    const textoResumen = (() => {
+      const normales = PEDIDOS.filter((x) => !x.shippy);
+      const shippy = PEDIDOS.filter((x) => x.shippy);
+      const efectivo = PEDIDOS.reduce((a, x) => a + x.cobrar, 0);
+      const enviosN = normales.reduce((a, x) => a + x.envio, 0);
+      const enviosS = shippy.reduce((a, x) => a + x.envio, 0);
+      const aPagar = enviosN * 0.7 + enviosS;
+      if (st.modo === 'Compacto') {
+        return `*${st.caja} - COMPACTO*\n\n` +
+          `- Bazar Rivadavia x2. Cobrar ${money(87000)} Envío ${money(8400)}\n` +
+          `- Vet. Constitución x1. Cobrar ${money(22500)} Envío ${money(3700)}\n` +
+          `- Shippy x2. Cobrar ${money(12000)}. Envío ${money(6000)} (sin comisión)\n\n` +
+          `Envíos a pagar al cadete: ${money(aPagar)}\nTotal a rendir: ${money(efectivo - aPagar)}`;
+      }
+      const lineas = PEDIDOS.map((x, i) => `${i + 1}) ${x.descripcion}. ` +
+        (x.cobrar > 0 ? `Cobrar ${money(x.cobrar)} ` : '') +
+        `Envío ${money(x.envio)}${x.shippy ? ' (sin comisión)' : ''}`);
+      return `*${st.caja}*\n\n${lineas.join('\n')}\n\n` +
+        `Efectivo cobrado total en calle: ${money(efectivo)}\n\n` +
+        `Total envíos de locales (sin comisión): ${money(enviosN)}\n` +
+        `Total envíos Shippy (netos): ${money(enviosS)}\n\n` +
+        `Envíos a pagar al cadete: ${money(enviosN * 0.7)} (Normales) + ${money(enviosS)} (Shippy) = ${money(aPagar)}\n\n` +
+        `Total a rendir: ${money(efectivo - aPagar)}`;
+    })();
+
+    const pick = (v, activo) => ({
+      borde: activo ? '#0636a5' : '#c9d9fb',
+      fondo: activo ? '#0636a5' : '#fff',
+      color: activo ? '#fff' : '#4b6bb5'
+    });
+
+    return {
+      mostrarPlata, padFila: comoda ? '14px' : '9px',
+      nav: NAV.map((n) => ({
+        ...n, tieneBadge: Boolean(n.badge),
+        fondo: st.screen === n.id ? '#0636a5' : 'transparent',
+        color: st.screen === n.id ? '#fff' : '#b7cbff',
+        ir: () => this.setState({ screen: n.id })
+      })),
+      esPanel: st.screen === 'panel', esEnvios: st.screen === 'envios', esNuevo: st.screen === 'nuevo',
+      esMapa: st.screen === 'mapa', esRepartidores: st.screen === 'repartidores', esCaja: st.screen === 'caja',
+      esResumenes: st.screen === 'resumenes', esStats: st.screen === 'stats', esStock: st.screen === 'stock',
+      irNuevo: () => this.setState({ screen: 'nuevo' }),
+      irMapa: () => this.setState({ screen: 'mapa' }),
+      irCaja: () => this.setState({ screen: 'caja' }),
+
+      tiles: [
+        { label: 'ENVÍOS HOY', valor: '52', nota: '6 cargados hace un rato', color: '#0f172a' },
+        { label: 'EN LA CALLE', valor: '18', nota: '3 motos activas', color: '#0636a5' },
+        { label: 'ENTREGADOS', valor: '26', nota: '50% de la jornada', color: '#059669' },
+        { label: 'SIN SALIR', valor: '6', nota: 'esperando retiro', color: '#92400e' },
+        { label: 'CON ATRASO', valor: '4', nota: 'mirar el bloque de abajo', color: '#dc2626' }
+      ],
+      alertasCount: 4,
+      alertas: [
+        { tipo: 'SIN ASIGNAR', detalle: '6 envíos de hoy sin repartidor', desde: 'el más viejo entró 09:10 · corte de retiro 15 hs', tono: '#dc2626', accion: 'ASIGNAR', icono: 'user-check', accionar: () => { this.setState({ screen: 'envios' }); this.avisar('Filtrado por "sin asignar" en la tabla.'); } },
+        { tipo: 'SIN RETIRAR HACE 4 H', detalle: 'EDR-9QM03T · Pañalera Sol, Güemes 2871', desde: 'asignado a Sabrina Quiroga 11:05', tono: '#ea580c', accion: 'AVISAR', icono: 'phone', accionar: () => this.avisar('WhatsApp abierto con el comercio.') },
+        { tipo: 'EN CAMINO HACE 95 MIN', detalle: 'EDR-2K48F1 · Falucho 1832', desde: 'Juan Pérez · GPS hace 3 min a 1,2 km', tono: '#ea580c', accion: 'VER MAPA', icono: 'map-pin', accionar: () => this.setState({ screen: 'mapa' }) },
+        { tipo: 'NO ENTREGADO SIN REPROGRAMAR', detalle: 'EDR-33HHQ1 · Tejedor 1120 · Ausente', desde: 'cerrado ayer 12:40 · el comercio no fue avisado', tono: '#dc2626', accion: 'REPROGRAMAR', icono: 'calendar-clock', accionar: () => this.avisar('Reprogramado para mañana. Nace un envío nuevo.') }
+      ],
+      repartidores: REPARTIDORES.map((r) => ({
+        ...r, pct: Math.round((r.hechos / r.total) * 100) + '%', plataFmt: money(r.plata),
+        demorado: Boolean(r.demorado)
+      })),
+      aCobrarFmt: money(aCobrar + 43700),
+      aCobrarNota: '18 envíos con cobranza · 2 son al retirar',
+
+      q: st.q, setQ: (e) => this.setState({ q: e.target.value, copiado: false }),
+      hayResultado: Boolean(encontrado), sinResultado: Boolean(q) && !encontrado,
+      res: encontrado ? {
+        codigo: encontrado.codigo, comercio: encontrado.comercio, calle: encontrado.calle,
+        dest: encontrado.dest, tel: encontrado.tel, pasos: pasosDe(encontrado),
+        eta: 'Entre 15 y 20 minutos',
+        etaNota: 'Juan Pérez a 1,2 km · GPS hace 3 min · tiene 2 paradas antes',
+        mensaje: `Hola! Tu envío de ${encontrado.comercio} está en camino, llega aproximadamente entre 15 y 20 minutos. Seguilo acá: enviosdosruedas.com/t/${encontrado.codigo}`
+      } : { pasos: [] },
+      labelCopiar: st.copiado ? 'COPIADO' : 'COPIAR RESPUESTA',
+      copiarRespuesta: () => { this.setState({ copiado: true }); this.avisar('Respuesta copiada, lista para pegar en WhatsApp.'); },
+      abrirProof: () => this.setState({ verProof: true }),
+      cerrarProof: () => this.setState({ verProof: false }),
+      verProof: st.verProof,
+      proofPasos: [
+        { label: 'Cargado por la oficina', hora: '09:12' },
+        { label: 'Retirado en el comercio', hora: '10:04' },
+        { label: 'En camino', hora: '11:02' },
+        { label: 'Entregado con foto y GPS', hora: '11:20' }
+      ],
+
+      atajos: ['Hoy', 'Mañana', 'Ayer', 'Últimos 7 días'].map((label) => ({
+        label, ...pick(label, st.atajo === label), elegir: () => this.setState({ atajo: label })
+      })),
+      filas: ENVIOS.map((e, i) => {
+        const tildado = st.sel.includes(i);
+        const chip = CHIP[e.estado] || CHIP.CREADO;
+        return {
+          ...e, esFlex: Boolean(e.flex), tildado,
+          fondo: tildado ? '#f5f8ff' : '#fff',
+          tildeBorde: tildado ? '#0636a5' : '#c9d9fb',
+          tildeFondo: tildado ? '#0636a5' : '#fff',
+          chipFondo: chip[0], chipColor: chip[1],
+          repartidor: e.rep || 'Sin asignar',
+          repColor: e.rep ? '#0f172a' : '#dc2626',
+          cobrarFmt: mostrarPlata ? (e.cobrar > 0 ? money(e.cobrar) : '—') : '···',
+          plataColor: e.cobrar > 0 ? '#0f172a' : '#9aabc7',
+          tieneProof: e.estado === 'ENTREGADO' || e.estado === 'NO ENTREGADO',
+          tildar: () => this.setState((s) => ({ sel: s.sel.includes(i) ? s.sel.filter((x) => x !== i) : [...s.sel, i] }))
+        };
+      }),
+      filasCount: ENVIOS.length,
+      haySeleccion: st.sel.length > 0, seleccionCount: st.sel.length,
+      limpiarSeleccion: () => this.setState({ sel: [] }),
+      asignar: () => { this.setState({ sel: [] }); this.avisar('Asignados a Juan Pérez. Le llegó un solo aviso al celular.'); },
+      labelSeguimientos: st.seguimientosCopiados ? 'COPIADOS' : 'COPIAR SEGUIMIENTOS',
+      copiarSeguimientos: () => { this.setState({ seguimientosCopiados: true }); this.avisar('Dirección, seguimiento y etiqueta de cada uno, copiados.'); },
+
+      pegado: st.pegado, setPegado: (e) => this.setState({ pegado: e.target.value }),
+      lineasPegadas: st.pegado.split('\n').filter((l) => /^\s*\d/.test(l)).length || 2,
+      interpretar: () => this.avisar('Dos envíos interpretados. Revisá la ventana horaria del segundo.'),
+      guardarEnvios: () => { this.setState({ screen: 'envios' }); this.avisar('Guardados. Etiquetas 10×15 listas para imprimir.'); },
+      interpretados: [
+        { n: '1', estado: 'LISTO PARA GUARDAR', tono: '#166534', borde: '#c9d9fb', calle: 'Falucho 1832 · 4to B', dest: 'Marcela Ferreyra', tel: '223 555-1234', cobrar: money(62000), ventana: '14 a 18 hs', ventanaFondo: '#f5f8ff' },
+        { n: '2', estado: 'FALTA LA VENTANA HORARIA', tono: '#92400e', borde: '#ffec01', calle: 'Roca 2233', dest: 'Ana Ledesma', tel: '223 411-9080', cobrar: money(22500), ventana: 'sin dato', ventanaFondo: '#fef9c3' }
+      ],
+
+      puntosMapa: [
+        { x: '30%', y: '24%', color: '#ffec01' }, { x: '46%', y: '18%', color: '#ffec01' },
+        { x: '58%', y: '36%', color: '#059669' }, { x: '68%', y: '58%', color: '#ffec01' },
+        { x: '26%', y: '52%', color: '#059669' }, { x: '38%', y: '72%', color: '#dc2626' },
+        { x: '52%', y: '64%', color: '#ffec01' }, { x: '74%', y: '28%', color: '#ffec01' },
+        { x: '18%', y: '38%', color: '#059669' }
+      ],
+      motos: REPARTIDORES.map((r) => ({ inicial: r.inicial, x: r.x, y: r.y })),
+
+      chipsRepartidor: REPARTIDORES.map((r) => ({
+        label: r.nombre, ...pick(r.nombre, st.caja === r.nombre), elegir: () => this.setState({ caja: r.nombre })
+      })),
+      cajaNombre: rep.nombre,
+      movimientos: [
+        { hora: '10:04', codigo: 'EDR-9QM03T', dest: 'Diego Sosa', calle: 'Alberti 3455', evento: 'RETIRADO', chipFondo: '#e0f2fe', chipColor: '#075985', plata: money(3700) },
+        { hora: '10:41', codigo: 'EDR-20FZ9M', dest: 'Julieta Paz', calle: 'Olavarría 2310', evento: 'ENTREGADO', chipFondo: '#dcfce7', chipColor: '#166534', plata: '—' },
+        { hora: '11:20', codigo: 'EDR-118KKX', dest: 'Nicolás Vera', calle: 'Colón 4550', evento: 'ENTREGADO', chipFondo: '#dcfce7', chipColor: '#166534', plata: money(25000) },
+        { hora: '12:40', codigo: 'EDR-33HHQ1', dest: 'Marcos Iriarte', calle: 'Tejedor 1120', evento: 'NO ENTREGADO · AUSENTE', chipFondo: '#ffedd5', chipColor: '#9a3412', plata: '—' },
+        { hora: '13:05', codigo: 'EDR-4TT519', dest: 'Ana Ledesma', calle: 'Roca 2233', evento: 'ENTREGADO', chipFondo: '#dcfce7', chipColor: '#166534', plata: money(22500) },
+        { hora: '14:12', codigo: 'EDR-2K48F1', dest: 'Marcela Ferreyra', calle: 'Falucho 1832', evento: 'ENTREGADO', chipFondo: '#dcfce7', chipColor: '#166534', plata: money(62000) }
+      ],
+      renglones: [
+        { label: 'Efectivo cobrado', nota: 'lo que calculó el sistema', valor: money(cobrado) },
+        { label: 'Efectivo rendido / pagado', nota: 'lo que entregó de verdad', valor: money(rendido) },
+        { label: 'Envíos totales (sin comisión)', nota: '14 entregados', valor: money(envios) },
+        { label: 'Envíos a cobrar (comisión 30% descontada)', nota: 'lo que le toca al repartidor', valor: money(envios - comision) }
+      ],
+      saldoFmt: money(Math.abs(saldo)),
+      saldoLabel: saldo >= 0 ? 'TOTAL A RENDIR' : 'TOTAL A COBRAR',
+      saldoFondo: saldo >= 0 ? '#dc2626' : '#059669',
+      labelLiquidar: st.liquidado ? 'DÍA LIQUIDADO' : 'MARCAR DÍA COMO LIQUIDADO',
+      liquidar: () => { this.setState({ liquidado: true }); this.avisar('Caja cerrada. Le llegó el aviso al celular de ' + rep.nombre + '.'); },
+
+      pedidos: PEDIDOS.map((x) => ({
+        descripcion: x.descripcion, comercio: x.comercio,
+        cobrar: x.cobrar > 0 ? money(x.cobrar) : '—', envio: money(x.envio),
+        regla: x.shippy ? 'SHIPPY · SIN COMISIÓN' : '30%', tono: x.shippy ? '#92400e' : '#4b6bb5'
+      })),
+      modosResumen: ['Detallado', 'Compacto'].map((label) => ({
+        label,
+        borde: st.modo === label ? '#ffec01' : 'rgba(255,255,255,.25)',
+        fondo: st.modo === label ? '#ffec01' : 'transparent',
+        color: st.modo === label ? '#0636a5' : '#b7cbff',
+        elegir: () => this.setState({ modo: label })
+      })),
+      textoResumen,
+      labelCopiarResumen: st.copiadoResumen ? 'COPIADO' : 'COPIAR PARA WHATSAPP',
+      copiarResumen: () => { this.setState({ copiadoResumen: true }); this.avisar('Resumen copiado.'); },
+
+      statTiles: [
+        { label: 'ENVÍOS', valor: '341', color: '#0f172a', fondo: '#fff', borde: '#c9d9fb', labelColor: '#4b6bb5' },
+        { label: 'EFECTIVIDAD', valor: '94%', color: '#059669', fondo: '#fff', borde: '#c9d9fb', labelColor: '#4b6bb5' },
+        { label: 'NO ENTREGADOS', valor: '19', color: '#ea580c', fondo: '#fff', borde: '#c9d9fb', labelColor: '#4b6bb5' },
+        { label: 'EFECTIVO COBRADO', valor: mostrarPlata ? '$ 1.482.300' : '···', color: '#0636a5', fondo: '#ffec01', borde: '#ffec01', labelColor: '#0636a5' }
+      ],
+      barras: [
+        { label: 'Entregado', valor: '281', pct: '82%', color: '#059669' },
+        { label: 'No entregado', valor: '19', pct: '6%', color: '#ea580c' },
+        { label: 'En camino', valor: '18', pct: '5%', color: '#0636a5' },
+        { label: 'Pendiente de retiro', valor: '17', pct: '5%', color: '#ffec01' },
+        { label: 'Cancelado', valor: '6', pct: '2%', color: '#9aabc7' }
+      ],
+      statFilas: [
+        { nombre: 'Juan Pérez', total: '134', entregados: '128', efectividad: '96%', efectivo: mostrarPlata ? '$ 612.400' : '···' },
+        { nombre: 'Luciano Ríos', total: '112', entregados: '104', efectividad: '93%', efectivo: mostrarPlata ? '$ 498.100' : '···' },
+        { nombre: 'Sabrina Quiroga', total: '81', entregados: '75', efectividad: '93%', efectivo: mostrarPlata ? '$ 371.800' : '···' },
+        { nombre: 'Sin asignar', total: '14', entregados: '0', efectividad: '—', efectivo: '—' }
+      ],
+
+      tabsStock: ['Stock', 'Descargar entregas', 'Movimientos', 'Clientes'].map((label) => ({
+        label,
+        borde: st.tab === label ? '#ffec01' : 'transparent',
+        color: st.tab === label ? '#0f172a' : '#4b6bb5',
+        elegir: () => this.setState({ tab: label })
+      })),
+      filasStock: [
+        { codigo: 'PSO-0012', nombre: 'Pañal Talle G x40', stock: '86', reservado: '12', color: '#0f172a' },
+        { codigo: 'PSO-0031', nombre: 'Toallitas húmedas x80', stock: '14', reservado: '6', color: '#ea580c' },
+        { codigo: 'PSO-0044', nombre: 'Óleo calcáreo 500 ml', stock: '132', reservado: '0', color: '#0f172a' },
+        { codigo: 'PSO-0058', nombre: 'Body algodón 6 meses', stock: '3', reservado: '3', color: '#dc2626' },
+        { codigo: 'PSO-0067', nombre: 'Mordillo silicona', stock: '151', reservado: '9', color: '#0f172a' }
+      ],
+
+      toast: st.toast, hayToast: Boolean(st.toast)
+    };
+  }
+}
+</script>
+</body>
+</html>

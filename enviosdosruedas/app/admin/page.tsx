@@ -305,6 +305,22 @@ export default function AdminPage() {
      * cualquiera fabricar la etiqueta de cualquier envío.
      */
     const { data: sesion } = await supabase.auth.getSession();
+
+    /*
+     * Sin sesión no hay etiquetas, y hay que decirlo.
+     *
+     * Acá estaba el problema: si el servidor contestaba que no —lo más común,
+     * una pestaña que llevaba horas abierta y se quedó sin sesión— el texto
+     * salía igual pero con la mitad, y el cartel decía "copiado". Uno pega eso
+     * en WhatsApp y recién ahí se entera de que faltaba la etiqueta.
+     *
+     * Ahora el aviso es explícito. El seguimiento se copia lo mismo: media
+     * lista sirve, ninguna no.
+     */
+    if (!sesion.session?.access_token) {
+      setError('Se cerró tu sesión: se copian los seguimientos, pero no las etiquetas. Recargá la página.');
+    }
+
     const res = await fetch('/api/etiquetas', {
       method: 'POST',
       headers: {
@@ -315,9 +331,26 @@ export default function AdminPage() {
     });
 
     const etiquetas = new Map<string, string>();
+
     if (res.ok) {
       const { links } = (await res.json()) as { links?: { codigo: string; url: string }[] };
       for (const l of links ?? []) etiquetas.set(l.codigo, l.url);
+    } else if (sesion.session?.access_token) {
+      const detalle = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(
+        res.status === 403
+          ? 'El servidor no te reconoció como administrador: se copian los seguimientos, pero no las etiquetas. Recargá la página y probá de nuevo.'
+          : `No se pudieron armar los links de etiqueta (${detalle.error ?? res.status}). Los seguimientos sí se copiaron.`,
+      );
+    }
+
+    // Un código sin link es lo mismo que ninguno: si el servidor contestó bien
+    // pero le faltó alguno, tampoco puede pasar en silencio.
+    const faltan = elegidos.filter((s) => !etiquetas.has(s.tracking_code));
+    if (res.ok && faltan.length) {
+      setError(
+        `Sin etiqueta: ${faltan.map((s) => s.tracking_code).join(', ')}. El resto se copió completo.`,
+      );
     }
 
     return elegidos
@@ -341,7 +374,7 @@ export default function AdminPage() {
     try {
       texto = await textoSeguimientos();
     } catch {
-      setError('No se pudieron armar los links de las etiquetas.');
+      setError('No se pudieron armar los links de las etiquetas: revisá la conexión.');
     }
     setCopiando(false);
     if (!texto) return;

@@ -1,6 +1,6 @@
 'use client';
 
-import { Bike, CalendarClock, Camera, Package, PackageCheck } from 'lucide-react';
+import { Bike, Camera, Check, Navigation, Package, PackageCheck, Phone } from 'lucide-react';
 import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
@@ -8,143 +8,163 @@ import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 /**
  * Tarjeta de la hoja de ruta.
  *
- * Si hay plata para cobrar la tarjeta cambia entera: amarillo flúor, borde negro
- * grueso y el monto en el cuerpo más grande de la pantalla. El objetivo es que
- * sea imposible entregar un paquete a cobrar sin darse cuenta.
+ * EL ORDEN DE LO QUE SE LEE es la decisión de fondo, y va de lo que hace falta
+ * primero a lo que hace falta después: el código chico arriba, el comercio,
+ * y enseguida LA DIRECCIÓN, que es el dato por el que se mira la pantalla —29px
+ * en Anton, que se lee de reojo con el casco puesto—. Abajo, sólo si hay,
+ * la franja de plata; y al pie, la acción.
+ *
+ * LA PLATA NO PINTA LA TARJETA ENTERA, como antes: va en una franja amarilla
+ * con el monto en monoespaciada de 26px. Pintar todo de amarillo hacía que la
+ * dirección —lo que hay que leer— compitiera con el monto, y en una hoja de
+ * veinte envíos la mitad quedaba en fluo y el efecto se perdía.
+ *
+ * Las tres acciones de abajo son las tres cosas que se hacen parado en la
+ * puerta: el paso siguiente, llamar y cómo llegar. Todas de 56px, que es el
+ * mínimo para acertarle con guantes.
  */
 export default function ShipmentCard({
   shipment,
   onOpen,
   onEstado,
+  onCerrarEntrega,
 }: {
   shipment: Shipment;
   onOpen: (shipment: Shipment) => void;
   /** Marcar retirado / en camino sin tener que entrar al envío. */
   onEstado: (shipment: Shipment, estado: 'retirado' | 'en_camino') => void;
+  /** Abrir el cierre de entrega. Sin esto, el botón lleva al detalle. */
+  onCerrarEntrega?: (shipment: Shipment) => void;
 }) {
   const programado = esProgramado(shipment);
   const cash = shipmentCash(shipment);
-  // Un envío de mañana no se cobra hoy: apagamos el amarillo flúor para que la
-  // hoja de ruta de hoy se siga leyendo de un vistazo.
+  // Un envío de mañana no se cobra hoy: la franja de plata se apaga para que
+  // la hoja de hoy se siga leyendo de un vistazo.
   const cobra = cash.total > 0 && !programado;
   const flex = Boolean(shipment.is_flex);
+  const sinRetirar = shipment.status === 'pendiente_retiro' || shipment.status === 'creado';
+
+  const accion = sinRetirar
+    ? { label: 'YA LO RETIRÉ', Icono: PackageCheck, hacer: () => onEstado(shipment, 'retirado') }
+    : shipment.status === 'retirado'
+      ? { label: 'SALGO EN CAMINO', Icono: Bike, hacer: () => onEstado(shipment, 'en_camino') }
+      : {
+          label: 'CERRAR ENTREGA',
+          Icono: Check,
+          hacer: () => (onCerrarEntrega ?? onOpen)(shipment),
+        };
+
+  const comoLlegar =
+    shipment.lat != null && shipment.lng != null
+      ? `https://www.google.com/maps/dir/?api=1&destination=${shipment.lat},${shipment.lng}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+          `${shipment.address_street}, ${shipment.city}, Argentina`,
+        )}`;
 
   return (
     <div
-      className={`w-full rounded-2xl px-4 py-4 text-left ${
-        cobra
-          ? 'border-4 border-black bg-[var(--edr-fluo)] text-black'
-          : programado
-            ? 'border-2 border-dashed border-[var(--edr-border)] bg-[var(--edr-surface)] opacity-75'
-            : 'border-2 border-[var(--edr-border)] bg-[var(--edr-surface)]'
+      className={`flex flex-col gap-3 rounded-3xl border p-4 ${
+        programado
+          ? 'border-dashed border-[var(--edr-border)] bg-[var(--edr-blue)] opacity-75'
+          : 'border-white/10 bg-[var(--edr-blue)] shadow-[var(--edr-sombra)]'
       }`}
     >
-      <button onClick={() => onOpen(shipment)} className="block w-full text-left">
-      <div className="flex items-start justify-between gap-2">
-        <span className={`edr-mono text-xs font-bold ${cobra ? 'text-black/70' : 'text-[var(--edr-muted)]'}`}>
-          {shipment.tracking_code}
-        </span>
-        <span className="rounded-full bg-black/10 px-2 py-0.5 text-[11px] font-bold uppercase">
-          {programado ? `Para ${cuandoSeHace(shipment.scheduled_date)}` : STATUS_LABEL[shipment.status]}
-        </span>
-      </div>
-
-      {/* De qué comercio es: el repartidor lo necesita para saber dónde retirar
-          y para nombrarlo cuando llama al destinatario. */}
-      {shipment.client_name_raw && (
-        <div
-          className={`mt-1 text-sm font-black uppercase tracking-wide ${
-            cobra ? 'text-black/70' : 'text-[var(--edr-yellow)]'
-          }`}
-        >
-          {shipment.client_name_raw}
-        </div>
-      )}
-
-      {flex && (
-        <div className="mt-2 rounded-xl border-4 border-black bg-[var(--edr-yellow)] px-3 py-2 text-center text-black">
-          <div className="text-xl font-black leading-none tracking-wide">ENVÍO FLEX</div>
-          <div className="mt-1 text-sm font-black leading-tight">
-            COMPLETAR EN LA APP DE ENVÍOS FLEX
-          </div>
-          {/* Durante meses un FLEX se cerró sin foto. El aviso va acá, en la hoja
-              de ruta, y no sólo adentro del envío: la costumbre vieja se corta
-              cuando el repartidor lee el cambio antes de tocar nada. */}
-          <div className="mt-1 flex items-center gap-1.5 border-t-2 border-black/30 pt-1 text-sm font-black leading-tight">
-            <Camera size={16} strokeWidth={2} className="shrink-0" />
-            LA FOTO VA EN ESTA APP Y ES OBLIGATORIA
-          </div>
-        </div>
-      )}
-
-      <div className="mt-1 text-2xl font-black leading-tight">{shipment.address_street}</div>
-      {shipment.address_extra && (
-        <div className="text-lg font-bold">{shipment.address_extra}</div>
-      )}
-
-      <div className={`text-base font-semibold ${cobra ? 'text-black/80' : 'text-[var(--edr-muted)]'}`}>
-        {shipment.recipient_name}
-        {shipment.delivery_window ? ` · ${shipment.delivery_window}` : ''}
-      </div>
-
-      {/* Dónde retirar: sin esto el repartidor no sabe adónde ir a buscarlo. */}
-      {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
-        <div
-          className={`mt-2 rounded-lg px-3 py-2 text-sm font-bold ${
-            cobra ? 'bg-black/10' : 'bg-[var(--edr-surface-2)]'
-          }`}
-        >
-          <span className="flex items-center gap-1.5">
-            <Package size={16} strokeWidth={2} className="shrink-0" />
-            Retirar en: {dondeRetira(shipment.pickup_address)}
+      <button
+        onClick={() => onOpen(shipment)}
+        className="flex flex-col gap-2 text-left"
+      >
+        <span className="flex items-center justify-between gap-2">
+          <span className="edr-mono text-xs font-bold tracking-[-.02em] text-[var(--edr-muted)]">
+            {shipment.tracking_code}
           </span>
-        </div>
-      )}
+          <span className="rounded-full bg-white/10 px-2.5 py-1 font-bebas text-[13px] tracking-[.08em] text-[var(--edr-yellow)]">
+            {STATUS_LABEL[shipment.status]}
+          </span>
+        </span>
 
-      {cobra && (
-        <div className="mt-3 rounded-xl bg-black px-3 py-3 text-center text-white">
-          <div className="text-sm font-black uppercase tracking-widest">
-            {cash.atDelivery > 0 ? 'Cobrar' : 'Cobrar al retirar'}
-          </div>
-          <div className="edr-mono text-4xl font-black leading-none">
-            {money(cash.atDelivery > 0 ? cash.atDelivery : cash.atPickup)}
-          </div>
-        </div>
-      )}
+        {shipment.client_name_raw && (
+          <span className="font-bebas text-[15px] tracking-[.08em] text-[var(--edr-yellow)]">
+            {shipment.client_name_raw}
+          </span>
+        )}
+
+        <span className="font-anton text-[29px] uppercase leading-[.98] tracking-[-.02em] text-white">
+          {shipment.address_street}
+        </span>
+
+        {shipment.address_extra && (
+          <span className="text-base font-semibold text-white">{shipment.address_extra}</span>
+        )}
+
+        <span className="text-[15px] font-medium text-[var(--edr-muted)]">
+          {[shipment.recipient_name, shipment.delivery_window].filter(Boolean).join(' · ')}
+        </span>
+
+        {/* Durante meses un FLEX se cerró sin foto. El aviso va acá, en la hoja
+            de ruta, y no sólo adentro del envío: la costumbre vieja se corta
+            cuando el repartidor lee el cambio antes de tocar nada. */}
+        {flex && (
+          <span className="flex items-center gap-2 rounded-xl bg-[var(--edr-blue-soft)] px-3 py-2.5 font-bebas text-[15px] tracking-[.05em] text-[var(--edr-blue-dark)]">
+            <Camera size={16} strokeWidth={2} className="shrink-0" />
+            FLEX · CERRALO EN SU APP, LA FOTO VA ACÁ
+          </span>
+        )}
+
+        {sinRetirar && shipment.pickup_address && (
+          <span className="flex items-center gap-2 rounded-xl bg-white/[.08] px-3 py-2.5 text-sm font-semibold text-[var(--edr-blue-soft)]">
+            <Package size={16} strokeWidth={2} className="shrink-0 text-[var(--edr-yellow)]" />
+            Retirar en {dondeRetira(shipment.pickup_address)}
+          </span>
+        )}
+
+        {cobra && (
+          <span className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--edr-yellow)] px-4 py-3 text-[var(--edr-blue)]">
+            <span className="font-bebas text-base tracking-[.08em]">
+              {cash.atPickup > 0 ? 'COBRAR AL RETIRAR' : 'COBRAR EN LA PUERTA'}
+            </span>
+            <span className="edr-mono text-[26px] font-extrabold tracking-[-.03em]">
+              {money(cash.total)}
+            </span>
+          </span>
+        )}
       </button>
 
       {/* Programado: se ve para que sepa lo que le viene, pero no se toca.
           El botón se reemplaza por el motivo, así no busca dónde apretar. */}
       {programado ? (
-        <div className="mt-3 rounded-xl border-2 border-dashed border-[var(--edr-border)] px-4 py-3 text-center text-sm font-bold text-[var(--edr-muted)]">
-          <span className="flex items-center justify-center gap-1.5">
-            <CalendarClock size={16} strokeWidth={2} className="shrink-0" />
-            Se hace {cuandoSeHace(shipment.scheduled_date)} · todavía no se puede tocar
-          </span>
+        <div className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-4 py-3 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-muted)]">
+          SE HACE {cuandoSeHace(shipment.scheduled_date).toUpperCase()} · NO SE TOCA
         </div>
       ) : (
-        <>
-          {/* El paso siguiente, a un toque, sin entrar al envío. */}
-          {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
-            <button
-              onClick={() => onEstado(shipment, 'retirado')}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+        <div className="flex gap-2">
+          <button
+            onClick={accion.hacer}
+            className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-full bg-[var(--edr-yellow)] px-4 font-bebas text-xl tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95"
+          >
+            <accion.Icono size={19} strokeWidth={2.5} />
+            {accion.label}
+          </button>
+
+          {shipment.recipient_phone && (
+            <a
+              href={`tel:${shipment.recipient_phone}`}
+              aria-label="Llamar"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/[.06] text-white transition active:scale-95"
             >
-              <PackageCheck size={20} strokeWidth={2} />
-              Ya lo retiré
-            </button>
+              <Phone size={20} strokeWidth={2} />
+            </a>
           )}
 
-          {shipment.status === 'retirado' && (
-            <button
-              onClick={() => onEstado(shipment, 'en_camino')}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-base font-black text-white active:scale-[0.99]"
-            >
-              <Bike size={20} strokeWidth={2} />
-              Salgo en camino
-            </button>
-          )}
-        </>
+          <a
+            href={comoLlegar}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Cómo llegar"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/[.06] text-white transition active:scale-95"
+          >
+            <Navigation size={20} strokeWidth={2} />
+          </a>
+        </div>
       )}
     </div>
   );

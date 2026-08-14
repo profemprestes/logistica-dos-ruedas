@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import QrScannerModal from '@/components/driver/QrScannerModal';
 import { useEscaner } from '@/components/driver/DriverShell';
+import Link from 'next/link';
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, RefreshCw, XCircle } from 'lucide-react';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
@@ -24,7 +26,7 @@ import {
 import { errorText } from '@/lib/driver/errors';
 import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
-import { money, shipmentCash, type Shipment } from '@/lib/format';
+import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
 
 /**
@@ -330,20 +332,39 @@ export default function DriverDashboardPage() {
   // entregado, por el mismo motivo: es plata que ya tiene en el bolsillo.
   const totalCash = pendientes.reduce((acc, s) => acc + shipmentCash(s).total, 0);
 
+  /* Lo hecho sobre lo del día: es el número que el repartidor mira para saber
+     cuánto le falta, y el que hace que la barra de progreso signifique algo. */
+  const hechos = cerrados.length;
+  const total = deHoy.length;
+  const avance = total > 0 ? Math.round((hechos / total) * 100) : 0;
+
   return (
-    <div className="pb-6">
+    <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
       {/* ---------- Encabezado ---------- */}
-      <header className="bg-[var(--edr-surface-2)] px-4 py-3 text-white">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-black leading-tight">
-              {driver?.name || 'Hoja de ruta'}
-            </h1>
-            <p className="text-xs text-white/70">
-              {pendientes.length} envío(s) por hacer
-              {proximos.length > 0 && ` · ${proximos.length} para después`}
-            </p>
-          </div>
+      <header className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between gap-2.5">
+          <h1 className="font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
+            Hoja de ruta
+          </h1>
+          <span className="edr-mono text-[15px] font-bold text-[var(--edr-yellow)]">
+            {hechos}/{total}
+          </span>
+        </div>
+
+        {/* La barra dice de un vistazo cuánto queda, que es lo que se pregunta
+            veinte veces por día. */}
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-[var(--edr-yellow)] transition-[width] duration-300 ease-[var(--edr-smooth)]"
+            style={{ width: `${avance}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
+            {pendientes.length} POR HACER
+            {proximos.length > 0 && ` · ${proximos.length} PARA DESPUÉS`}
+          </span>
           {/* Actualiza los datos SIN recargar la página: una recarga volvería a
               disparar el pedido de permisos de cámara y GPS. */}
           <button
@@ -351,20 +372,26 @@ export default function DriverDashboardPage() {
               recargar();
               refreshPending();
             }}
-            title="Actualizar"
             aria-label="Actualizar"
-            className="shrink-0 rounded-lg bg-white/15 px-3 py-2 text-xl leading-none"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-[var(--edr-muted)] transition active:scale-95"
           >
-            ⟳
+            <RefreshCw size={18} strokeWidth={2} />
           </button>
-
         </div>
 
         {totalCash > 0 && (
-          <div className="mt-2 rounded-lg bg-[var(--edr-fluo)] text-black px-3 py-2 text-center text-black">
-            <span className="text-sm font-black uppercase tracking-wide">A cobrar hoy: </span>
-            <span className="edr-mono text-lg font-black">{money(totalCash)}</span>
-          </div>
+          <Link
+            href="/driver/caja"
+            className="flex items-center justify-between gap-3 rounded-full bg-[var(--edr-yellow)] px-5 py-3 text-[var(--edr-blue)] shadow-[var(--edr-sombra)] transition active:scale-95"
+          >
+            <span className="font-bebas text-[17px] tracking-[.1em]">A COBRAR HOY</span>
+            <span className="flex items-center gap-1">
+              <span className="edr-mono text-[22px] font-extrabold tracking-[-.03em]">
+                {money(totalCash)}
+              </span>
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </span>
+          </Link>
         )}
 
         {/* En camino: se reintentan solas, sólo hay que esperar. */}
@@ -408,7 +435,7 @@ export default function DriverDashboardPage() {
       </header>
 
       {/* ---------- Hoja de ruta ---------- */}
-      <main className="space-y-3 px-3 py-3">
+      <main className="flex flex-col gap-3.5">
         {loading && (
           <p className="py-10 text-center text-base font-semibold text-[var(--edr-muted)]">
             Cargando tu hoja de ruta…
@@ -434,44 +461,75 @@ export default function DriverDashboardPage() {
         )}
 
         {pendientes.map((s) => (
-          <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
+          <ShipmentCard
+            key={s.id}
+            shipment={s}
+            onOpen={setSelected}
+            onEstado={cambiarEstado}
+            onCerrarEntrega={(x) => {
+              setSelected(x);
+              setResolving('entregado');
+            }}
+          />
         ))}
 
         {/* Cerrados de hoy. Plegado, porque no es trabajo: es para repasar la
             jornada, o para entrar a uno que se cerró mal y corregirlo. */}
         {cerrados.length > 0 && (
-          <>
+          <div className="mt-1 overflow-hidden rounded-2xl border border-white/10">
             <button
               onClick={() => setVerCerrados((v) => !v)}
-              className="mt-4 w-full rounded-2xl border-2 border-[var(--edr-border)] px-4 py-3 text-left"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
             >
-              <span className="text-sm font-black uppercase tracking-widest text-[var(--edr-muted)]">
-                Cerrados hoy · {cerrados.length} {verCerrados ? '▾' : '▸'}
+              <span>
+                <span className="font-bebas text-base tracking-[.08em] text-white">
+                  CERRADOS HOY · {cerrados.length}
+                </span>
+                <span className="mt-0.5 block text-xs text-[var(--edr-muted)]">
+                  {cerrados.filter((s) => s.status === 'entregado').length} entregados ·{' '}
+                  {cerrados.filter((s) => s.status === 'pendiente_entrega').length} sin entregar
+                </span>
               </span>
-              <span className="mt-0.5 block text-xs text-[var(--edr-muted)]">
-                {cerrados.filter((s) => s.status === 'entregado').length} entregado(s) ·{' '}
-                {cerrados.filter((s) => s.status === 'pendiente_entrega').length} sin entregar
-              </span>
+              {verCerrados ? (
+                <ChevronUp size={20} strokeWidth={2} className="shrink-0 text-[var(--edr-muted)]" />
+              ) : (
+                <ChevronDown size={20} strokeWidth={2} className="shrink-0 text-[var(--edr-muted)]" />
+              )}
             </button>
 
+            {/* Filas compactas y no tarjetas: acá no hay nada que hacer, sólo
+                mirar. Entrando se corrige uno que se cerró mal. */}
             {verCerrados &&
               cerrados.map((s) => (
-                <ShipmentCard
+                <button
                   key={s.id}
-                  shipment={s}
-                  onOpen={setSelected}
-                  onEstado={cambiarEstado}
-                />
+                  onClick={() => setSelected(s)}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-4 py-3 text-left"
+                >
+                  {s.status === 'entregado' ? (
+                    <CheckCircle2 size={20} strokeWidth={2} className="shrink-0 text-emerald-400" />
+                  ) : (
+                    <XCircle size={20} strokeWidth={2} className="shrink-0 text-red-400" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-anton text-lg uppercase leading-tight text-white">
+                      {s.address_street}
+                    </span>
+                    <span className="block truncate text-xs text-[var(--edr-muted)]">
+                      {s.recipient_name} · {ETIQUETA_ESTADO[s.status]}
+                    </span>
+                  </span>
+                </button>
               ))}
-          </>
+          </div>
         )}
 
         {/* Programados: se ven para poder organizarse, pero no se tocan hasta
             el día. El candado real está en la base (paso 14). */}
         {proximos.length > 0 && (
           <>
-            <h2 className="px-1 pt-4 text-sm font-black uppercase tracking-widest text-[var(--edr-muted)]">
-              Próximos días · {proximos.length}
+            <h2 className="px-1 pt-2 font-bebas text-base tracking-[.08em] text-[var(--edr-muted)]">
+              PRÓXIMOS DÍAS · {proximos.length}
             </h2>
             {proximos.map((s) => (
               <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />

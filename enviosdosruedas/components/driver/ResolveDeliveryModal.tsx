@@ -39,7 +39,9 @@ export default function ResolveDeliveryModal({
   shipment: Shipment;
   kind: DeliveryKind;
   onClose: () => void;
-  onResolved: (shipmentId: number) => void;
+  /** El tipo va con el aviso: la hoja de ruta lo usa para moverlo a
+   *  "cerrados" sin tener que volver a preguntarle al servidor. */
+  onResolved: (shipmentId: number, kind: DeliveryKind) => void;
   /** Se llama cuando termina de intentar el envío, para refrescar el contador. */
   onSynced: () => void;
 }) {
@@ -196,7 +198,7 @@ export default function ResolveDeliveryModal({
       // Se saca de la hoja de ruta apenas queda guardado en el celular:
       // el envío ya está cerrado aunque todavía no haya subido.
       await dropFromRoute(shipment.id);
-      onResolved(shipment.id);
+      onResolved(shipment.id, kind);
 
       const outcome = await flushPending();
 

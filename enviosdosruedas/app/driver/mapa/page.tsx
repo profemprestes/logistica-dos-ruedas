@@ -21,7 +21,7 @@ const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
 });
 
 /** Los que todavía se reparten: el mapa es para llegar, no para repasar. */
-const ACTIVOS = ['creado', 'pendiente_retiro', 'retirado', 'en_camino', 'pendiente_entrega'];
+const ACTIVOS = ['creado', 'pendiente_retiro', 'retirado', 'en_camino'];
 
 /**
  * La hoja de ruta del día sobre un mapa.
@@ -52,6 +52,9 @@ export default function MapaRepartidorPage() {
           .from('shipments')
           .select('*')
           .eq('assigned_driver', id)
+          // El intento fallido que ya se reprogramó no va: el que hay que
+          // llegar es el envío nuevo, y dos puntos en la misma puerta confunden.
+          .is('reprogramado_en', null)
           .in('status', ACTIVOS)
           .order('id');
 

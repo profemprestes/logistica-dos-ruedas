@@ -27,7 +27,7 @@ import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
 import { useOnline } from '@/lib/driver/useOnline';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
-import { partirRuta } from '@/lib/scheduled';
+import { hoyLocal, partirRuta } from '@/lib/scheduled';
 
 /**
  * Todo lo que todavía tiene abierto, sin importar cómo llegó a su hoja de ruta.
@@ -37,21 +37,49 @@ import { partirRuta } from '@/lib/scheduled';
  * nunca le aparecían al chofer, porque todavía no los había escaneado.
  * Los únicos que no van son los cerrados: 'entregado' y 'cancelado'.
  */
-const ACTIVE_STATUSES = [
-  'creado',
-  'pendiente_retiro',
-  'retirado',
-  'en_camino',
-  'pendiente_entrega',
-];
+/** Trabajo por hacer: lo que todavía hay que mover. */
+const ACTIVE_STATUSES = ['creado', 'pendiente_retiro', 'retirado', 'en_camino'];
+
+/**
+ * Terminados: se entregó, o se fue y no se pudo.
+ *
+ * "Pendiente de entrega" salió de la lista de trabajo a propósito. Es el envío
+ * que ya se intentó: sigue existiendo y se puede mirar, pero volver a
+ * intentarlo es una decisión del panel —ahí se reprograma para otro día— y no
+ * algo que quede dando vueltas en la hoja de ruta.
+ */
+const CERRADOS = ['entregado', 'pendiente_entrega'];
 
 function fetchRoute(driverId: string) {
-  return supabase
-    .from('shipments')
-    .select('*')
-    .eq('assigned_driver', driverId)
-    .in('status', ACTIVE_STATUSES)
-    .order('id', { ascending: true });
+  const hoy = hoyLocal();
+
+  return (
+    supabase
+      .from('shipments')
+      .select('*')
+      .eq('assigned_driver', driverId)
+      /*
+       * Los reprogramados no van.
+       *
+       * Al reprogramar, el intento fallido se queda como registro del viaje y
+       * nace un envío nuevo. Sin este filtro el repartidor veía los dos —el de
+       * ayer y el de hoy, el mismo paquete— sin forma de saber cuál tocar, y
+       * pasó lo que tenía que pasar: cerró el que no era.
+       */
+      .is('reprogramado_en', null)
+      /*
+       * Lo que hay que hacer, de cualquier fecha, MÁS lo que se cerró hoy.
+       *
+       * Lo cerrado se trae sólo del día: sirve para repasar la jornada y para
+       * corregir un cierre equivocado, y traer el historial entero al celular
+       * sería llenarlo de envíos de hace tres semanas.
+       */
+      .or(
+        `status.in.(${ACTIVE_STATUSES.join(',')}),` +
+          `and(scheduled_date.eq.${hoy},status.in.(${CERRADOS.join(',')}))`,
+      )
+      .order('id', { ascending: true })
+  );
 }
 
 export default function DriverDashboardPage() {
@@ -61,6 +89,8 @@ export default function DriverDashboardPage() {
 
   const [driver, setDriver] = useState<{ id: string; name: string } | null>(null);
   const [route, setRoute] = useState<Shipment[]>([]);
+  /** Si la lista de cerrados de hoy está desplegada. */
+  const [verCerrados, setVerCerrados] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<{
     /** Se siguen reintentando solas. */
@@ -206,7 +236,10 @@ export default function DriverDashboardPage() {
   }, [route]);
 
   useEffect(() => {
-    return seguirEnviando(() => partirRuta(rutaRef.current).deHoy.length > 0);
+    return seguirEnviando(
+      () =>
+        partirRuta(rutaRef.current).deHoy.filter((s) => !CERRADOS.includes(s.status)).length > 0,
+    );
   }, []);
 
   // --- escaneo -----------------------------------------------------------
@@ -270,18 +303,34 @@ export default function DriverDashboardPage() {
   );
 
   // --- cierre de entrega -------------------------------------------------
-  function handleResolved(shipmentId: number) {
+  function handleResolved(shipmentId: number, kind: DeliveryKind) {
     avisarPosicionSiCorresponde();
-    setRoute((prev) => prev.filter((s) => s.id !== shipmentId));
+    // No se borra de la lista: pasa a "cerrados hoy". Se cambia acá y no
+    // pidiendo la hoja de ruta de nuevo porque esto tiene que funcionar sin
+    // señal, que es cuando más se usa.
+    setRoute((prev) =>
+      prev.map((s) =>
+        s.id === shipmentId
+          ? ({ ...s, status: kind === 'entregado' ? 'entregado' : 'pendiente_entrega' } as Shipment)
+          : s,
+      ),
+    );
     setSelected(null);
     setResolving(null);
     refreshPending();
   }
 
   const { deHoy, proximos } = partirRuta(route);
+
+  /** Lo que falta hacer, que es de lo que se trata la pantalla. */
+  const pendientes = deHoy.filter((s) => !CERRADOS.includes(s.status));
+  /** Lo de hoy que ya terminó, para repasar o corregir. */
+  const cerrados = deHoy.filter((s) => CERRADOS.includes(s.status));
+
   // El total del día no cuenta lo que todavía no se reparte: si lo sumara, el
-  // repartidor rendiría de más y el cierre de caja no daría.
-  const totalCash = deHoy.reduce((acc, s) => acc + shipmentCash(s).total, 0);
+  // repartidor rendiría de más y el cierre de caja no daría. Tampoco lo ya
+  // entregado, por el mismo motivo: es plata que ya tiene en el bolsillo.
+  const totalCash = pendientes.reduce((acc, s) => acc + shipmentCash(s).total, 0);
 
   return (
     <div className="min-h-dvh pb-32">
@@ -294,7 +343,7 @@ export default function DriverDashboardPage() {
               {driver?.name || 'Hoja de ruta'}
             </h1>
             <p className="text-xs text-white/70">
-              {deHoy.length} envío(s) hoy
+              {pendientes.length} envío(s) por hacer
               {proximos.length > 0 && ` · ${proximos.length} para después`} ·{' '}
               {online ? 'con señal' : 'sin señal'}
             </p>
@@ -392,7 +441,7 @@ export default function DriverDashboardPage() {
           </div>
         )}
 
-        {!loading && deHoy.length === 0 && proximos.length > 0 && (
+        {!loading && pendientes.length === 0 && proximos.length > 0 && (
           <div className="rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-6 py-8 text-center">
             <p className="text-xl font-black">Por hoy no te queda nada</p>
             <p className="mt-1 text-base text-[var(--edr-muted)]">
@@ -401,9 +450,38 @@ export default function DriverDashboardPage() {
           </div>
         )}
 
-        {deHoy.map((s) => (
+        {pendientes.map((s) => (
           <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
         ))}
+
+        {/* Cerrados de hoy. Plegado, porque no es trabajo: es para repasar la
+            jornada, o para entrar a uno que se cerró mal y corregirlo. */}
+        {cerrados.length > 0 && (
+          <>
+            <button
+              onClick={() => setVerCerrados((v) => !v)}
+              className="mt-4 w-full rounded-2xl border-2 border-[var(--edr-border)] px-4 py-3 text-left"
+            >
+              <span className="text-sm font-black uppercase tracking-widest text-[var(--edr-muted)]">
+                Cerrados hoy · {cerrados.length} {verCerrados ? '▾' : '▸'}
+              </span>
+              <span className="mt-0.5 block text-xs text-[var(--edr-muted)]">
+                {cerrados.filter((s) => s.status === 'entregado').length} entregado(s) ·{' '}
+                {cerrados.filter((s) => s.status === 'pendiente_entrega').length} sin entregar
+              </span>
+            </button>
+
+            {verCerrados &&
+              cerrados.map((s) => (
+                <ShipmentCard
+                  key={s.id}
+                  shipment={s}
+                  onOpen={setSelected}
+                  onEstado={cambiarEstado}
+                />
+              ))}
+          </>
+        )}
 
         {/* Programados: se ven para poder organizarse, pero no se tocan hasta
             el día. El candado real está en la base (paso 14). */}

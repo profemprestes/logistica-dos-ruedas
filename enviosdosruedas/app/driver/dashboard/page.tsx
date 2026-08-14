@@ -1,14 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import QrScannerModal from '@/components/driver/QrScannerModal';
+import { useEscaner } from '@/components/driver/DriverShell';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
-import Logo from '@/components/Logo';
 import { useToast } from '@/components/driver/Toast';
 import {
   avisarPosicionSiCorresponde,
@@ -23,10 +22,8 @@ import {
   type DeliveryKind,
 } from '@/lib/driver/db';
 import { errorText } from '@/lib/driver/errors';
-import { Map as MapIcon, ScanLine, User } from 'lucide-react';
 import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
-import { useOnline } from '@/lib/driver/useOnline';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
 
@@ -86,7 +83,6 @@ function fetchRoute(driverId: string) {
 export default function DriverDashboardPage() {
   const router = useRouter();
   const toast = useToast();
-  const online = useOnline();
 
   const [driver, setDriver] = useState<{ id: string; name: string } | null>(null);
   const [route, setRoute] = useState<Shipment[]>([]);
@@ -102,7 +98,8 @@ export default function DriverDashboardPage() {
     lastError: string | null;
   }>({ sendable: 0, blocked: 0, blockedCodes: [], lastError: null });
 
-  const [scanning, setScanning] = useState(false);
+  /** El botón vive en la barra de abajo; acá se dibuja el lector. */
+  const { abierto: escaneando, cerrar: cerrarEscaner } = useEscaner();
   const [selected, setSelected] = useState<Shipment | null>(null);
   const [resolving, setResolving] = useState<DeliveryKind | null>(null);
 
@@ -246,7 +243,7 @@ export default function DriverDashboardPage() {
   // --- escaneo -----------------------------------------------------------
   const handleDetected = useCallback(
     async (code: string) => {
-      setScanning(false);
+      cerrarEscaner();
 
       if (!navigator.onLine) {
         toast('Sin señal: para sumar un paquete hace falta internet.', 'error');
@@ -276,7 +273,7 @@ export default function DriverDashboardPage() {
       );
       toast(`Retirado: ${shipment.address_street}`, 'ok');
     },
-    [toast],
+    [toast, cerrarEscaner],
   );
 
   /** Marca retirado / en camino y refleja el cambio en la lista al instante. */
@@ -334,19 +331,17 @@ export default function DriverDashboardPage() {
   const totalCash = pendientes.reduce((acc, s) => acc + shipmentCash(s).total, 0);
 
   return (
-    <div className="min-h-dvh pb-32">
+    <div className="pb-6">
       {/* ---------- Encabezado ---------- */}
       <header className="bg-[var(--edr-surface-2)] px-4 py-3 text-white">
         <div className="flex items-center justify-between gap-3">
-          <Logo size={34} className="shrink-0 rounded bg-[var(--edr-surface)]/95 p-0.5" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-black leading-tight">
               {driver?.name || 'Hoja de ruta'}
             </h1>
             <p className="text-xs text-white/70">
               {pendientes.length} envío(s) por hacer
-              {proximos.length > 0 && ` · ${proximos.length} para después`} ·{' '}
-              {online ? 'con señal' : 'sin señal'}
+              {proximos.length > 0 && ` · ${proximos.length} para después`}
             </p>
           </div>
           {/* Actualiza los datos SIN recargar la página: una recarga volvería a
@@ -363,21 +358,6 @@ export default function DriverDashboardPage() {
             ⟳
           </button>
 
-          <Link
-            href="/driver/mapa"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
-          >
-            <MapIcon size={16} strokeWidth={2} />
-            Mapa
-          </Link>
-
-          <Link
-            href="/driver/profile"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
-          >
-            <User size={16} strokeWidth={2} />
-            Mi perfil
-          </Link>
         </div>
 
         {totalCash > 0 && (
@@ -500,20 +480,9 @@ export default function DriverDashboardPage() {
         )}
       </main>
 
-      {/* ---------- Botón gigante ---------- */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button
-          onClick={() => setScanning(true)}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[var(--edr-yellow)] px-6 py-7 text-3xl font-black text-black active:scale-[0.99]"
-        >
-          <ScanLine size={34} strokeWidth={2.5} />
-          ESCANEAR PAQUETE
-        </button>
-      </div>
-
       {/* ---------- Capas ---------- */}
-      {scanning && (
-        <QrScannerModal onDetected={handleDetected} onClose={() => setScanning(false)} />
+      {escaneando && (
+        <QrScannerModal onDetected={handleDetected} onClose={cerrarEscaner} />
       )}
 
       {selected && !resolving && (

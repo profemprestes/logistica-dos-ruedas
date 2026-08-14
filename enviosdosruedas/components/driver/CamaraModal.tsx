@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Camera } from 'lucide-react';
 
 /**
  * Cámara adentro de la app.
@@ -183,7 +184,14 @@ export default function CamaraModal({
             disabled={!listo || sacando}
             className="w-full rounded-2xl bg-white px-6 py-6 text-2xl font-black text-black active:scale-[0.99] disabled:opacity-50"
           >
-            {sacando ? 'Guardando…' : '📷 SACAR FOTO'}
+            {sacando ? (
+              'Guardando…'
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Camera size={28} strokeWidth={2} />
+                SACAR FOTO
+              </span>
+            )}
           </button>
         </div>
       )}

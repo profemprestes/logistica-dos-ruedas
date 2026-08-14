@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import PhotoInput from '@/components/driver/PhotoInput';
 import { useToast } from '@/components/driver/Toast';
 import { getFix, type Fix } from '@/lib/driver/geo';
@@ -375,15 +376,14 @@ export default function ResolveDeliveryModal({
             photos={photos}
             onPhotos={setPhotos}
             etiquetaPrimera={
-              flexEntregado ? '📷 Sacar foto del paquete y la fachada' : '📷 Sacar foto (obligatoria)'
+              flexEntregado ? 'Sacar foto del paquete y la fachada' : 'Sacar foto (obligatoria)'
             }
           />
         </div>
 
-        <p className="text-center text-sm font-semibold text-[var(--edr-muted)]">
-          {fix
-            ? `📍 Ubicación tomada (±${Math.round(fix.accuracy)} m)`
-            : '📍 Buscando ubicación…'}
+        <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-[var(--edr-muted)]">
+          <MapPin size={16} strokeWidth={2} className="shrink-0" />
+          {fix ? `Ubicación tomada (±${Math.round(fix.accuracy)} m)` : 'Buscando ubicación…'}
         </p>
 
         {error && (

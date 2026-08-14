@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Bell, Check } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
@@ -412,9 +413,10 @@ export default function DriverProfilePage() {
                         {lista === 'fallidos' && hoy && l.shipment && (
                           <button
                             onClick={() => corregir(l.shipment!.id)}
-                            className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white"
+                            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white"
                           >
-                            ✅ En realidad lo entregué
+                            <Check size={16} strokeWidth={3} />
+                            En realidad lo entregué
                           </button>
                         )}
                       </li>
@@ -631,11 +633,14 @@ export default function DriverProfilePage() {
                   : 'bg-[var(--edr-yellow)] text-black'
               }`}
             >
-              {pushOcupado
-                ? 'Un momento…'
-                : push === 'activo'
-                  ? '🔔 Activadas · tocá para desactivar'
-                  : '🔔 Activar notificaciones'}
+              {pushOcupado ? (
+                'Un momento…'
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <Bell size={18} strokeWidth={2} />
+                  {push === 'activo' ? 'Activadas · tocá para desactivar' : 'Activar notificaciones'}
+                </span>
+              )}
             </button>
           )}
         </section>

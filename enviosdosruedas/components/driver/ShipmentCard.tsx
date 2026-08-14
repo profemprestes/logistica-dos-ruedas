@@ -1,5 +1,6 @@
 'use client';
 
+import { Bike, CalendarClock, Camera, Package, PackageCheck } from 'lucide-react';
 import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
@@ -69,8 +70,9 @@ export default function ShipmentCard({
           {/* Durante meses un FLEX se cerró sin foto. El aviso va acá, en la hoja
               de ruta, y no sólo adentro del envío: la costumbre vieja se corta
               cuando el repartidor lee el cambio antes de tocar nada. */}
-          <div className="mt-1 border-t-2 border-black/30 pt-1 text-sm font-black leading-tight">
-            📷 LA FOTO VA EN ESTA APP Y ES OBLIGATORIA
+          <div className="mt-1 flex items-center gap-1.5 border-t-2 border-black/30 pt-1 text-sm font-black leading-tight">
+            <Camera size={16} strokeWidth={2} className="shrink-0" />
+            LA FOTO VA EN ESTA APP Y ES OBLIGATORIA
           </div>
         </div>
       )}
@@ -92,7 +94,10 @@ export default function ShipmentCard({
             cobra ? 'bg-black/10' : 'bg-[var(--edr-surface-2)]'
           }`}
         >
-          📦 Retirar en: {dondeRetira(shipment.pickup_address)}
+          <span className="flex items-center gap-1.5">
+            <Package size={16} strokeWidth={2} className="shrink-0" />
+            Retirar en: {dondeRetira(shipment.pickup_address)}
+          </span>
         </div>
       )}
 
@@ -112,7 +117,10 @@ export default function ShipmentCard({
           El botón se reemplaza por el motivo, así no busca dónde apretar. */}
       {programado ? (
         <div className="mt-3 rounded-xl border-2 border-dashed border-[var(--edr-border)] px-4 py-3 text-center text-sm font-bold text-[var(--edr-muted)]">
-          🗓️ Se hace {cuandoSeHace(shipment.scheduled_date)} · todavía no se puede tocar
+          <span className="flex items-center justify-center gap-1.5">
+            <CalendarClock size={16} strokeWidth={2} className="shrink-0" />
+            Se hace {cuandoSeHace(shipment.scheduled_date)} · todavía no se puede tocar
+          </span>
         </div>
       ) : (
         <>
@@ -120,18 +128,20 @@ export default function ShipmentCard({
           {(shipment.status === 'pendiente_retiro' || shipment.status === 'creado') && (
             <button
               onClick={() => onEstado(shipment, 'retirado')}
-              className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-base font-black text-white active:scale-[0.99]"
             >
-              📦 Ya lo retiré
+              <PackageCheck size={20} strokeWidth={2} />
+              Ya lo retiré
             </button>
           )}
 
           {shipment.status === 'retirado' && (
             <button
               onClick={() => onEstado(shipment, 'en_camino')}
-              className="mt-3 w-full rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-base font-black text-white active:scale-[0.99]"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-base font-black text-white active:scale-[0.99]"
             >
-              🛵 Salgo en camino
+              <Bike size={20} strokeWidth={2} />
+              Salgo en camino
             </button>
           )}
         </>

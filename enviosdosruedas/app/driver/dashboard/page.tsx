@@ -23,6 +23,7 @@ import {
   type DeliveryKind,
 } from '@/lib/driver/db';
 import { errorText } from '@/lib/driver/errors';
+import { Map as MapIcon, ScanLine, User } from 'lucide-react';
 import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
 import { useOnline } from '@/lib/driver/useOnline';
@@ -364,16 +365,18 @@ export default function DriverDashboardPage() {
 
           <Link
             href="/driver/mapa"
-            className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
           >
-            🗺️ Mapa
+            <MapIcon size={16} strokeWidth={2} />
+            Mapa
           </Link>
 
           <Link
             href="/driver/profile"
-            className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
           >
-            👤 Mi perfil
+            <User size={16} strokeWidth={2} />
+            Mi perfil
           </Link>
         </div>
 
@@ -501,9 +504,10 @@ export default function DriverDashboardPage() {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <button
           onClick={() => setScanning(true)}
-          className="w-full rounded-2xl bg-[var(--edr-yellow)] px-6 py-7 text-3xl font-black text-black active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[var(--edr-yellow)] px-6 py-7 text-3xl font-black text-black active:scale-[0.99]"
         >
-          📷 ESCANEAR PAQUETE
+          <ScanLine size={34} strokeWidth={2.5} />
+          ESCANEAR PAQUETE
         </button>
       </div>
 

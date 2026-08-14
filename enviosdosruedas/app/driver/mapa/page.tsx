@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { Navigation } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { readCachedRoute } from '@/lib/driver/db';
 import { getFix, type Fix } from '@/lib/driver/geo';
@@ -182,9 +183,10 @@ export default function MapaRepartidorPage() {
               href={`https://www.google.com/maps/dir/?api=1&destination=${elegido.lat},${elegido.lng}`}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 block rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-center text-base font-black text-white"
+              className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-center text-base font-black text-white"
             >
-              🧭 Cómo llegar a destino
+              <Navigation size={20} strokeWidth={2} />
+              Cómo llegar a destino
             </a>
           </div>
         )}

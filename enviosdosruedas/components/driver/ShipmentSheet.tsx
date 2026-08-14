@@ -4,6 +4,17 @@ import { money, shipmentCash, type Shipment } from '@/lib/format';
 import type { DeliveryKind } from '@/lib/driver/db';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
+import {
+  AlertTriangle,
+  Bike,
+  CalendarClock,
+  Camera,
+  Check,
+  MessageCircle,
+  Navigation,
+  Package,
+  Phone,
+} from 'lucide-react';
 import MiniMapa from '@/components/driver/MiniMapa';
 import { trackUrl } from '@/lib/trackUrl';
 
@@ -91,8 +102,9 @@ export default function ShipmentSheet({
               Acá no se cobra. Cerralo primero en Envíos Flex y recién después tocá
               &quot;Entregado&quot;.
             </p>
-            <div className="mt-2 border-t-2 border-black/30 pt-2 text-base font-black leading-tight">
-              📷 LA FOTO SÍ VA ACÁ: EL PAQUETE CON LA FACHADA DE FONDO
+            <div className="mt-2 flex items-center gap-2 border-t-2 border-black/30 pt-2 text-base font-black leading-tight">
+              <Camera size={20} strokeWidth={2} className="shrink-0" />
+              LA FOTO SÍ VA ACÁ: EL PAQUETE CON LA FACHADA DE FONDO
             </div>
           </div>
         )}
@@ -128,9 +140,10 @@ export default function ShipmentSheet({
             )}`}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 block rounded-lg border border-sky-400 px-3 py-2 text-center text-sm font-black text-sky-400"
+            className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-sky-400 px-3 py-2 text-center text-sm font-black text-sky-400"
           >
-            🗺️ Cómo llegar al retiro
+            <Navigation size={16} strokeWidth={2} />
+            Cómo llegar al retiro
           </a>
         </div>
 
@@ -152,9 +165,10 @@ export default function ShipmentSheet({
           {shipment.recipient_phone && (
             <a
               href={`tel:${shipment.recipient_phone}`}
-              className="rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-4 text-center text-lg font-black"
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-4 text-center text-lg font-black"
             >
-              📞 Llamar
+              <Phone size={20} strokeWidth={2} />
+              Llamar
             </a>
           )}
           {waUrl && (
@@ -162,18 +176,20 @@ export default function ShipmentSheet({
               href={waUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border-2 border-emerald-400 bg-emerald-600 px-4 py-4 text-center text-lg font-black text-white"
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-400 bg-emerald-600 px-4 py-4 text-center text-lg font-black text-white"
             >
-              💬 WhatsApp
+              <MessageCircle size={20} strokeWidth={2} />
+              WhatsApp
             </a>
           )}
           <a
             href={mapsUrl}
             target="_blank"
             rel="noreferrer"
-            className="col-span-2 rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-4 text-center text-lg font-black"
+            className="col-span-2 flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-4 text-center text-lg font-black"
           >
-            🗺️ Cómo llegar a destino
+            <Navigation size={20} strokeWidth={2} />
+            Cómo llegar a destino
           </a>
         </div>
       </div>
@@ -183,7 +199,10 @@ export default function ShipmentSheet({
             pero ningún botón de acción. La base lo rechazaría igual. */}
         {programado && (
           <div className="rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-4 py-5 text-center">
-            <div className="text-lg font-black">🗓️ Se reparte {cuandoSeHace(shipment.scheduled_date)}</div>
+            <div className="flex items-center justify-center gap-2 text-lg font-black">
+              <CalendarClock size={20} strokeWidth={2} />
+              Se reparte {cuandoSeHace(shipment.scheduled_date)}
+            </div>
             <p className="mt-1 text-sm font-semibold text-[var(--edr-muted)]">
               Hasta ese día no se puede retirar ni entregar. Está acá para que sepas lo que viene.
             </p>
@@ -195,9 +214,10 @@ export default function ShipmentSheet({
           <>
             <button
               onClick={() => onEstado(shipment, 'retirado')}
-              className="w-full rounded-2xl bg-sky-600 px-6 py-5 text-xl font-black text-white active:scale-[0.99]"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-6 py-5 text-xl font-black text-white active:scale-[0.99]"
             >
-              📦 Ya lo retiré
+              <Package size={24} strokeWidth={2} />
+              Ya lo retiré
             </button>
             <p className="text-center text-sm font-semibold text-[var(--edr-muted)]">
               Marcá el retiro para poder entregarlo.
@@ -208,28 +228,31 @@ export default function ShipmentSheet({
         {!programado && shipment.status === 'retirado' && (
           <button
             onClick={() => onEstado(shipment, 'en_camino')}
-            className="w-full rounded-2xl bg-[var(--edr-blue)] px-6 py-4 text-lg font-black text-white active:scale-[0.99]"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--edr-blue)] px-6 py-4 text-lg font-black text-white active:scale-[0.99]"
           >
-            🛵 Salgo en camino
+            <Bike size={22} strokeWidth={2} />
+            Salgo en camino
           </button>
         )}
 
         {!programado && !sinRetirar && (
           <button
             onClick={() => onResolve('entregado')}
-            className="w-full rounded-2xl bg-emerald-600 px-6 py-6 text-2xl font-black text-white active:scale-[0.99]"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-6 text-2xl font-black text-white active:scale-[0.99]"
           >
-            ✅ Entregado
+            <Check size={28} strokeWidth={3} />
+            Entregado
           </button>
         )}
         {!programado && !sinRetirar && (
           <button
             onClick={() => onResolve('no_entregado')}
-            className={`w-full rounded-2xl bg-orange-600 font-black text-white active:scale-[0.99] ${
+            className={`flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-600 font-black text-white active:scale-[0.99] ${
               flex ? 'px-4 py-3 text-base' : 'px-6 py-5 text-xl'
             }`}
           >
-            ⚠️ No entregado
+            <AlertTriangle size={24} strokeWidth={2} />
+            No entregado
           </button>
         )}
       </div>

@@ -6,7 +6,17 @@ import { supabase } from '@/lib/supabaseClient';
 import QrScannerModal from '@/components/driver/QrScannerModal';
 import { useEscaner } from '@/components/driver/DriverShell';
 import Link from 'next/link';
-import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, RefreshCw, XCircle } from 'lucide-react';
+import {
+  ArrowUpDown,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  GripVertical,
+  RefreshCw,
+  XCircle,
+} from 'lucide-react';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
@@ -19,6 +29,8 @@ import {
 import {
   cacheRoute,
   dropBlocked,
+  guardarOrden,
+  leerOrden,
   listPending,
   readCachedRoute,
   type DeliveryKind,
@@ -27,6 +39,7 @@ import { errorText } from '@/lib/driver/errors';
 import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
 import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
+import { aplicarOrden, moverEncima, moverUno } from '@/lib/driver/orden';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
 
 /**
@@ -90,6 +103,17 @@ export default function DriverDashboardPage() {
   const [route, setRoute] = useState<Shipment[]>([]);
   /** Si la lista de cerrados de hoy está desplegada. */
   const [verCerrados, setVerCerrados] = useState(false);
+  /** El orden que eligió el repartidor, por id. Vacío = el que vino. */
+  const [orden, setOrden] = useState<number[]>([]);
+  const [modoOrden, setModoOrden] = useState(false);
+  const [arrastrando, setArrastrando] = useState<number | null>(null);
+  /**
+   * La foto del orden al empezar a arrastrar.
+   *
+   * Es lo que hace que soltar dos veces —el navegador lo dispara más de una
+   * vez— no corra la tarjeta de más. Ver `lib/driver/orden`.
+   */
+  const arrastreRef = useRef<{ id: number; base: number[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<{
     /** Se siguen reintentando solas. */
@@ -181,6 +205,23 @@ export default function DriverDashboardPage() {
       cacheRoute(rows);
     });
   }, [driver, toast]);
+
+  // --- el orden que eligió el repartidor ---------------------------------
+  useEffect(() => {
+    let vivo = true;
+    leerOrden().then((ids) => {
+      if (vivo && ids.length) setOrden(ids);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /** Guarda el orden nuevo, en la pantalla y en el celular. */
+  const acomodar = useCallback((ids: number[]) => {
+    setOrden(ids);
+    void guardarOrden(ids);
+  }, []);
 
   // --- cola offline ------------------------------------------------------
   const refreshPending = useCallback(() => {
@@ -299,7 +340,10 @@ export default function DriverDashboardPage() {
 
       toast(estado === 'retirado' ? 'Marcado como retirado.' : 'Marcado en camino.', 'ok');
     },
-    [toast],
+    // `setSelected` va en la lista aunque sea estable: el compilador de React
+    // no da por buena la memorizacion si no coinciden, y sin eso deja de
+    // optimizar toda la pantalla.
+    [toast, setSelected],
   );
 
   // --- cierre de entrega -------------------------------------------------
@@ -323,7 +367,10 @@ export default function DriverDashboardPage() {
   const { deHoy, proximos } = partirRuta(route);
 
   /** Lo que falta hacer, que es de lo que se trata la pantalla. */
-  const pendientes = deHoy.filter((s) => !CERRADOS.includes(s.status));
+  const pendientes = aplicarOrden(
+    deHoy.filter((s) => !CERRADOS.includes(s.status)),
+    orden,
+  );
   /** Lo de hoy que ya terminó, para repasar o corregir. */
   const cerrados = deHoy.filter((s) => CERRADOS.includes(s.status));
 
@@ -365,6 +412,20 @@ export default function DriverDashboardPage() {
             {pendientes.length} POR HACER
             {proximos.length > 0 && ` · ${proximos.length} PARA DESPUÉS`}
           </span>
+
+          {pendientes.length > 1 && (
+            <button
+              onClick={() => setModoOrden((v) => !v)}
+              className={`ml-auto flex items-center gap-1.5 rounded-full border border-[var(--edr-yellow)] px-3.5 py-2 font-bebas text-sm tracking-[.06em] transition active:scale-95 ${
+                modoOrden
+                  ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
+                  : 'text-[var(--edr-yellow)]'
+              }`}
+            >
+              {modoOrden ? <Check size={16} strokeWidth={2.5} /> : <ArrowUpDown size={16} strokeWidth={2} />}
+              {modoOrden ? 'LISTO' : 'REORDENAR'}
+            </button>
+          )}
           {/* Actualiza los datos SIN recargar la página: una recarga volvería a
               disparar el pedido de permisos de cámara y GPS. */}
           <button
@@ -460,18 +521,100 @@ export default function DriverDashboardPage() {
           </div>
         )}
 
-        {pendientes.map((s) => (
-          <ShipmentCard
-            key={s.id}
-            shipment={s}
-            onOpen={setSelected}
-            onEstado={cambiarEstado}
-            onCerrarEntrega={(x) => {
-              setSelected(x);
-              setResolving('entregado');
-            }}
-          />
-        ))}
+        {modoOrden ? (
+          <>
+            <p className="rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-4 py-3 text-sm font-semibold text-[var(--edr-muted)]">
+              Arrastrá las filas para armar tu recorrido, o usá las flechas si estás con guantes.
+              El orden queda guardado en este celular.
+            </p>
+
+            {pendientes.map((s, i) => (
+              <div
+                key={s.id}
+                draggable
+                onDragStart={(e) => {
+                  // La foto del orden al empezar: la cuenta del soltar se hace
+                  // siempre contra esto. Ver `lib/driver/orden`.
+                  arrastreRef.current = { id: s.id, base: pendientes.map((x) => x.id) };
+                  e.dataTransfer.effectAllowed = 'move';
+                  setArrastrando(s.id);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const d = arrastreRef.current;
+                  if (d && d.id !== s.id) acomodar(moverEncima(d.base, d.id, s.id));
+                  setArrastrando(null);
+                }}
+                onDragEnd={() => {
+                  arrastreRef.current = null;
+                  setArrastrando(null);
+                }}
+                className={`flex items-center gap-2.5 rounded-2xl border bg-[var(--edr-blue)] p-2.5 ${
+                  arrastrando === s.id
+                    ? 'border-[var(--edr-yellow)] opacity-50'
+                    : 'border-white/10'
+                }`}
+              >
+                <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-white/10 text-[var(--edr-muted)]">
+                  <GripVertical size={18} strokeWidth={2} />
+                </span>
+
+                <span className="edr-mono w-5 shrink-0 text-sm font-bold text-[var(--edr-yellow)]">
+                  {i + 1}
+                </span>
+
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-anton text-xl uppercase leading-tight text-white">
+                    {s.address_street}
+                  </span>
+                  <span className="block truncate text-[12.5px] text-[var(--edr-muted)]">
+                    {ETIQUETA_ESTADO[s.status]}
+                    {shipmentCash(s).total > 0 && ` · cobrar ${money(shipmentCash(s).total)}`}
+                  </span>
+                </span>
+
+                <button
+                  onClick={() => acomodar(moverUno(pendientes.map((x) => x.id), s.id, -1))}
+                  disabled={i === 0}
+                  aria-label="Subir"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 text-white transition active:scale-95 disabled:opacity-30"
+                >
+                  <ChevronUp size={20} strokeWidth={2.5} />
+                </button>
+                <button
+                  onClick={() => acomodar(moverUno(pendientes.map((x) => x.id), s.id, 1))}
+                  disabled={i === pendientes.length - 1}
+                  aria-label="Bajar"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 text-white transition active:scale-95 disabled:opacity-30"
+                >
+                  <ChevronDown size={20} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+
+            <button
+              onClick={() => setModoOrden(false)}
+              className="mt-1 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-[var(--edr-yellow)] font-bebas text-xl tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95"
+            >
+              <Check size={20} strokeWidth={2.5} />
+              LISTO, ASÍ VOY
+            </button>
+          </>
+        ) : (
+          pendientes.map((s) => (
+            <ShipmentCard
+              key={s.id}
+              shipment={s}
+              onOpen={setSelected}
+              onEstado={cambiarEstado}
+              onCerrarEntrega={(x) => {
+                setSelected(x);
+                setResolving('entregado');
+              }}
+            />
+          ))
+        )}
 
         {/* Cerrados de hoy. Plegado, porque no es trabajo: es para repasar la
             jornada, o para entrar a uno que se cerró mal y corregirlo. */}

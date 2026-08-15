@@ -125,7 +125,13 @@ En este orden, que es de más probable a menos:
    abajo: esto necesita Firebase configurado o no funciona.
 5. Que aparezca el **aviso fijo de ubicación** al abrir la hoja de ruta con
    envíos del día.
-6. Y la prueba de verdad: **dejar el celular quieto media hora con la app
+6. **Poner el celular en modo avión y abrir la app.** Hoy, desde Chrome, arranca
+   igual sin señal porque el service worker tiene guardado el armazón. Adentro
+   de la app eso hay que comprobarlo: si no anda, sin señal se va a ver el
+   cartel de "no se pudo abrir" y el repartidor pierde la hoja de ruta y la cola
+   de entregas guardadas. Es lo más importante de esta lista después de la
+   cámara.
+7. Y la prueba de verdad: **dejar el celular quieto media hora con la app
    cerrada** y mirar si siguen entrando posiciones.
 
    ```sql

@@ -1,8 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
-import { MessageCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MessageCircle, RefreshCw } from 'lucide-react';
 import Logo from '@/components/Logo';
 import SiteFooter, { WHATSAPP } from '@/components/SiteFooter';
 import { fechaHoraAR, STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
@@ -75,6 +75,9 @@ const MOTIVOS: Record<string, string> = {
 const HITOS: Record<string, string> = {
   creado: 'Envío registrado',
   asignado: 'Asignado a un repartidor',
+  // Va escrito acá y no se deja caer al nombre interno: "pendiente de retiro"
+  // es como lo llama la base, y es lo que el destinatario tiene que leer.
+  pendiente_retiro: 'Pendiente de retiro',
   retirado: 'Retirado del comercio',
   en_camino: 'En camino a tu domicilio',
   entregado: 'Entregado',
@@ -119,6 +122,9 @@ const CASITA =
 /** Hora de Mar del Plata, igual en el servidor que en el celular. Ver lib/format. */
 const fecha = fechaHoraAR;
 
+/** Ya no se mueven: no hay nada que refrescar ni que esperar. */
+const CERRADOS: ShipmentStatus[] = ['entregado', 'cancelado'];
+
 /**
  * Qué se le explica al que abre el seguimiento, según cómo esté el envío.
  *
@@ -143,11 +149,23 @@ function explicacion(data: TrackResult): string {
     return 'Tu envío no pudo ser entregado. Comunicate con tu vendedor o con la mensajería para coordinar la entrega.';
   }
 
+  /*
+   * Cada estado dice DÓNDE está el paquete y QUÉ falta, en ese orden.
+   *
+   * Antes casi todo caía en "está en curso, volvé a consultar más tarde", que
+   * no dice ninguna de las dos cosas: el que lo lee sigue sin saber si el
+   * paquete está en el comercio, en la moto o a la vuelta de su casa. Y "volvé
+   * más tarde" le pasa el trabajo a él.
+   */
   switch (data.status) {
+    case 'creado':
+      return 'Ya lo cargamos en el sistema. Falta que un repartidor lo pase a buscar por el comercio.';
+    case 'pendiente_retiro':
+      return 'Un repartidor está yendo al comercio a buscarlo.';
+    case 'retirado':
+      return 'Ya lo retiramos del comercio. Cuando salga a la calle vas a ver acá por dónde viene.';
     case 'en_camino':
       return 'El repartidor ya salió con tu envío.';
-    case 'retirado':
-      return 'Ya lo retiramos del comercio.';
     case 'pendiente_entrega':
       return 'Tu envío está pendiente de entrega. Esto sucede porque se reprogramó una nueva visita para otro día.';
     default:
@@ -178,52 +196,70 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
    */
   const [cambioDeTiempo, setCambioDeTiempo] = useState(false);
   const etaAnterior = useRef(inicial.courier?.eta?.texto ?? null);
+  /** Mientras dura el toque al botón de actualizar. */
+  const [buscando, setBuscando] = useState(false);
 
-  useEffect(() => {
-    if (data.status !== 'en_camino') return;
-    let vivo = true;
-
-    const pedir = () => {
-      fetch('/api/track', {
+  /**
+   * Vuelve a preguntar por el envío.
+   *
+   * La usan las tres formas de refrescar: el reloj mientras está en camino,
+   * volver a la pestaña, y el botón. Una sola función para que las tres
+   * traigan lo mismo y avisen igual cuando cambia el tiempo estimado.
+   */
+  const pedir = useCallback(async () => {
+    try {
+      const r = await fetch('/api/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: data.code }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((nuevo: TrackResult | null) => {
-          if (!vivo || !nuevo) return;
+        body: JSON.stringify({ code: inicial.code }),
+      });
+      if (!r.ok) return;
+      const nuevo: TrackResult = await r.json();
 
-          const ahora = nuevo.courier?.eta?.texto ?? null;
-          // Sólo si ya había un estimado antes: la primera vez que aparece no
-          // es un cambio, es la primera noticia.
-          if (ahora && etaAnterior.current && ahora !== etaAnterior.current) {
-            setCambioDeTiempo(true);
-            window.setTimeout(() => setCambioDeTiempo(false), 40_000);
-          }
-          etaAnterior.current = ahora;
+      const ahora = nuevo.courier?.eta?.texto ?? null;
+      // Sólo si ya había un estimado antes: la primera vez que aparece no es
+      // un cambio, es la primera noticia.
+      if (ahora && etaAnterior.current && ahora !== etaAnterior.current) {
+        setCambioDeTiempo(true);
+        window.setTimeout(() => setCambioDeTiempo(false), 40_000);
+      }
+      etaAnterior.current = ahora;
 
-          setData(nuevo);
-        })
-        .catch(() => {
-          // Sin señal se queda con lo último que vio. No hay nada que avisar.
-        });
-    };
+      setData(nuevo);
+    } catch {
+      // Sin señal se queda con lo último que vio. No hay nada que avisar.
+    }
+  }, [inicial.code]);
 
+  /** El botón. Se ve que hace algo aunque no haya cambiado nada. */
+  async function actualizarAMano() {
+    setBuscando(true);
+    await pedir();
+    // Un respiro para que el giro se vea: sin esto, con buena conexión el
+    // botón parpadea y parece que no hizo nada.
+    window.setTimeout(() => setBuscando(false), 400);
+  }
+
+  useEffect(() => {
+    // El que está esperando no cierra la pestaña: la deja abierta. Mientras el
+    // envío viaja se refresca solo, que es cuando cambia algo cada minuto.
+    if (data.status !== 'en_camino') return;
     const timer = window.setInterval(pedir, 45_000);
+    return () => window.clearInterval(timer);
+  }, [data.status, pedir]);
 
+  useEffect(() => {
     // Volver a la pestaña después de un rato es el momento en que más importa
-    // que el dato esté fresco.
+    // que el dato esté fresco. Vale para todo lo que todavía se mueve, no sólo
+    // para lo que está en camino: alguien que dejó abierto "retirado" a la
+    // mañana vuelve a la tarde y quiere ver si ya salió.
+    if (CERRADOS.includes(data.status)) return;
     const alVolver = () => {
-      if (document.visibilityState === 'visible') pedir();
+      if (document.visibilityState === 'visible') void pedir();
     };
     document.addEventListener('visibilitychange', alVolver);
-
-    return () => {
-      vivo = false;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', alVolver);
-    };
-  }, [data.status, data.code]);
+    return () => document.removeEventListener('visibilitychange', alVolver);
+  }, [data.status, pedir]);
 
   /*
    * Manda el estado del envío, no el último movimiento.
@@ -425,6 +461,28 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
           />
         )}
       </div>
+
+      {/* ---------- Actualizar ----------
+          Mientras el envío viaja la pantalla se refresca sola, pero eso el que
+          espera no lo sabe: se queda mirando un número quieto sin saber si es
+          el de hace un rato. El botón es para eso, para poder pedirlo. En un
+          envío ya cerrado no aparece: no hay nada que pueda cambiar. */}
+      {!CERRADOS.includes(data.status) && (
+        <div className="px-5 pt-4">
+          <button
+            onClick={actualizarAMano}
+            disabled={buscando}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border-2 border-[var(--edr-yellow)] px-6 font-bebas text-lg tracking-[.07em] text-[var(--edr-yellow)] transition hover:bg-[var(--edr-surface-2)] disabled:opacity-70"
+          >
+            <RefreshCw
+              size={18}
+              strokeWidth={2.5}
+              className={buscando ? 'animate-spin' : undefined}
+            />
+            {buscando ? 'BUSCANDO NOVEDADES…' : 'ACTUALIZAR'}
+          </button>
+        </div>
+      )}
 
       {/* ---------- Escribirnos ----------
           El que abre esto y ve algo que no cuadra —la dirección mal, el envío

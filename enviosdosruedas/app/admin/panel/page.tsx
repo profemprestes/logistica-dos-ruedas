@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -11,8 +12,10 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useAdminGuard } from '@/lib/adminGuard';
-import { money } from '@/lib/format';
+import { money, type Shipment } from '@/lib/format';
 import { useDatosDelDia, type Repartidor } from '@/components/admin/DatosDelDia';
+import BuscarPaquete from '@/components/admin/BuscarPaquete';
+import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import type { Atraso } from '@/lib/admin/atrasos';
 
 /**
@@ -46,6 +49,8 @@ const titulo = 'font-anton text-[19px] uppercase tracking-[-.01em] text-[var(--e
 export default function PanelDelDiaPage() {
   const ready = useAdminGuard();
   const { cargando, deHoy, atrasos, repartidores, aCobrar, entregados } = useDatosDelDia();
+  /** El envío cuya prueba de entrega se está mirando, desde el buscador. */
+  const [prueba, setPrueba] = useState<Shipment | null>(null);
 
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-text-3)]">Cargando…</div>;
 
@@ -160,9 +165,13 @@ export default function PanelDelDiaPage() {
                 de los envíos que todavía no se entregaron
               </div>
             </div>
+
+            <BuscarPaquete verPrueba={setPrueba} />
           </div>
         </div>
       </div>
+
+      <ProofOfDeliveryModal shipment={prueba} onClose={() => setPrueba(null)} />
     </div>
   );
 }

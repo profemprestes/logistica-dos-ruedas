@@ -1,7 +1,7 @@
 /**
- * Prueba las cuatro reglas de atraso del Panel del día.
+ * Prueba el Panel del día: las cuatro reglas de atraso y la respuesta escrita.
  *
- *   npx tsx --tsconfig tsconfig.json scripts/probar-atrasos.ts
+ *   npm run panel
  *
  * Dos partes. Primero casos armados a mano, donde se sabe qué tiene que dar:
  * es la única forma de probar "a las 15 hs todavía sin retirar" sin esperar a
@@ -13,6 +13,8 @@
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos } from '../lib/admin/atrasos';
+import { respuestaParaElCliente } from '../lib/admin/respuesta';
+import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import type { Shipment } from '../lib/format';
 
 // ---------------------------------------------------------------- casos armados
@@ -163,6 +165,103 @@ caso(
   ),
   ['sin_reprogramar', 'sin_retirar'],
 );
+
+// ----------------------------------------------- cómo se entiende la búsqueda
+
+console.log('\n=== lo que se pega en el buscador ===\n');
+
+for (const [texto, esperadas] of [
+  ['BROWN 2055, Mar del Plata', ['brown', '2055']],
+  ['Brown (fondo) 2055', ['brown', 'fondo', '2055']],
+  ['DIAGONAL PUEYRREDÓN 2956, Mar del Plata', ['diagonal', 'pueyrredón', '2956']],
+  ['Av. Independencia 1500', ['independencia', '1500']],
+  ['calle 12 de Octubre 3400', ['12', 'octubre', '3400']],
+] as const) {
+  caso(`palabras de "${texto}"`, palabrasUtiles(texto), [...esperadas]);
+}
+
+for (const [texto, esperado] of [
+  ['+54 223 513-5312', true],
+  ['2235135312', true],
+  ['223 555 1234', true],
+  ['Alberti 2235', false],
+  ['BROWN 2055', false],
+] as const) {
+  caso(
+    `"${texto}" ${esperado ? 'es' : 'no es'} un teléfono`,
+    [String(esTelefono(texto))],
+    [String(esperado)],
+  );
+}
+
+caso('del teléfono se usa la cola', [colaDelTelefono('+54 9 223 513-5312')], ['35135312']);
+
+// ------------------------------------------------- la respuesta que se copia
+
+console.log('\n=== la respuesta que se le manda al cliente ===\n');
+
+/*
+ * Lo que se prueba acá no es el texto sino los dos límites que no se pueden
+ * cruzar: que no salga plata ni datos del destinatario —esto se reenvía a un
+ * chat que no controlamos— y que el tiempo vaya siempre como aproximado.
+ */
+const conPlata = envio({
+  status: 'en_camino',
+  payment_mode: 'cobrar_destinatario',
+  amount_to_collect: 148200,
+  merchandise_amount: 140000,
+  shipping_fee: 8200,
+  recipient_phone: '2235551234',
+  recipient_name: 'Marcela Gómez',
+});
+
+const eta = { metros: 2400, desde: 10, hasta: 15, texto: 'Entre 10 y 15 minutos' };
+
+for (const [nombre, datos] of [
+  ['en camino', { envio: conPlata, eta, cierre: null }],
+  ['en camino sin poder calcular', { envio: conPlata, eta: null, cierre: null }],
+  ['todavía en el comercio', { envio: envio({ status: 'pendiente_retiro' }), eta: null, cierre: null }],
+  [
+    'entregado',
+    {
+      envio: envio({ status: 'entregado' }),
+      eta: null,
+      cierre: { event: 'entregado', happened_at: `${HOY}T16:42:00`, failure_reason: null },
+    },
+  ],
+  [
+    'no entregado',
+    {
+      envio: envio({ status: 'pendiente_entrega' }),
+      eta: null,
+      cierre: { event: 'no_entregado', happened_at: `${HOY}T12:40:00`, failure_reason: 'ausente' },
+    },
+  ],
+  ['cancelado', { envio: envio({ status: 'cancelado' }), eta: null, cierre: null }],
+] as const) {
+  const texto = respuestaParaElCliente(datos);
+  const filtra: string[] = [];
+
+  for (const prohibido of ['148200', '148.200', '140000', '8200', '2235551234', '$']) {
+    if (texto.includes(prohibido)) filtra.push(`dice "${prohibido}"`);
+  }
+  if (datos.eta && !texto.toLowerCase().includes('aproximadamente')) {
+    filtra.push('promete una hora sin decir "aproximadamente"');
+  }
+
+  if (filtra.length) {
+    fallas++;
+    console.log(`FALLA  ${nombre}: ${filtra.join('; ')}`);
+  } else {
+    console.log(`  ok   ${nombre}`);
+  }
+  console.log(
+    texto
+      .split('\n')
+      .map((l) => `         │ ${l}`)
+      .join('\n'),
+  );
+}
 
 // ------------------------------------------------------------------ base real
 

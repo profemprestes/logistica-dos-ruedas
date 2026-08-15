@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "parser": "tsx --tsconfig tsconfig.json scripts/probar-parser.ts",
-    "atrasos": "tsx --tsconfig tsconfig.json scripts/probar-atrasos.ts"
+    "panel": "tsx --tsconfig tsconfig.json scripts/probar-panel.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.6.0",

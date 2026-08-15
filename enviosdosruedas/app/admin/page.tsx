@@ -233,18 +233,8 @@ export default function AdminPage() {
       setEditing(null);
       setModalOpen(true);
     };
-    const buscar = (e: Event) => {
-      const q = (e as CustomEvent<string>).detail ?? '';
-      setSearch(q);
-      setSearchAplicada(q);
-    };
-
     window.addEventListener('edr-nuevo-envio', abrir);
-    window.addEventListener('edr-buscar', buscar);
-    return () => {
-      window.removeEventListener('edr-nuevo-envio', abrir);
-      window.removeEventListener('edr-buscar', buscar);
-    };
+    return () => window.removeEventListener('edr-nuevo-envio', abrir);
   }, []);
 
   /**

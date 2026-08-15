@@ -103,19 +103,26 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   /**
    * Navegar a la sección en la que ya estás no la vuelve a montar, así que
-   * mandarle la búsqueda por la dirección no haría nada. Estando en Envíos se
-   * le avisa directo; desde afuera, la dirección alcanza.
+   * mandarle el dato por la dirección no haría nada. Estando ahí se le avisa
+   * directo; desde afuera, la dirección alcanza.
    */
-  function enEnvios(evento: string, dato: string, url: string) {
-    if (pathname === '/admin') window.dispatchEvent(new CustomEvent(evento, { detail: dato }));
+  function mandarA(seccion: string, evento: string, dato: string, url: string) {
+    if (pathname === seccion) window.dispatchEvent(new CustomEvent(evento, { detail: dato }));
     else router.push(url);
   }
 
+  /**
+   * El buscador de arriba contesta "¿dónde está mi paquete?", que es la
+   * pregunta que entra por WhatsApp, y por eso termina en el buscador del
+   * Panel del día y no en la tabla: lo que hace falta ahí no es encontrar la
+   * fila, es tener la respuesta escrita para mandársela al comercio. La tabla
+   * tiene su propio buscador para lo otro.
+   */
   function buscar(e: React.FormEvent) {
     e.preventDefault();
     const q = busqueda.trim();
     if (!q) return;
-    enEnvios('edr-buscar', q, `/admin?buscar=${encodeURIComponent(q)}`);
+    mandarA('/admin/panel', 'edr-paquete', q, `/admin/panel?paquete=${encodeURIComponent(q)}`);
   }
 
   async function salir() {
@@ -244,7 +251,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </button>
 
           <button
-            onClick={() => enEnvios('edr-nuevo-envio', '', '/admin?nuevo=1')}
+            onClick={() => mandarA('/admin', 'edr-nuevo-envio', '', '/admin?nuevo=1')}
             className="ml-auto flex shrink-0 items-center gap-2 rounded-full bg-[var(--edr-yellow)] px-4 py-3 font-bebas text-[17px] tracking-[.06em] text-[var(--edr-blue)] shadow-[var(--edr-sombra)] transition active:scale-95 sm:px-5"
           >
             <Plus size={18} strokeWidth={3} />

@@ -99,6 +99,29 @@ export function fechaHoraAR(iso: string | Date): string {
   );
 }
 
+/** "13:54" */
+export function horaAR(iso: string | Date): string {
+  const d = enArgentina(iso);
+  return `${dosCifras(d.getUTCHours())}:${dosCifras(d.getUTCMinutes())}`;
+}
+
+/** "14/08" */
+export function diaAR(iso: string | Date): string {
+  const d = enArgentina(iso);
+  return `${dosCifras(d.getUTCDate())}/${dosCifras(d.getUTCMonth() + 1)}`;
+}
+
+/** Qué hora del día es, con los minutos como decimales: 14:30 → 14.5. */
+export function horaDelDiaAR(ahora: Date = new Date()): number {
+  const d = enArgentina(ahora);
+  return d.getUTCHours() + d.getUTCMinutes() / 60;
+}
+
+/** El día de hoy en Mar del Plata, en formato AAAA-MM-DD. */
+export function hoyAR(ahora: Date = new Date()): string {
+  return enArgentina(ahora).toISOString().slice(0, 10);
+}
+
 const DIAS_AR = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 /** "viernes 14/08" */

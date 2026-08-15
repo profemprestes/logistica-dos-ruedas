@@ -1,5 +1,4 @@
-import type { Shipment } from '@/lib/format';
-import { hoyLocal } from '@/lib/scheduled';
+import { diaAR, horaAR, horaDelDiaAR, hoyAR, type Shipment } from '@/lib/format';
 
 /**
  * Qué se está atrasando, ahora.
@@ -37,7 +36,8 @@ export interface Atraso {
 }
 
 /**
- * A qué hora deja de ser razonable que un envío siga sin retirar.
+ * A qué hora deja de ser razonable que un envío siga sin retirar, cuando no
+ * hay franja horaria acordada.
  *
  * A las tres de la tarde ya pasó la mañana entera: si a esa hora el comercio
  * todavía no entregó el paquete, o el repartidor no pasó, el envío de hoy
@@ -45,8 +45,41 @@ export interface Atraso {
  */
 export const CORTE_RETIRO_HS = 15;
 
-/** O antes, si el envío ya lleva demasiado cargado sin que nadie lo toque. */
-export const HORAS_SIN_RETIRAR = 4;
+/**
+ * Cuánto antes del cierre de la franja hay que avisar.
+ *
+ * Retirar no es entregar: falta ir al comercio, cargarlo y recién después
+ * llegar al domicilio, con las paradas que el repartidor tenga en el medio.
+ * Dos horas es lo que da para que la entrega todavía entre en la franja.
+ */
+export const MARGEN_ANTES_DEL_CIERRE_HS = 2;
+
+/**
+ * Hasta qué hora hay que entregar, según lo que diga la franja.
+ *
+ * Las franjas las escribe la oficina a mano y salen de mil formas —"antes de
+ * 19 hs", "ANTES 13HS", "11 a 12:30 hs", "14 A 17HS"— pero todas terminan
+ * diciendo una hora límite, y siempre es la ÚLTIMA que aparece en el texto:
+ * en "antes de 19" es el 19, y en un rango es el final del rango.
+ *
+ * Devuelve `null` cuando no hay ninguna hora escrita ("por la mañana", vacío).
+ * Ahí manda el corte general, que es lo que se hacía siempre.
+ */
+export function limiteDeLaFranja(texto: string | null | undefined): number | null {
+  if (!texto) return null;
+
+  let limite: number | null = null;
+  for (const m of texto.matchAll(/(\d{1,2})(?::(\d{2}))?/g)) {
+    const h = Number(m[1]);
+    const min = Number(m[2] ?? 0);
+    // Una hora del día y nada más: así un "24/08" perdido en el texto o un
+    // número de puerta no se toman por un horario.
+    if (h > 23 || min > 59) continue;
+    limite = h + min / 60;
+  }
+
+  return limite;
+}
 
 /**
  * Cuánto puede durar un "en camino".
@@ -62,20 +95,21 @@ function abierto(s: Shipment): boolean {
   return s.status !== 'entregado' && s.status !== 'cancelado';
 }
 
-/**
- * "14:35". A mano y no con `toLocaleTimeString`, que acá devolvía
- * "01:54 p. m." — media pantalla para decir la hora, y en un tablero donde
- * todas las horas se leen de reojo y comparadas entre sí.
- */
-function hora(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 /** "13/08", del texto de la fecha y sin pasar por el calendario. */
 function fechaCorta(fechaISO: string): string {
   const [, mes, dia] = fechaISO.split('-');
   return `${dia}/${mes}`;
+}
+
+/**
+ * Cuándo entró, dicho de forma que no engañe.
+ *
+ * Un envío cargado ayer decía "entró 13:54" a secas, y eso se lee como las
+ * 13:54 de hoy. Si no es de hoy, va el día adelante.
+ */
+function cuandoEntro(iso: string, hoy: string): string {
+  const dia = hoyAR(new Date(iso));
+  return dia === hoy ? horaAR(iso) : `${diaAR(iso)} a las ${horaAR(iso)}`;
 }
 
 /** "1 h 20 min", "35 min". Los minutos sueltos importan más que la precisión. */
@@ -85,6 +119,13 @@ function hace(ms: number): string {
   const h = Math.floor(min / 60);
   const resto = min % 60;
   return resto ? `${h} h ${resto} min` : `${h} h`;
+}
+
+/** La franja tal cual la escribió la oficina, en minúscula y sin sobrar. */
+function textoFranja(texto: string | null | undefined): string {
+  const t = (texto ?? '').trim();
+  // "ANTES 13HS" gritado en el medio de una frase se lee peor que "antes 13hs".
+  return t === t.toUpperCase() ? t.toLowerCase() : t;
 }
 
 function unEnvio(s: Shipment): string {
@@ -111,7 +152,7 @@ export function buscarAtrasos({
   envios,
   enCaminoDesde,
   ahora = new Date(),
-  hoy = hoyLocal(),
+  hoy = hoyAR(ahora),
 }: EntradaAtrasos): Atraso[] {
   const avisos: Atraso[] = [];
   const deHoy = envios.filter((s) => s.scheduled_date === hoy && abierto(s));
@@ -128,31 +169,62 @@ export function buscarAtrasos({
       tipo: 'sin_asignar',
       titulo: 'SIN ASIGNAR',
       detalle: `${sinAsignar.length} ${sinAsignar.length === 1 ? 'envío' : 'envíos'} de hoy sin repartidor`,
-      desde: `el más viejo entró ${hora(masViejo.created_at)} · corte de retiro ${CORTE_RETIRO_HS} hs`,
+      desde: `el más viejo entró ${cuandoEntro(masViejo.created_at, hoy)}`,
       tono: 'rojo',
       accion: 'ASIGNAR',
       href: '/admin?repartidor=sin_asignar',
     });
   }
 
-  // ---- 2. Tiene dueño pero sigue en el comercio ---------------------------
-  const limiteCarga = t - HORAS_SIN_RETIRAR * 3_600_000;
-  const pasoElCorte = ahora.getHours() >= CORTE_RETIRO_HS;
+  /*
+   * ---- 2. Tiene dueño pero sigue en el comercio ---------------------------
+   *
+   * LO QUE SE MIRA ES CUÁNTO FALTA PARA EL CIERRE, no hace cuánto se cargó.
+   *
+   * La primera versión contaba las horas desde `created_at`, y eso está mal
+   * para los envíos que se cargan un día antes: uno cargado ayer a las 13:54
+   * para hoy amanecía con diecinueve horas encima y saltaba a la madrugada,
+   * cuando en realidad no había pasado nada. Y no es un caso raro: de cada
+   * diez envíos, más de uno se carga para otro día.
+   *
+   * El compromiso no es "retirarlo rápido", es "entregarlo dentro de la
+   * franja". Así que la cuenta va contra la franja: se avisa cuando ya no
+   * queda margen para retirar y llegar a tiempo. Sin franja escrita, manda el
+   * corte general de las 15.
+   */
+  const horaAhora = horaDelDiaAR(ahora);
 
   for (const s of deHoy) {
     if (!s.assigned_driver) continue;
     if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
 
-    const viejo = Date.parse(s.created_at) < limiteCarga;
-    if (!pasoElCorte && !viejo) continue;
+    const cierre = limiteDeLaFranja(s.delivery_window);
+    const avisarDesde =
+      cierre !== null ? cierre - MARGEN_ANTES_DEL_CIERRE_HS : CORTE_RETIRO_HS;
+
+    if (horaAhora < avisarDesde) continue;
+
+    /*
+     * Que falte margen y que la franja YA HAYA PASADO no son lo mismo.
+     *
+     * Lo primero es apurarse; lo segundo es que el compromiso con el
+     * destinatario ya se incumplió y alguien tiene que avisarle. Por eso
+     * cambia de color: deja de ser algo que se está moviendo despacio.
+     */
+    const vencida = cierre !== null && horaAhora > cierre;
+    const quien = s.driver?.full_name ?? 'Asignado';
 
     avisos.push({
       clave: `sin-retirar-${s.id}`,
       tipo: 'sin_retirar',
-      titulo: viejo ? `SIN RETIRAR HACE ${hace(t - Date.parse(s.created_at))}` : 'SIN RETIRAR',
+      titulo: vencida ? 'SIN RETIRAR · SE PASÓ LA FRANJA' : 'SIN RETIRAR',
       detalle: unEnvio(s),
-      desde: `${s.driver?.full_name ?? 'Asignado'} · cargado ${hora(s.created_at)}`,
-      tono: 'naranja',
+      desde: vencida
+        ? `${quien} · había que entregarlo ${textoFranja(s.delivery_window)} y todavía está en el comercio`
+        : cierre !== null
+          ? `${quien} · hay que entregarlo ${textoFranja(s.delivery_window)}`
+          : `${quien} · sin franja acordada · corte de retiro ${CORTE_RETIRO_HS} hs`,
+      tono: vencida ? 'rojo' : 'naranja',
       accion: 'VER',
       href: `/admin?buscar=${encodeURIComponent(s.tracking_code)}`,
     });
@@ -173,7 +245,7 @@ export function buscarAtrasos({
       tipo: 'demorado',
       titulo: `EN CAMINO HACE ${hace(t - desdeCuando)}`,
       detalle: unEnvio(s),
-      desde: `${s.driver?.full_name ?? 'Repartidor'} · salió ${hora(new Date(desdeCuando).toISOString())}`,
+      desde: `${s.driver?.full_name ?? 'Repartidor'} · salió ${horaAR(new Date(desdeCuando))}`,
       tono: 'naranja',
       accion: 'VER MAPA',
       href: '/admin/mapa',

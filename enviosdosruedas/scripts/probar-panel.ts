@@ -12,7 +12,7 @@
 
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { buscarAtrasos } from '../lib/admin/atrasos';
+import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import type { Shipment } from '../lib/format';
@@ -63,7 +63,8 @@ function caso(nombre: string, obtenido: string[], esperado: string[]) {
 }
 
 function tipos(envios: Shipment[], hora: number, enCamino: [number, number][] = []) {
-  const ahora = new Date(`${HOY}T${String(hora).padStart(2, '0')}:00:00`);
+  // El +3 lleva la hora de Mar del Plata a UTC, que es como se guarda.
+  const ahora = new Date(`${HOY}T${String(hora + 3).padStart(2, '0')}:00:00Z`);
   return buscarAtrasos({
     envios,
     enCaminoDesde: new Map(enCamino),
@@ -88,10 +89,12 @@ caso(
   ['sin_retirar'],
 );
 
+// Antes esto avisaba: la regla contaba las horas desde que se cargó. Ahora no,
+// y es a propósito — sin franja escrita, lo que manda es el corte de las 15.
 caso(
-  'asignado a las 6 y a las 11 sigue sin retirar: cinco horas',
+  'cargado tempranísimo pero sin franja: a las 11 todavía no molesta',
   tipos([envio({ assigned_driver: 'd1', created_at: `${HOY}T06:00:00` })], 11),
-  ['sin_retirar'],
+  [],
 );
 
 caso(
@@ -161,10 +164,78 @@ caso(
       envio({ id: 1, assigned_driver: 'd1', created_at: `${HOY}T06:00:00` }),
       envio({ id: 2, status: 'pendiente_entrega', scheduled_date: '2026-08-12' }),
     ],
-    11,
+    16,
   ),
   ['sin_reprogramar', 'sin_retirar'],
 );
+
+
+// ------------------------------------------------ franjas horarias de verdad
+
+console.log('\n=== lo que dice cada franja (sacadas de la base) ===\n');
+
+for (const [texto, esperado] of [
+  ['antes de 19 hs', 19],
+  ['ANTES 13HS', 13],
+  ['antes de 18 hs', 18],
+  ['11 a 12:30 hs', 12.5],
+  ['14 A 17HS', 17],
+  ['9 a 15 hs', 15],
+  ['10 a 12 hs', 12],
+  ['15 a 17 hs', 17],
+  ['por la mañana', null],
+  ['', null],
+] as const) {
+  caso(
+    `"${texto || '(vacío)'}" cierra ${esperado ?? 'sin hora'}`,
+    [String(limiteDeLaFranja(texto))],
+    [String(esperado)],
+  );
+}
+
+// ------------------------------------- el caso que reporto Matias el 15/08
+
+console.log('\n=== el envio cargado ayer para hoy ===\n');
+
+const cargadoAyer = envio({
+  id: 91,
+  tracking_code: 'EDR00001091MDQ',
+  assigned_driver: 'd1',
+  status: 'creado',
+  created_at: '2026-08-13T16:54:00Z', // 13:54 del dia ANTERIOR
+  scheduled_date: HOY,
+  delivery_window: 'antes de 19 hs',
+});
+
+caso('a las 9 de la mañana no molesta', tipos([cargadoAyer], 9), []);
+caso('a las 13 tampoco: la franja cierra recien a las 19', tipos([cargadoAyer], 13), []);
+caso('a las 17 sí: quedan dos horas', tipos([cargadoAyer], 17), ['sin_retirar']);
+
+const franjaTemprana = envio({ ...cargadoAyer, delivery_window: '11 a 12:30 hs' });
+caso('con franja de 11 a 12:30, a las 9 todavia no', tipos([franjaTemprana], 9), []);
+caso('con franja de 11 a 12:30, a las 11 sí', tipos([franjaTemprana], 11), ['sin_retirar']);
+
+const sinFranja = envio({ ...cargadoAyer, delivery_window: null });
+caso('sin franja, a las 13 no', tipos([sinFranja], 13), []);
+caso('sin franja, a las 15 sí (el corte de siempre)', tipos([sinFranja], 15), ['sin_retirar']);
+
+caso(
+  'ya retirado, no importa la hora',
+  tipos([envio({ ...cargadoAyer, status: 'retirado' })], 18),
+  [],
+);
+
+// Con la franja ya vencida el aviso cambia de color: deja de ser "apurate" y
+// pasa a ser "el compromiso ya se incumplió".
+function tono(envios: Shipment[], hora: number) {
+  const ahora = new Date(`${HOY}T${String(hora + 3).padStart(2, '0')}:00:00Z`);
+  return buscarAtrasos({ envios, enCaminoDesde: new Map(), ahora, hoy: HOY }).map((a) => a.tono);
+}
+
+const franja10a12 = envio({ ...cargadoAyer, delivery_window: '10 a 12 hs' });
+caso('a las 9, con franja 10 a 12, todavía nada', tipos([franja10a12], 9), []);
+caso('a las 11 avisa en naranja', tono([franja10a12], 11), ['naranja']);
+caso('a las 15, con la franja vencida, avisa en rojo', tono([franja10a12], 15), ['rojo']);
 
 // ----------------------------------------------- cómo se entiende la búsqueda
 

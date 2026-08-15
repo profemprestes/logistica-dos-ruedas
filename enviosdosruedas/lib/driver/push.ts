@@ -9,8 +9,19 @@
  *
  * OJO en iPhone: sólo funciona si la app está instalada en la pantalla de
  * inicio (iOS 16.4 o más nuevo). En el navegador suelto, Apple no lo permite.
+ *
+ * Y OJO ADENTRO DE LA APP DE ANDROID: nada de esto existe ahí. Una ventana de
+ * app no tiene Web Push, así que `soportaPush()` daría false y el repartidor se
+ * quedaría sin avisos sin enterarse. Por eso las tres funciones de abajo
+ * preguntan primero si estamos adentro del APK y se van por el otro camino,
+ * el de Firebase, que vive en `lib/driver/pushNativo.ts`.
  */
 import { supabase } from '@/lib/supabaseClient';
+import {
+  activarPushNativo,
+  desactivarPushNativo,
+  estadoPushNativo,
+} from '@/lib/driver/pushNativo';
 
 export type EstadoPush = 'no-soportado' | 'sin-permiso' | 'activo' | 'bloqueado';
 
@@ -34,6 +45,9 @@ export function soportaPush(): boolean {
 }
 
 export async function estadoPush(): Promise<EstadoPush> {
+  const nativo = await estadoPushNativo();
+  if (nativo !== null) return nativo;
+
   if (!soportaPush()) return 'no-soportado';
   if (Notification.permission === 'denied') return 'bloqueado';
 
@@ -48,6 +62,9 @@ export async function estadoPush(): Promise<EstadoPush> {
  * pedir permiso de notificaciones sin un gesto de por medio.
  */
 export async function activarPush(driverId: string): Promise<EstadoPush> {
+  const nativo = await activarPushNativo(driverId);
+  if (nativo !== null) return nativo;
+
   if (!soportaPush()) return 'no-soportado';
 
   const permiso = await Notification.requestPermission();
@@ -92,6 +109,9 @@ export async function activarPush(driverId: string): Promise<EstadoPush> {
 
 /** Baja: deja de recibir en ESTE celular. */
 export async function desactivarPush(): Promise<EstadoPush> {
+  const nativo = await desactivarPushNativo();
+  if (nativo !== null) return nativo;
+
   if (!soportaPush()) return 'no-soportado';
 
   const reg = await navigator.serviceWorker.ready;

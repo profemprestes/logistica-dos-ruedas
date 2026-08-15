@@ -121,9 +121,11 @@ En este orden, que es de más probable a menos:
 2. Que el **lector de QR** prenda la cámara. Es lo primero que se rompe en una
    app así, porque el permiso de cámara lo pide Android y no el navegador.
 3. Que las **fotos** del comprobante se saquen y suban.
-4. Que aparezca el **aviso fijo de ubicación** al abrir la hoja de ruta con
+4. Que **lleguen las notificaciones** con la app cerrada. Ver la sección de
+   abajo: esto necesita Firebase configurado o no funciona.
+5. Que aparezca el **aviso fijo de ubicación** al abrir la hoja de ruta con
    envíos del día.
-5. Y la prueba de verdad: **dejar el celular quieto media hora con la app
+6. Y la prueba de verdad: **dejar el celular quieto media hora con la app
    cerrada** y mirar si siguen entrando posiciones.
 
    ```sql
@@ -132,12 +134,77 @@ En este orden, que es de más probable a menos:
     order by id desc limit 20;
    ```
 
-## Lo que se sabe que falta
+---
 
-**Las notificaciones push no funcionan adentro del APK.** El aviso de "te
-asignaron un envío" viaja por Web Push, que existe en Chrome pero no en la
-ventana de una app de Android. Para recuperarlo hace falta Firebase, que es otro
-trabajo aparte.
+# Las notificaciones
 
-Mientras tanto, el repartidor ve los envíos nuevos al abrir la app. Vale la pena
-tenerlo en cuenta antes de sacarles el acceso por Chrome.
+## Por qué hay dos caminos
+
+El aviso de "te asignaron un envío" viaja por **Web Push**: el navegador entrega
+una URL única con dos claves de cifrado y el servidor le manda ahí. Eso funciona
+en Chrome y en el Safari de un iPhone.
+
+**Adentro de la app de Android no existe.** Una ventana de app no tiene Web
+Push; no es que ande mal, no está implementado. Sin hacer nada, el repartidor con
+la app instalada se quedaba mudo sin enterarse.
+
+Android usa Firebase, que entrega otra cosa: un token, un texto solo, sin claves.
+Así que ahora hay dos destinos y el servidor le manda por los dos:
+
+| Dónde | Qué se guarda | Tabla |
+|---|---|---|
+| Chrome, iPhone | la suscripción del navegador | `push_subscriptions` (paso 10) |
+| La app de Android | el token de Firebase | `push_tokens` (paso 35) |
+
+Un repartidor puede estar en las dos —la app en el celular y Chrome en la compu—
+y recibe en las dos. Repetido no queda: un mismo celular no puede tener ambas.
+
+## Qué hay que configurar, una sola vez
+
+**1. En [console.firebase.google.com](https://console.firebase.google.com):**
+
+- Crear un proyecto. Google Analytics no hace falta.
+- Agregar una **app de Android** con este nombre de paquete exacto:
+  ```
+  com.enviosdosruedas.repartidor
+  ```
+  El SHA-1 se puede dejar vacío.
+- Bajar el **`google-services.json`** y guardarlo en `android/app/`. Ese archivo
+  no es secreto: viaja adentro del APK igual. Si no está, el proyecto compila lo
+  mismo y las notificaciones quedan apagadas — lo dice al compilar.
+
+**2. Configuración del proyecto → Cuentas de servicio → Generar nueva clave
+privada.** Baja un JSON.
+
+**Ese sí es secreto.** Con él cualquiera manda notificaciones en nombre de la
+empresa. No va al repositorio ni al chat. Se carga como variable de entorno, con
+el JSON entero en una sola línea:
+
+```
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"...", ...}
+```
+
+Va en `.env.local` para probar de local, y en Vercel → Settings → Environment
+Variables para producción. **Después de agregarla en Vercel hay que volver a
+publicar**, porque las variables se leen al construir.
+
+**3. Correr el paso 35** en el SQL Editor de Supabase.
+
+## Cómo saber si quedó bien
+
+Si falta la variable pero hay celulares con la app dados de alta, el servidor lo
+grita en los registros de Vercel:
+
+```
+[notify] hay tokens de la app pero falta FIREBASE_SERVICE_ACCOUNT.
+```
+
+La prueba de verdad, en este orden:
+
+1. Instalar el APK, entrar, ir a **Perfil** y activar los avisos. Tiene que
+   aparecer una fila en `push_tokens`.
+2. **Cerrar la app del todo** y asignarle un envío desde el panel. El aviso tiene
+   que llegar igual.
+
+Ese segundo paso es el que importa. Si el aviso sólo llega con la app abierta, lo
+que está andando es otra cosa y Firebase no.

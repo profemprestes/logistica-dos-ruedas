@@ -37,7 +37,7 @@ import {
  */
 
 const campo =
-  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]';
+  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]';
 const labelCls =
   'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
@@ -287,7 +287,7 @@ export default function ResumenesPage() {
   const hoy = today();
 
   return (
-    <div className="min-h-screen bg-[var(--edr-paper)]">
+    <div className="min-h-full bg-[var(--edr-paper)]">
 
       <main className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-6">
         <h2 className="mb-1 text-xl font-black sm:text-2xl">Resumen del repartidor</h2>
@@ -414,7 +414,7 @@ export default function ResumenesPage() {
             />
             <button
               onClick={procesarPegado}
-              className="mt-2 rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-black hover:brightness-95"
+              className="mt-2 rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95"
             >
               Procesar texto
             </button>
@@ -570,7 +570,7 @@ export default function ResumenesPage() {
 
               <p className="mt-2 text-xs text-[var(--edr-muted)]">
                 Ganancia de la mensajería en este resumen:{' '}
-                <span className="font-bold text-[var(--edr-yellow)]">
+                <span className="font-bold text-[var(--edr-acento)]">
                   {plata(totales.ganancia)}
                 </span>
               </p>
@@ -629,7 +629,7 @@ export default function ResumenesPage() {
                           ? `-${plata(Math.abs(Number(r.a_rendir)))}`
                           : plata(Number(r.a_rendir))}
                       </td>
-                      <td className="py-2 pr-3 text-right text-[var(--edr-yellow)]">
+                      <td className="py-2 pr-3 text-right text-[var(--edr-acento)]">
                         {plata(Number(r.ganancia))}
                       </td>
                       <td className="py-2 text-right">
@@ -739,7 +739,7 @@ function Salida({
         <h3 className="text-sm font-bold">{titulo}</h3>
         <button
           onClick={() => onCopiar(texto)}
-          className="rounded bg-[var(--edr-yellow)] px-3 py-1 text-xs font-black text-black hover:brightness-95"
+          className="rounded bg-[var(--edr-yellow)] px-3 py-1 text-xs font-black text-[var(--edr-blue)] hover:brightness-95"
         >
           Copiar
         </button>

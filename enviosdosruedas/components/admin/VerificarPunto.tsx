@@ -265,7 +265,7 @@ export default function VerificarPunto({
                 }
               }}
               placeholder={direccion || 'calle y altura, referencia, o coordenadas'}
-              className="min-w-0 flex-1 rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)]"
+              className="min-w-0 flex-1 rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-acento)]"
             />
             <button
               type="button"
@@ -280,7 +280,7 @@ export default function VerificarPunto({
               onClick={() => setAMano((v) => !v)}
               className={`rounded px-3 py-1.5 text-xs font-bold ${
                 aMano
-                  ? 'bg-[var(--edr-yellow)] text-black'
+                  ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                   : 'border border-[var(--edr-border)] hover:bg-[var(--edr-surface)]'
               }`}
             >
@@ -354,7 +354,7 @@ export default function VerificarPunto({
                     onPunto(punto);
                     setAviso('');
                   }}
-                  className="rounded bg-[var(--edr-yellow)] px-3 py-1.5 text-xs font-black text-black hover:brightness-95"
+                  className="rounded bg-[var(--edr-yellow)] px-3 py-1.5 text-xs font-black text-[var(--edr-blue)] hover:brightness-95"
                 >
                   ✓ Usar este punto
                 </button>

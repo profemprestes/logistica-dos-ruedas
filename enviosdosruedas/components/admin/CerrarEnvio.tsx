@@ -139,7 +139,7 @@ export default function CerrarEnvio({
                   onClick={() => setMotivo(r)}
                   className={`rounded border px-3 py-2 text-xs font-bold ${
                     motivo === r
-                      ? 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)] text-black'
+                      ? 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                       : 'border-[var(--edr-border)] hover:bg-[var(--edr-surface-2)]'
                   }`}
                 >
@@ -157,7 +157,7 @@ export default function CerrarEnvio({
               value={recibio}
               onChange={(e) => setRecibio(e.target.value)}
               placeholder="El encargado del edificio"
-              className="mb-3 w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]"
+              className="mb-3 w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]"
             />
           </>
         )}
@@ -174,7 +174,7 @@ export default function CerrarEnvio({
               ? 'El comercio avisó que no había nadie'
               : 'Lo cerró el repartidor por teléfono'
           }
-          className="mb-3 w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]"
+          className="mb-3 w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]"
         />
 
         <p className="mb-3 text-xs text-[var(--edr-muted)]">

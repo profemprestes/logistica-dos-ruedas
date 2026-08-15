@@ -51,7 +51,7 @@ function alAbrir(nombre: string): string {
 }
 
 const campo =
-  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]';
+  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]';
 const labelCls =
   'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
@@ -67,7 +67,7 @@ function FlexBadge() {
   return (
     <span
       title="Se cierra en la app de Mercado Libre Flex"
-      className="ml-1.5 rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-black"
+      className="ml-1.5 rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--edr-blue)]"
     >
       Flex
     </span>
@@ -732,7 +732,7 @@ export default function AdminPage() {
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
 
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
         <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
@@ -743,7 +743,7 @@ export default function AdminPage() {
               setEditing(null);
               setModalOpen(true);
             }}
-            className="w-full rounded bg-[var(--edr-yellow)] px-4 py-3 text-base font-black text-black hover:brightness-95 sm:w-auto sm:py-2 sm:text-sm"
+            className="w-full rounded bg-[var(--edr-yellow)] px-4 py-3 text-base font-black text-[var(--edr-blue)] hover:brightness-95 sm:w-auto sm:py-2 sm:text-sm"
           >
             + Nuevo envío
           </button>
@@ -752,7 +752,7 @@ export default function AdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código, destinatario, dirección o comercio"
-            className="w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)] sm:max-w-sm"
+            className="w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)] sm:max-w-sm"
           />
           <select
             value={statusFilter}
@@ -767,10 +767,10 @@ export default function AdminPage() {
             ))}
           </select>
 
-          <div className="ml-auto rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-black px-3 py-1.5 text-sm font-bold">
+          <div className="ml-auto rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-[var(--edr-blue)] px-3 py-1.5 text-sm font-bold">
             A cobrar: <span className="edr-mono">{money(totales.puerta)}</span>
             {totales.retiro > 0 && (
-              <span className="ml-2 rounded bg-orange-500 px-2 py-0.5 text-white">
+              <span className="ml-2 rounded bg-[var(--edr-naranja)] px-2 py-0.5 text-white">
                 al retirar <span className="edr-mono">{money(totales.retiro)}</span>
               </span>
             )}
@@ -822,7 +822,7 @@ export default function AdminPage() {
                     }}
                     className={`rounded px-3 py-2 text-xs font-black ${
                       activo
-                        ? 'bg-[var(--edr-yellow)] text-black'
+                        ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                         : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
                     }`}
                   >
@@ -865,7 +865,7 @@ export default function AdminPage() {
             ) : (
               <>
                 <Contador label="envíos" valor={resumen.total} />
-                <Contador label="entregados" valor={resumen.entregados} clase="text-emerald-400" />
+                <Contador label="entregados" valor={resumen.entregados} clase="text-[var(--edr-verde)]" />
                 <Contador label="en la calle" valor={resumen.enCalle} clase="text-sky-300" />
                 <Contador label="sin salir" valor={resumen.sinSalir} />
                 {/* Se cuenta sobre lo traído y no sobre lo visible, igual que
@@ -876,13 +876,13 @@ export default function AdminPage() {
                   title="Ver únicamente los envíos que quedaron sin entregar"
                   className={`rounded px-2 py-0.5 text-xs ${
                     soloFallidos
-                      ? 'bg-orange-500 font-black text-black'
+                      ? 'bg-orange-500 font-black text-[var(--edr-blue)]'
                       : 'text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
                   }`}
                 >
                   <span
                     className={`edr-mono text-base font-black ${
-                      soloFallidos ? 'text-black' : 'text-orange-400'
+                      soloFallidos ? 'text-[var(--edr-blue)]' : 'text-[var(--edr-naranja)]'
                     }`}
                   >
                     {resumen.fallidos}
@@ -911,8 +911,8 @@ export default function AdminPage() {
                     title="Ver únicamente los envíos FLEX"
                     className={`rounded px-2 py-0.5 text-xs font-black uppercase ${
                       soloFlex
-                        ? 'bg-[var(--edr-yellow)] text-black'
-                        : 'border border-[var(--edr-yellow)] text-[var(--edr-yellow)]'
+                        ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
+                        : 'border border-[var(--edr-yellow)] text-[var(--edr-acento)]'
                     }`}
                   >
                     {resumen.flex} flex {soloFlex ? '· ver todos' : ''}
@@ -963,7 +963,7 @@ export default function AdminPage() {
               onClick={copiarSeguimientos}
               disabled={copiando}
               title="Copiar dirección, seguimiento y etiqueta de todos los tildados"
-              className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-yellow)] hover:bg-[var(--edr-surface)] disabled:opacity-50"
+              className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface)] disabled:opacity-50"
             >
               {copiando ? 'Armando…' : copiados ? '✓ Copiados' : '🔗 Copiar seguimiento y etiqueta'}
             </button>
@@ -1127,7 +1127,7 @@ export default function AdminPage() {
                       {/* La fecha sólo cuando el listado mezcla días: si se está
                           viendo un día suelto, repetirla en cada fila es ruido. */}
                       {(buscando || desde !== hasta) && (
-                        <span className="edr-mono ml-1 text-[var(--edr-yellow)]">
+                        <span className="edr-mono ml-1 text-[var(--edr-acento)]">
                           {s.scheduled_date.split('-').reverse().slice(0, 2).join('/')}
                         </span>
                       )}
@@ -1284,12 +1284,12 @@ function CashCell({ shipment }: { shipment: Shipment }) {
   return (
     <div className="flex flex-col items-end gap-1">
       {cash.atDelivery > 0 && (
-        <span className="edr-mono inline-block bg-[var(--edr-hiviz)] px-2 py-1 font-bold text-black">
+        <span className="edr-mono inline-block bg-[var(--edr-hiviz)] px-2 py-1 font-bold text-[var(--edr-blue)]">
           {money(cash.atDelivery)}
         </span>
       )}
       {cash.atPickup > 0 && (
-        <span className="edr-mono inline-block bg-orange-500 px-2 py-1 font-bold text-white">
+        <span className="edr-mono inline-block bg-[var(--edr-naranja)] px-2 py-1 font-bold text-white">
           {money(cash.atPickup)}
           <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide">al retirar</span>
         </span>

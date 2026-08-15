@@ -139,7 +139,7 @@ const emptyForm = () => ({
 type FormState = ReturnType<typeof emptyForm>;
 
 const field =
-  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
+  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-acento)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
 const labelCls = 'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
 /** Campo con etiqueta arriba, para que siempre se sepa qué es cada casilla. */
@@ -425,7 +425,7 @@ function ShipmentForm({
                 onClick={() => setMode(m)}
                 className={`rounded-t px-4 py-2 text-sm font-semibold ${
                   mode === m
-                    ? 'border-b-2 border-[var(--edr-yellow)] text-[var(--edr-yellow)]'
+                    ? 'border-b-2 border-[var(--edr-yellow)] text-[var(--edr-acento)]'
                     : 'text-[var(--edr-muted)] hover:text-[var(--edr-muted)]'
                 }`}
               >
@@ -502,7 +502,7 @@ function ShipmentForm({
                         onClick={() => set('scheduled_date', valor)}
                         className={`rounded px-2 py-1 text-xs font-bold ${
                           activo
-                            ? 'bg-[var(--edr-yellow)] text-black'
+                            ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                             : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
                         }`}
                       >
@@ -511,7 +511,7 @@ function ShipmentForm({
                     );
                   })}
                   {form.scheduled_date > fechaEn(0) && (
-                    <span className="self-center px-1 text-xs font-semibold text-[var(--edr-yellow)]">
+                    <span className="self-center px-1 text-xs font-semibold text-[var(--edr-acento)]">
                       El repartidor lo va a ver, pero no lo puede hacer hasta ese día.
                     </span>
                   )}
@@ -525,7 +525,7 @@ function ShipmentForm({
                 Plata
               </div>
 
-              <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-[var(--edr-yellow)] text-black px-4 py-3 text-black sm:col-span-2">
+              <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-[var(--edr-yellow)] text-[var(--edr-blue)] px-4 py-3 text-[var(--edr-blue)] sm:col-span-2">
                 <input
                   type="checkbox"
                   checked={form.is_flex}
@@ -628,7 +628,7 @@ function ShipmentForm({
                         onClick={() => cambiarFechaLote(valor)}
                         className={`rounded px-3 py-1.5 text-xs font-bold ${
                           activo
-                            ? 'bg-[var(--edr-yellow)] text-black'
+                            ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                             : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface)]'
                         }`}
                       >
@@ -657,7 +657,7 @@ function ShipmentForm({
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => setRows(parseWhatsappText(raw, 'Mar del Plata', fechaLote))}
-                  className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-black hover:brightness-95"
+                  className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95"
                 >
                   Interpretar texto
                 </button>
@@ -667,7 +667,7 @@ function ShipmentForm({
                       {rows.length} envíos ·{' '}
                       {rows.filter((r) => r.warnings.length).length} con avisos
                     </span>
-                    <span className="ml-auto rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-black px-3 py-1 text-sm font-bold">
+                    <span className="ml-auto rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-[var(--edr-blue)] px-3 py-1 text-sm font-bold">
                       Efectivo: <span className="edr-mono">{money(totalParsed)}</span>
                     </span>
                   </>
@@ -711,12 +711,12 @@ function ShipmentForm({
                               title="Día en que se reparte"
                               className={`rounded border px-2 py-1 text-xs ${
                                 r.scheduledDate !== fechaLote
-                                  ? 'border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] text-[var(--edr-yellow)]'
+                                  ? 'border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] text-[var(--edr-acento)]'
                                   : 'border-[var(--edr-border)] bg-[var(--edr-surface)] text-[var(--edr-muted)]'
                               }`}
                             />
                             {cash.atDelivery > 0 && (
-                              <span className="edr-mono bg-[var(--edr-hiviz)] text-black px-2 py-1 text-sm font-bold">
+                              <span className="edr-mono bg-[var(--edr-hiviz)] text-[var(--edr-blue)] px-2 py-1 text-sm font-bold">
                                 {money(cash.atDelivery)}
                               </span>
                             )}
@@ -742,7 +742,7 @@ function ShipmentForm({
                         <label
                           className={`mb-3 flex cursor-pointer items-center gap-3 rounded border-2 px-3 py-2 ${
                             r.isReminder
-                              ? 'border-black bg-[var(--edr-yellow)] text-black'
+                              ? 'border-black bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                               : 'border-[var(--edr-border)] text-[var(--edr-muted)]'
                           }`}
                         >
@@ -895,7 +895,7 @@ function ShipmentForm({
           <button
             onClick={mode === 'manual' ? saveManual : saveParsed}
             disabled={saving}
-            className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-black hover:brightness-95 disabled:opacity-50"
+            className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
           >
             {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar envío'}
           </button>

@@ -85,13 +85,13 @@ export default function ShipmentMobileCard({
           {/* Con la palabra escrita: el amarillo pelado en el panel ya significa
               plata a cobrar, y las dos cosas se dan juntas en la misma fila. */}
           {shipment.is_flex && (
-            <span className="ml-1.5 rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-black">
+            <span className="ml-1.5 rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--edr-blue)]">
               Flex
             </span>
           )}
         </span>
         {programado && (
-          <span className="rounded bg-[var(--edr-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-yellow)]">
+          <span className="rounded bg-[var(--edr-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-acento)]">
             Para {cuandoSeHace(shipment.scheduled_date)}
           </span>
         )}
@@ -115,13 +115,13 @@ export default function ShipmentMobileCard({
         {shipment.recipient_name} · {shipment.city}
         {shipment.delivery_window ? ` · ${shipment.delivery_window}` : ''}
         {mostrarFecha && (
-          <span className="edr-mono ml-1 text-[var(--edr-yellow)]">
+          <span className="edr-mono ml-1 text-[var(--edr-acento)]">
             {shipment.scheduled_date.split('-').reverse().slice(0, 2).join('/')}
           </span>
         )}
       </div>
       {shipment.client_name_raw && (
-        <div className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--edr-yellow)]">
+        <div className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--edr-acento)]">
           {shipment.client_name_raw}
         </div>
       )}
@@ -131,12 +131,12 @@ export default function ShipmentMobileCard({
       {cash.total > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {cash.atDelivery > 0 && (
-            <span className="edr-mono bg-[var(--edr-hiviz)] px-2 py-1 text-sm font-bold text-black">
+            <span className="edr-mono bg-[var(--edr-hiviz)] px-2 py-1 text-sm font-bold text-[var(--edr-blue)]">
               {money(cash.atDelivery)}
             </span>
           )}
           {cash.atPickup > 0 && (
-            <span className="edr-mono bg-orange-500 px-2 py-1 text-sm font-bold text-white">
+            <span className="edr-mono bg-[var(--edr-naranja)] px-2 py-1 text-sm font-bold text-white">
               {money(cash.atPickup)}
               <span className="ml-1 text-[10px] uppercase">al retirar</span>
             </span>

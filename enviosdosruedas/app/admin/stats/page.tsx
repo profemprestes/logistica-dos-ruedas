@@ -7,7 +7,7 @@ import { money, shipmentCash, type Shipment } from '@/lib/format';
 import { dayShift, today } from '@/lib/settlement';
 
 const campo =
-  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]';
+  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]';
 const labelCls =
   'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
@@ -139,7 +139,7 @@ export default function StatsPage() {
   const efectividad = cerrados > 0 ? Math.round((general.entregados / cerrados) * 100) : 0;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         <div className="mb-6 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-4">
@@ -181,7 +181,7 @@ export default function StatsPage() {
                     onClick={() => aplicarAtajo(a)}
                     className={`rounded px-3 py-2 text-sm font-black ${
                       activo
-                        ? 'bg-[var(--edr-yellow)] text-black'
+                        ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                         : 'border border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
                     }`}
                   >
@@ -282,10 +282,10 @@ export default function StatsPage() {
                       <tr key={f.nombre} className="border-b border-[var(--edr-border)] last:border-0">
                         <td className="px-3 py-2 font-semibold">{f.nombre}</td>
                         <td className="edr-mono px-3 py-2 text-right">{f.total}</td>
-                        <td className="edr-mono px-3 py-2 text-right text-emerald-400">
+                        <td className="edr-mono px-3 py-2 text-right text-[var(--edr-verde)]">
                           {f.entregados}
                         </td>
-                        <td className="edr-mono px-3 py-2 text-right text-orange-400">{f.fallidos}</td>
+                        <td className="edr-mono px-3 py-2 text-right text-[var(--edr-naranja)]">{f.fallidos}</td>
                         <td className="edr-mono px-3 py-2 text-right">{f.pendientes}</td>
                         <td className="edr-mono px-3 py-2 text-right font-black">{efec}%</td>
                         <td className="edr-mono px-3 py-2 text-right font-black">
@@ -324,10 +324,10 @@ function Tarjeta({
   destacada?: boolean;
 }) {
   const cls = destacada
-    ? 'border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-black'
+    ? 'border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-[var(--edr-blue)]'
     : 'border border-[var(--edr-border)] bg-[var(--edr-surface)]';
   const valorCls =
-    tono === 'ok' ? 'text-emerald-400' : tono === 'warn' ? 'text-orange-400' : '';
+    tono === 'ok' ? 'text-[var(--edr-verde)]' : tono === 'warn' ? 'text-[var(--edr-naranja)]' : '';
 
   return (
     <div className={`rounded-lg p-4 ${cls}`}>

@@ -26,7 +26,7 @@ const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
 });
 
 const campo =
-  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]';
+  'rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]';
 const labelCls =
   'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
@@ -330,7 +330,7 @@ export default function MapaAdminPage() {
   const hoy = today();
 
   return (
-    <div className="min-h-screen bg-[var(--edr-paper)]">
+    <div className="min-h-full bg-[var(--edr-paper)]">
 
       <main className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-6">
         <h2 className="mb-3 text-xl font-black sm:text-2xl">Mapa de envíos</h2>
@@ -435,7 +435,7 @@ export default function MapaAdminPage() {
                     className={
                       r.haceMinutos > MINUTOS_RECIENTE
                         ? 'text-[var(--edr-muted)]'
-                        : 'font-bold text-emerald-400'
+                        : 'font-bold text-[var(--edr-verde)]'
                     }
                   >
                     {r.hora}

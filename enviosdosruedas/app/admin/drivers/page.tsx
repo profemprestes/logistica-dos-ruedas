@@ -15,7 +15,7 @@ interface Driver {
 }
 
 const field =
-  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
+  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-acento)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
 const labelCls = 'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
 const EMPTY = { full_name: '', username: '', password: '', phone: '', vehicle: '' };
@@ -144,7 +144,7 @@ export default function DriversPage() {
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         {/* Alta */}
@@ -201,7 +201,7 @@ export default function DriversPage() {
           <button
             onClick={createDriver}
             disabled={creating}
-            className="mt-4 rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-black hover:brightness-95 disabled:opacity-50"
+            className="mt-4 rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
           >
             {creating ? 'Creando…' : 'Crear repartidor'}
           </button>
@@ -371,7 +371,7 @@ export default function DriversPage() {
               </button>
               <button
                 onClick={saveEdit}
-                className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-black hover:brightness-95"
+                className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95"
               >
                 Guardar cambios
               </button>

@@ -229,7 +229,7 @@ export default function BillingPage() {
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         <div className="mb-6 flex flex-wrap items-end gap-3">
@@ -297,7 +297,7 @@ export default function BillingPage() {
           </div>
           {/* Fondo amarillo: el texto va negro sí o sí. Con el color heredado
               del cuerpo (que es amarillo) quedaba invisible. */}
-          <div className="rounded-lg border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] p-4 text-black">
+          <div className="rounded-lg border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] p-4 text-[var(--edr-blue)]">
             <div className="text-[11px] font-semibold uppercase tracking-wide">
               Efectivo a rendir
             </div>
@@ -311,7 +311,7 @@ export default function BillingPage() {
             </div>
             <div className="edr-mono text-3xl font-black">{money(shippingTotal)}</div>
             {shippingMissing > 0 && (
-              <div className="mt-1 text-[11px] font-bold text-[var(--edr-yellow)]">
+              <div className="mt-1 text-[11px] font-bold text-[var(--edr-acento)]">
                 {shippingMissing} envío(s) sin valor cargado: cuentan $0 hasta que los completes.
               </div>
             )}
@@ -482,7 +482,7 @@ export default function BillingPage() {
                 <button
                   onClick={settle}
                   disabled={!logs.length}
-                  className="rounded bg-[var(--edr-yellow)] px-5 py-2.5 text-sm font-black text-black hover:brightness-95 disabled:opacity-40"
+                  className="rounded bg-[var(--edr-yellow)] px-5 py-2.5 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-40"
                 >
                   Marcar día como liquidado
                 </button>
@@ -588,7 +588,7 @@ function Renglon({
     <div className="flex items-center justify-between gap-4 border-b border-[var(--edr-border)] pb-2">
       <div>
         <div className="text-sm font-semibold">{label}</div>
-        {hint && <div className="text-[11px] text-[var(--edr-yellow)]">{hint}</div>}
+        {hint && <div className="text-[11px] text-[var(--edr-acento)]">{hint}</div>}
       </div>
       {input ?? <div className="edr-mono text-lg font-black">{value}</div>}
     </div>

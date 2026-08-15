@@ -14,11 +14,11 @@ import { useAdminGuard } from '@/lib/adminGuard';
  */
 
 const field =
-  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
+  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-acento)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
 const labelCls = 'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 const card = 'rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-5';
 const btnPrimary =
-  'rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-black hover:brightness-95 disabled:opacity-50';
+  'rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50';
 
 interface Cuenta {
   id: string;
@@ -181,7 +181,7 @@ export default function AdminProfilePage() {
   const usuario = cuenta?.email.split('@')[0] ?? '';
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
 
       <main className="mx-auto max-w-2xl px-6 py-6">
         <h1 className="mb-1 text-xl font-black">Mi cuenta</h1>

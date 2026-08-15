@@ -68,7 +68,7 @@ export default function ReprogramarEnvio({
       onClick={() => setFecha(valor)}
       className={`flex-1 rounded px-3 py-2 text-sm font-bold ${
         fecha === valor
-          ? 'bg-[var(--edr-yellow)] text-black'
+          ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
           : 'border border-[var(--edr-border)] hover:bg-[var(--edr-surface-2)]'
       }`}
     >
@@ -114,11 +114,11 @@ export default function ReprogramarEnvio({
           value={fecha}
           min={hoyLocal()}
           onChange={(e) => setFecha(e.target.value)}
-          className="mb-3 w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-yellow)]"
+          className="mb-3 w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]"
         />
 
         <div className="mb-3 rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-3 py-2 text-xs text-[var(--edr-muted)]">
-          <p className="mb-1 font-bold text-[var(--edr-fg)]">Qué va a pasar</p>
+          <p className="mb-1 font-bold text-[var(--edr-ink)]">Qué va a pasar</p>
           <p>
             El intento fallido se queda en su día y se archiva como{' '}
             <span className="edr-mono">{shipment.tracking_code}-1</span>, con el motivo y la
@@ -150,7 +150,7 @@ export default function ReprogramarEnvio({
           <button
             onClick={guardar}
             disabled={guardando || !fecha}
-            className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-black hover:brightness-95 disabled:opacity-50"
+            className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
           >
             {guardando ? 'Reprogramando…' : 'Reprogramar'}
           </button>

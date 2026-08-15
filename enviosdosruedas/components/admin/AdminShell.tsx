@@ -259,9 +259,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </button>
         </header>
 
-        {/* Las secciones que todavía no se pasaron a paneles claros traen su
-            propio fondo azul; el claro es el de abajo. */}
-        <main className="min-w-0 flex-1 pb-20 lg:pb-0">{children}</main>
+        {/* `edr-oficina` es lo que hace que todo lo de adentro sea claro: ahí
+            cambian de significado los colores. Ver app/globals.css. */}
+        <main className="edr-oficina min-w-0 flex-1 pb-20 lg:pb-0">{children}</main>
       </div>
 
       {cajon && <Cajon cerrar={() => setCajon(false)}>{navegacion}</Cajon>}

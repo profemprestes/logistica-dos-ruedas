@@ -141,7 +141,7 @@ export default function AdminStockPage() {
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         {/* Cliente activo ------------------------------------------- */}
@@ -187,8 +187,8 @@ export default function AdminStockPage() {
               onClick={() => setTab(t.id)}
               className={`-mb-px rounded-t px-4 py-2 text-sm font-semibold ${
                 tab === t.id
-                  ? 'border-b-2 border-[var(--edr-yellow)] text-[var(--edr-yellow)]'
-                  : 'text-[var(--edr-muted)] hover:text-[var(--edr-yellow)]'
+                  ? 'border-b-2 border-[var(--edr-yellow)] text-[var(--edr-acento)]'
+                  : 'text-[var(--edr-muted)] hover:text-[var(--edr-acento)]'
               }`}
             >
               {t.label}

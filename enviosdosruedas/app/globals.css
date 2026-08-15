@@ -55,6 +55,16 @@
   --edr-text-5: #9aabc7;
   --edr-text-link: #4b6bb5;
 
+  /**
+   * El color de lo que resalta.
+   *
+   * Sobre azul es el amarillo; sobre los paneles claros de la oficina tiene
+   * que ser el azul, porque el amarillo sobre blanco no se lee. Existe para
+   * que las pantallas digan "resaltado" en vez de decir "amarillo": así la
+   * misma pantalla sirve en las dos superficies sin escribirla dos veces.
+   */
+  --edr-acento: var(--edr-yellow);
+
   /* Semánticos de alerta, iguales en las tres superficies. */
   --edr-rojo: #dc2626;
   --edr-naranja: #ea580c;
@@ -99,10 +109,39 @@
   --color-edr-text-4: var(--edr-text-4);
   --color-edr-text-5: var(--edr-text-5);
   --color-edr-text-link: var(--edr-text-link);
+  --color-edr-acento: var(--edr-acento);
   --color-edr-rojo: var(--edr-rojo);
   --color-edr-naranja: var(--edr-naranja);
   --color-edr-verde: var(--edr-verde);
   --color-edr-whatsapp: var(--edr-whatsapp);
+}
+
+/* ==========================================================================
+   PANEL DE LA OFICINA (pantalla grande, horas seguidas, al lado de planillas)
+
+   La calle sigue siendo azul y la oficina pasa a blanco. No es gusto: el azul
+   pleno a pantalla completa cansa cuando se lo mira ocho horas, y el panel se
+   usa al lado de planillas y del WhatsApp Web, que son blancos.
+
+   El cambio se hace acá y no pantalla por pantalla. Las ocho secciones ya
+   estaban escritas con los mismos nombres de color —"superficie", "borde",
+   "apagado"— así que alcanza con cambiar lo que esos nombres significan
+   adentro del panel. Escrito a mano habrían sido mil líneas tocadas, mil
+   chances de que una quedara azul.
+   ========================================================================== */
+.edr-oficina {
+  --edr-paper: var(--edr-blue-soft);
+  --edr-surface: var(--edr-panel);
+  --edr-surface-2: var(--edr-panel-2);
+  --edr-border: var(--edr-hairline);
+  --edr-muted: var(--edr-text-3);
+  --edr-ink: var(--edr-text);
+  /* Lo que resaltaba en amarillo pasa a resaltar en azul. El amarillo se
+     queda SÓLO donde significa plata o acción principal, que es su regla. */
+  --edr-acento: var(--edr-blue);
+
+  background: var(--edr-blue-soft);
+  color: var(--edr-text);
 }
 
 /* ==========================================================================

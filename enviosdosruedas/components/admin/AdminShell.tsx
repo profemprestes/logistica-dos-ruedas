@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { supabase } from '@/lib/supabaseClient';
+import { diaDeHoyAR } from '@/lib/format';
 import { useCerrarConAtras } from '@/lib/driver/useAtras';
 import { useDatosDelDia } from '@/components/admin/DatosDelDia';
 
@@ -58,8 +59,6 @@ const ITEMS: Item[] = [
   { href: '/admin/stats', label: 'Estadísticas', Icono: BarChart3 },
   { href: '/admin/stock', label: 'Stock', Icono: Warehouse },
 ];
-
-const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 /** Iniciales para el redondel del pie. "Oficina Central" → "OC". */
 function iniciales(nombre: string): string {
@@ -150,17 +149,11 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }
 
   /*
-   * "viernes 14/08", armado a mano.
-   *
-   * El marco se dibuja también en el servidor, así que el texto tiene que
-   * salir igual de los dos lados. `toLocaleDateString` acá devolvía
-   * "viernes 14-08" con guión, y el separador depende del navegador.
+   * "viernes 14/08". El marco se dibuja también en el servidor —que corre en
+   * UTC— así que la fecha se calcula en hora de Argentina y con un formato que
+   * no cambia según el navegador. Ver `lib/format`.
    */
-  const hoy = (() => {
-    const d = new Date();
-    const dia = DIAS[d.getDay()];
-    return `${dia} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  const hoy = diaDeHoyAR();
 
   const navegacion = (
     <>

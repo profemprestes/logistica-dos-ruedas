@@ -58,6 +58,55 @@ export interface Shipment {
   driver?: { full_name: string } | null;
 }
 
+/**
+ * La hora de Mar del Plata, dé donde dé.
+ *
+ * DOS PROBLEMAS DISTINTOS, y hay que resolver los dos.
+ *
+ * El primero es el formato: `toLocaleString('es-AR')` no devuelve lo mismo en
+ * todos lados —Safari del iPhone mete otro espacio antes del "p. m."— y estas
+ * pantallas se dibujan en el servidor y se vuelven a dibujar en el celular de
+ * quien abre el link. Si los dos textos no salen idénticos, React tira todo.
+ *
+ * El segundo es la zona horaria, y es el que de verdad muestra datos falsos:
+ * el servidor corre en UTC, así que una entrega de las 21:34 salía impresa
+ * como "15/08 00:34" en el HTML que ve el destinatario, tres horas adelante y
+ * un día equivocado. Se arreglaba solo cuando el navegador re-dibujaba, pero
+ * el primer vistazo —y lo que lee un buscador o la vista previa de WhatsApp—
+ * era la hora de Londres.
+ *
+ * Por eso el desfasaje va escrito acá y las partes se leen con `getUTC*`: la
+ * cuenta da igual en Vercel, en esta computadora y en cualquier teléfono.
+ *
+ * Argentina está en UTC-3 todo el año: no se cambia la hora desde 2009. El día
+ * que vuelva el horario de verano, se cambia este número.
+ */
+const HORAS_ARGENTINA = -3;
+
+function enArgentina(iso: string | Date): Date {
+  const t = (iso instanceof Date ? iso : new Date(iso)).getTime();
+  return new Date(t + HORAS_ARGENTINA * 3_600_000);
+}
+
+const dosCifras = (n: number) => String(n).padStart(2, '0');
+
+/** "14/08/2026 21:34" */
+export function fechaHoraAR(iso: string | Date): string {
+  const d = enArgentina(iso);
+  return (
+    `${dosCifras(d.getUTCDate())}/${dosCifras(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ` +
+    `${dosCifras(d.getUTCHours())}:${dosCifras(d.getUTCMinutes())}`
+  );
+}
+
+const DIAS_AR = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** "viernes 14/08" */
+export function diaDeHoyAR(ahora: Date = new Date()): string {
+  const d = enArgentina(ahora);
+  return `${DIAS_AR[d.getUTCDay()]} ${dosCifras(d.getUTCDate())}/${dosCifras(d.getUTCMonth() + 1)}`;
+}
+
 /** Muestra los montos como $ 25.000 */
 export function money(value: number | null | undefined): string {
   const n = Number(value ?? 0);

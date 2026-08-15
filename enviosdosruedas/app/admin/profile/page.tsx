@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import AdminNav from '@/components/AdminNav';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 
@@ -183,7 +182,6 @@ export default function AdminProfilePage() {
 
   return (
     <div className="min-h-screen">
-      <AdminNav />
 
       <main className="mx-auto max-w-2xl px-6 py-6">
         <h1 className="mb-1 text-xl font-black">Mi cuenta</h1>

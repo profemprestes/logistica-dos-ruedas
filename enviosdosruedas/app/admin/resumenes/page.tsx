@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import AdminNav from '@/components/AdminNav';
 import { dayShift, today, weekRange } from '@/lib/settlement';
 import {
   calcular,
@@ -289,7 +288,6 @@ export default function ResumenesPage() {
 
   return (
     <div className="min-h-screen bg-[var(--edr-paper)]">
-      <AdminNav />
 
       <main className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-6">
         <h2 className="mb-1 text-xl font-black sm:text-2xl">Resumen del repartidor</h2>

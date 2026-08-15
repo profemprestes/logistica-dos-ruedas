@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import { money } from '@/lib/format';
 import {
@@ -231,7 +230,6 @@ export default function BillingPage() {
 
   return (
     <div className="min-h-screen">
-      <AdminNav />
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         <div className="mb-6 flex flex-wrap items-end gap-3">

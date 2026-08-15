@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import AdminNav from '@/components/AdminNav';
 import { dayShift, today } from '@/lib/settlement';
 import {
   marcaDeEstado,
@@ -332,7 +331,6 @@ export default function MapaAdminPage() {
 
   return (
     <div className="min-h-screen bg-[var(--edr-paper)]">
-      <AdminNav />
 
       <main className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-6">
         <h2 className="mb-3 text-xl font-black sm:text-2xl">Mapa de envíos</h2>

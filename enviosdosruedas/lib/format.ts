@@ -45,6 +45,16 @@ export interface Shipment {
    */
   lat?: number | null;
   lng?: number | null;
+  /**
+   * Los dos lados de una reprogramación (paso 31).
+   *
+   * `reintento_de` apunta al intento fallido del que nació este envío;
+   * `reprogramado_en`, al envío nuevo que lo reemplaza. Que el segundo esté en
+   * null es lo que distingue "no se entregó y se está viendo" de "no se
+   * entregó y nadie hizo nada": de ahí sale uno de los avisos del panel.
+   */
+  reintento_de?: number | null;
+  reprogramado_en?: number | null;
   driver?: { full_name: string } | null;
 }
 

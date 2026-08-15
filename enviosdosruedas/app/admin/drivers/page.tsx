@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import AdminNav from '@/components/AdminNav';
 
 interface Driver {
   id: string;
@@ -146,7 +145,6 @@ export default function DriversPage() {
 
   return (
     <div className="min-h-screen">
-      <AdminNav />
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         {/* Alta */}

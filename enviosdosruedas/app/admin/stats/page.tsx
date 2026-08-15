@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import AdminNav from '@/components/AdminNav';
 import { money, shipmentCash, type Shipment } from '@/lib/format';
 import { dayShift, today } from '@/lib/settlement';
 
@@ -141,7 +140,6 @@ export default function StatsPage() {
 
   return (
     <div className="min-h-screen">
-      <AdminNav />
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         <div className="mb-6 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-4">

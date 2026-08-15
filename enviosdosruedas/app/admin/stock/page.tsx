@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import AdminNav from '@/components/AdminNav';
 import ClientesTab from '@/components/stock/ClientesTab';
 import DescargaTab from '@/components/stock/DescargaTab';
 import MovimientosTab from '@/components/stock/MovimientosTab';
@@ -143,7 +142,6 @@ export default function AdminStockPage() {
 
   return (
     <div className="min-h-screen">
-      <AdminNav />
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         {/* Cliente activo ------------------------------------------- */}

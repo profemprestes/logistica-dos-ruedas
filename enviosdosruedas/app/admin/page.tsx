@@ -6,7 +6,6 @@ import { useAdminGuard } from '@/lib/adminGuard';
 import AddShipmentModal from '@/components/AddShipmentModal';
 import ShippingLabel from '@/components/ShippingLabel';
 import PrintPortal from '@/components/PrintPortal';
-import AdminNav from '@/components/AdminNav';
 import { notificarRepartidor } from '@/lib/notify';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
@@ -30,6 +29,25 @@ import {
 interface Driver {
   id: string;
   full_name: string;
+}
+
+/**
+ * Lo que la tabla acepta que le pidan por la dirección.
+ *
+ * Es lo que hace que los avisos del Panel del día sirvan: el botón
+ * "REPROGRAMAR" de un aviso tiene que dejar el envío a la vista, no en la
+ * sección de envíos a que lo busque a mano. `?buscar=`, `?repartidor=` y
+ * `?nuevo=1`.
+ *
+ * Se lee del navegador y no con `useSearchParams` a propósito: ese hook obliga
+ * a envolver la pantalla en un `<Suspense>` para poder generarla de antemano, y
+ * acá sólo se usa para el estado inicial. Como la pantalla arranca mostrando
+ * "Cargando…" hasta que el guardia dice que sos admin, lo que se lea acá no
+ * cambia el primer dibujo y no hay nada que se pueda desincronizar.
+ */
+function alAbrir(nombre: string): string {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get(nombre) ?? '';
 }
 
 const campo =
@@ -132,19 +150,21 @@ export default function AdminPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => alAbrir('buscar'));
   /** Lo que realmente se le pide al servidor: se aplica al soltar el teclado. */
-  const [searchAplicada, setSearchAplicada] = useState('');
+  const [searchAplicada, setSearchAplicada] = useState(() => alAbrir('buscar'));
   const [desde, setDesde] = useState(() => hoyLocal());
   const [hasta, setHasta] = useState(() => hoyLocal());
-  const [driverFilter, setDriverFilter] = useState('');
+  const [driverFilter, setDriverFilter] = useState(() =>
+    alAbrir('repartidor') === 'sin_asignar' ? 'sin_asignar' : '',
+  );
   const [statusFilter, setStatusFilter] = useState<'todos' | ShipmentStatus>('todos');
   /** Los FLEX se cierran en la app de Mercado Libre: a veces hay que verlos solos. */
   const [soloFlex, setSoloFlex] = useState(false);
   /** Ver sólo los que quedaron con un intento fallido, para reprogramarlos. */
   const [soloFallidos, setSoloFallidos] = useState(false);
   const [ubicando, setUbicando] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(() => alAbrir('nuevo') === '1');
   const [editing, setEditing] = useState<Shipment | null>(null);
   /**
    * Las etiquetas que se están por imprimir.
@@ -199,6 +219,45 @@ export default function AdminPage() {
       applyShipments,
     );
   }, [applyShipments, desde, hasta, driverFilter, searchAplicada]);
+
+  /**
+   * El botón "+ Nuevo envío" de la barra de arriba.
+   *
+   * Vive en el marco, que no se vuelve a dibujar al cambiar de sección: por eso
+   * no puede abrir el cuadro llamando a `setModalOpen`. Desde otra sección va
+   * por la dirección (`?nuevo=1`); estando ya acá, avisa por este aviso, porque
+   * navegar a la misma pantalla no la vuelve a montar y el cuadro no se abriría.
+   */
+  useEffect(() => {
+    const abrir = () => {
+      setEditing(null);
+      setModalOpen(true);
+    };
+    const buscar = (e: Event) => {
+      const q = (e as CustomEvent<string>).detail ?? '';
+      setSearch(q);
+      setSearchAplicada(q);
+    };
+
+    window.addEventListener('edr-nuevo-envio', abrir);
+    window.addEventListener('edr-buscar', buscar);
+    return () => {
+      window.removeEventListener('edr-nuevo-envio', abrir);
+      window.removeEventListener('edr-buscar', buscar);
+    };
+  }, []);
+
+  /**
+   * Se limpia la dirección después de leerla.
+   *
+   * Si `?nuevo=1` se queda pegado, recargar la página vuelve a abrir el cuadro
+   * de carga, y el que quería ver la tabla se lo encuentra encima otra vez.
+   * Se conserva el estado del router de Next: pisarlo le rompe el "atrás".
+   */
+  useEffect(() => {
+    if (!window.location.search) return;
+    window.history.replaceState(window.history.state, '', '/admin');
+  }, []);
 
   // Se espera a que deje de tipear: si no, cada tecla dispara una consulta.
   useEffect(() => {
@@ -684,7 +743,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen">
-      <AdminNav />
 
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
         <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">

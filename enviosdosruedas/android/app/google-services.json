@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "324924355646",
+    "project_id": "enviosdosruedas2026",
+    "storage_bucket": "enviosdosruedas2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:324924355646:android:7699f06be33c91bf054d6f",
+        "android_client_info": {
+          "package_name": "com.enviosdosruedas.repartidor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAK1ewPWF-KIq8iu5rA_s12MZOlZEvFdQc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

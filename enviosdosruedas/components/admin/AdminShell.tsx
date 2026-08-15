@@ -190,7 +190,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-dvh bg-[var(--edr-blue-soft)]">
+    <div className="flex min-h-dvh bg-[var(--edr-dark)]">
       {/* ---------- Columna de secciones (de 1024px para arriba) ---------- */}
       <aside className="sticky top-0 hidden h-dvh w-[236px] shrink-0 flex-col gap-[22px] bg-[var(--edr-dark)] px-3.5 py-5 lg:flex">
         <Link href="/admin/panel" className="flex items-center gap-2.5 px-1.5">

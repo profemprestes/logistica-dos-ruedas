@@ -282,10 +282,10 @@ export default function StatsPage() {
                       <tr key={f.nombre} className="border-b border-[var(--edr-border)] last:border-0">
                         <td className="px-3 py-2 font-semibold">{f.nombre}</td>
                         <td className="edr-mono px-3 py-2 text-right">{f.total}</td>
-                        <td className="edr-mono px-3 py-2 text-right text-[var(--edr-verde)]">
+                        <td className="edr-mono px-3 py-2 text-right text-[var(--edr-verde-claro)]">
                           {f.entregados}
                         </td>
-                        <td className="edr-mono px-3 py-2 text-right text-[var(--edr-naranja)]">{f.fallidos}</td>
+                        <td className="edr-mono px-3 py-2 text-right text-[var(--edr-naranja-claro)]">{f.fallidos}</td>
                         <td className="edr-mono px-3 py-2 text-right">{f.pendientes}</td>
                         <td className="edr-mono px-3 py-2 text-right font-black">{efec}%</td>
                         <td className="edr-mono px-3 py-2 text-right font-black">
@@ -327,7 +327,7 @@ function Tarjeta({
     ? 'border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] text-[var(--edr-blue)]'
     : 'border border-[var(--edr-border)] bg-[var(--edr-surface)]';
   const valorCls =
-    tono === 'ok' ? 'text-[var(--edr-verde)]' : tono === 'warn' ? 'text-[var(--edr-naranja)]' : '';
+    tono === 'ok' ? 'text-[var(--edr-verde-claro)]' : tono === 'warn' ? 'text-[var(--edr-naranja-claro)]' : '';
 
   return (
     <div className={`rounded-lg p-4 ${cls}`}>

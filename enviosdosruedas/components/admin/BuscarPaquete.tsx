@@ -240,7 +240,7 @@ export default function BuscarPaquete({ verPrueba }: { verPrueba: (s: Shipment) 
   }
 
   return (
-    <section className="flex flex-col gap-3.5 rounded-3xl bg-[var(--edr-dark)] p-5">
+    <section className="flex flex-col gap-3.5 rounded-3xl border border-[var(--edr-hairline)] bg-[var(--edr-panel)] p-5">
       <div className="flex items-center gap-2.5">
         <PackageSearch size={19} strokeWidth={2.2} className="text-[var(--edr-yellow)]" />
         <h2 className="flex-1 font-anton text-lg uppercase tracking-[-.01em] text-white">

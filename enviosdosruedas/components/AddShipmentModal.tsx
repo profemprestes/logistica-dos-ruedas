@@ -864,8 +864,11 @@ function ShipmentForm({
                               />
                             </div>
 
+                            {/* Naranja claro: el oscuro sobre la tarjeta azul no
+                                se leía, y estos son justamente los avisos de lo
+                                que quedó mal interpretado. */}
                             {r.warnings.length > 0 && (
-                              <ul className="mt-3 list-inside list-disc text-xs text-orange-900">
+                              <ul className="mt-3 list-inside list-disc text-xs text-[var(--edr-naranja-claro)]">
                                 {r.warnings.map((w, k) => (
                                   <li key={k}>{w}</li>
                                 ))}

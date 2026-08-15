@@ -865,7 +865,7 @@ export default function AdminPage() {
             ) : (
               <>
                 <Contador label="envíos" valor={resumen.total} />
-                <Contador label="entregados" valor={resumen.entregados} clase="text-[var(--edr-verde)]" />
+                <Contador label="entregados" valor={resumen.entregados} clase="text-[var(--edr-verde-claro)]" />
                 <Contador label="en la calle" valor={resumen.enCalle} clase="text-sky-300" />
                 <Contador label="sin salir" valor={resumen.sinSalir} />
                 {/* Se cuenta sobre lo traído y no sobre lo visible, igual que
@@ -882,7 +882,7 @@ export default function AdminPage() {
                 >
                   <span
                     className={`edr-mono text-base font-black ${
-                      soloFallidos ? 'text-[var(--edr-blue)]' : 'text-[var(--edr-naranja)]'
+                      soloFallidos ? 'text-[var(--edr-blue)]' : 'text-[var(--edr-naranja-claro)]'
                     }`}
                   >
                     {resumen.fallidos}

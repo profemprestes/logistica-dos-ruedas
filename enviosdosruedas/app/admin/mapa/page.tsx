@@ -435,7 +435,7 @@ export default function MapaAdminPage() {
                     className={
                       r.haceMinutos > MINUTOS_RECIENTE
                         ? 'text-[var(--edr-muted)]'
-                        : 'font-bold text-[var(--edr-verde)]'
+                        : 'font-bold text-[var(--edr-verde-claro)]'
                     }
                   >
                     {r.hora}

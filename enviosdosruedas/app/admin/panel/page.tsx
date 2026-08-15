@@ -32,8 +32,8 @@ import type { Atraso } from '@/lib/admin/atrasos';
  */
 
 const TONO = {
-  rojo: 'var(--edr-rojo)',
-  naranja: 'var(--edr-naranja)',
+  rojo: 'var(--edr-rojo-claro)',
+  naranja: 'var(--edr-naranja-claro)',
 } as const;
 
 const ICONO_ACCION = {
@@ -61,10 +61,10 @@ export default function PanelDelDiaPage() {
 
   const tiles = [
     { label: 'ENVÍOS', valor: deHoy.length, color: 'var(--edr-text)', nota: 'programados hoy' },
-    { label: 'EN LA CALLE', valor: enCalle, color: 'var(--edr-blue)', nota: 'retirados o en camino' },
-    { label: 'ENTREGADOS', valor: entregados, color: 'var(--edr-verde)', nota: 'cerrados con foto' },
-    { label: 'SIN SALIR', valor: sinSalir, color: 'var(--edr-naranja)', nota: 'siguen en el comercio' },
-    { label: 'CON ATRASO', valor: atrasos.length, color: 'var(--edr-rojo)', nota: 'piden una decisión' },
+    { label: 'EN LA CALLE', valor: enCalle, color: 'var(--edr-yellow)', nota: 'retirados o en camino' },
+    { label: 'ENTREGADOS', valor: entregados, color: 'var(--edr-verde-claro)', nota: 'cerrados con foto' },
+    { label: 'SIN SALIR', valor: sinSalir, color: 'var(--edr-naranja-claro)', nota: 'siguen en el comercio' },
+    { label: 'CON ATRASO', valor: atrasos.length, color: 'var(--edr-rojo-claro)', nota: 'piden una decisión' },
   ];
 
   return (
@@ -92,8 +92,8 @@ export default function PanelDelDiaPage() {
           <div className="flex flex-col gap-[18px]">
             {/* ---------- Lo que hay que decidir ---------- */}
             <section className={`${panel} overflow-hidden`}>
-              <div className="flex flex-wrap items-center gap-2.5 border-b border-[#e0e9fd] px-4 py-4 sm:px-5">
-                <AlertTriangle size={19} strokeWidth={2.2} className="text-[var(--edr-rojo)]" />
+              <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--edr-divisor)] px-4 py-4 sm:px-5">
+                <AlertTriangle size={19} strokeWidth={2.2} className="text-[var(--edr-rojo-claro)]" />
                 <span className={titulo}>Necesita atención</span>
                 {atrasos.length > 0 && (
                   <span className="edr-mono rounded-full bg-[var(--edr-rojo)] px-2 py-0.5 text-xs font-bold text-white">
@@ -107,7 +107,7 @@ export default function PanelDelDiaPage() {
 
               {atrasos.length === 0 ? (
                 <div className="flex items-center gap-3 px-4 py-6 sm:px-5">
-                  <CheckCircle2 size={22} strokeWidth={2.2} className="text-[var(--edr-verde)]" />
+                  <CheckCircle2 size={22} strokeWidth={2.2} className="text-[var(--edr-verde-claro)]" />
                   <div>
                     <div className="text-[15px] font-semibold text-[var(--edr-text)]">
                       {cargando ? 'Mirando el día…' : 'No hay nada atrasado'}
@@ -125,13 +125,13 @@ export default function PanelDelDiaPage() {
             {/* ---------- Quiénes están trabajando ---------- */}
             <section className={`${panel} px-4 py-[18px] sm:px-5`}>
               <div className="mb-3.5 flex items-center gap-2.5">
-                <Bike size={19} strokeWidth={2.2} className="text-[var(--edr-blue)]" />
+                <Bike size={19} strokeWidth={2.2} className="text-[var(--edr-yellow)]" />
                 <span className={titulo}>
                   {repartidores.length === 1 ? 'El de hoy' : `Los ${repartidores.length}, ahora`}
                 </span>
                 <Link
                   href="/admin/mapa"
-                  className="ml-auto flex items-center gap-1.5 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-blue)]"
+                  className="ml-auto flex items-center gap-1.5 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-yellow)]"
                 >
                   VER EN EL MAPA
                   <ArrowUpRight size={15} strokeWidth={2.5} />
@@ -196,7 +196,7 @@ function FilaAtraso({ a }: { a: Atraso }) {
       </div>
       <Link
         href={a.href}
-        className="flex min-h-12 w-full shrink-0 items-center justify-center gap-[7px] rounded-full border border-[var(--edr-blue)] bg-white px-4 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-blue)] hover:bg-[var(--edr-blue-soft)] sm:w-auto"
+        className="flex min-h-12 w-full shrink-0 items-center justify-center gap-[7px] rounded-full border border-[var(--edr-yellow)] px-4 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-yellow)] hover:bg-white/10 sm:w-auto"
       >
         <Icono size={15} strokeWidth={2.5} />
         {a.accion}
@@ -222,7 +222,9 @@ function TarjetaRepartidor({ r }: { r: Repartidor }) {
   return (
     <div className="rounded-[20px] border border-[var(--edr-divisor)] bg-[var(--edr-panel-2)] p-4">
       <div className="flex items-center gap-2.5">
-        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[var(--edr-blue)] font-anton text-sm text-[var(--edr-yellow)]">
+        {/* Amarillo con la letra azul, como el de la barra lateral: el azul
+            sobre azul se pierde y el redondel deja de leerse. */}
+        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[var(--edr-yellow)] font-anton text-sm text-[var(--edr-blue)]">
           {iniciales}
         </div>
         <div className="min-w-0">
@@ -241,7 +243,7 @@ function TarjetaRepartidor({ r }: { r: Repartidor }) {
       </div>
 
       <div className="mt-1.5 h-[7px] overflow-hidden rounded-full bg-[var(--edr-divisor)]">
-        <div className="h-full rounded-full bg-[var(--edr-blue)]" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-[var(--edr-yellow)]" style={{ width: `${pct}%` }} />
       </div>
 
       {r.lleva > 0 && (
@@ -254,7 +256,7 @@ function TarjetaRepartidor({ r }: { r: Repartidor }) {
       )}
 
       {perdido && (
-        <div className="mt-2.5 text-xs font-semibold text-[var(--edr-rojo)]">
+        <div className="mt-2.5 text-xs font-semibold text-[var(--edr-rojo-claro)]">
           {r.haceMinutos === null
             ? 'No mandó ninguna señal hoy'
             : `Sin novedades hace ${r.haceMinutos} min`}

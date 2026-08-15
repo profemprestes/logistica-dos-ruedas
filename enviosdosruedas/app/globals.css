@@ -71,6 +71,14 @@
   --edr-verde: #059669;
   --edr-whatsapp: #25d366;
 
+  /* Los mismos tres, en la versión que se lee SOBRE AZUL.
+     Los de arriba están pensados para texto sobre blanco: puestos sobre el
+     azul de la app quedan en menos de 3 a 1 y el número no se distingue.
+     Regla: el color lleno usa el de arriba, el texto sobre azul usa éstos. */
+  --edr-rojo-claro: #f87171;
+  --edr-naranja-claro: #fb923c;
+  --edr-verde-claro: #34d399;
+
   /* La sombra de la marca: dura, sin desenfoque y azul. Nunca negra, y sólo
      en la acción principal y en las tarjetas de plata. */
   --edr-sombra: 4px 4px 0 #0742ca;
@@ -113,35 +121,49 @@
   --color-edr-rojo: var(--edr-rojo);
   --color-edr-naranja: var(--edr-naranja);
   --color-edr-verde: var(--edr-verde);
+  --color-edr-rojo-claro: var(--edr-rojo-claro);
+  --color-edr-naranja-claro: var(--edr-naranja-claro);
+  --color-edr-verde-claro: var(--edr-verde-claro);
   --color-edr-whatsapp: var(--edr-whatsapp);
 }
 
 /* ==========================================================================
-   PANEL DE LA OFICINA (pantalla grande, horas seguidas, al lado de planillas)
+   PANEL DE LA OFICINA
 
-   La calle sigue siendo azul y la oficina pasa a blanco. No es gusto: el azul
-   pleno a pantalla completa cansa cuando se lo mira ocho horas, y el panel se
-   usa al lado de planillas y del WhatsApp Web, que son blancos.
+   El rediseño proponía paneles blancos acá. Se probó y no: el sistema entero
+   es azul —la calle, el seguimiento, la portada— y la oficina en blanco se
+   veía de otra aplicación. Así que el panel es azul, y más oscuro que el
+   resto para que las tarjetas se despeguen del fondo.
 
-   El cambio se hace acá y no pantalla por pantalla. Las ocho secciones ya
-   estaban escritas con los mismos nombres de color —"superficie", "borde",
-   "apagado"— así que alcanza con cambiar lo que esos nombres significan
-   adentro del panel. Escrito a mano habrían sido mil líneas tocadas, mil
-   chances de que una quedara azul.
+   Los nombres del rediseño se quedan igual ("panel", "texto", "pelo de
+   línea"): lo que cambia es a qué color apunta cada uno. Las pantallas piden
+   "la superficie de una tarjeta" y no "blanco", así que darlo vuelta es esto
+   y nada más. Si algún día se prueba en claro, se cambia acá.
+
+   Tres profundidades, de atrás para adelante:
+     #001035  el fondo, igual que la barra lateral
+     #042c86  las tarjetas
+     #072a72  encabezados de tabla y filas alternas
    ========================================================================== */
 .edr-oficina {
-  --edr-paper: var(--edr-blue-soft);
-  --edr-surface: var(--edr-panel);
-  --edr-surface-2: var(--edr-panel-2);
-  --edr-border: var(--edr-hairline);
-  --edr-muted: var(--edr-text-3);
-  --edr-ink: var(--edr-text);
-  /* Lo que resaltaba en amarillo pasa a resaltar en azul. El amarillo se
-     queda SÓLO donde significa plata o acción principal, que es su regla. */
-  --edr-acento: var(--edr-blue);
+  /* Superficies: lo que el rediseño quería claro, en azul. */
+  --edr-panel: #042c86;
+  --edr-panel-2: #072a72;
+  --edr-panel-3: #072a72;
+  --edr-hairline: #2a58c4;
+  --edr-divisor: #1e3f8f;
+  --edr-paper: var(--edr-dark);
 
-  background: var(--edr-blue-soft);
-  color: var(--edr-text);
+  /* Texto: la escala del rediseño va de más fuerte a más apagado, así que
+     dada vuelta empieza en blanco y termina en el azul lavado. */
+  --edr-text: #ffffff;
+  --edr-text-2: #dbe6fd;
+  --edr-text-3: #b7cbff;
+  --edr-text-4: #8fa9e8;
+  --edr-text-5: #7f9de8;
+  --edr-text-link: #b7cbff;
+
+  background: var(--edr-dark);
 }
 
 /* ==========================================================================

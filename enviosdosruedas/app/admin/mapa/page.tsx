@@ -42,12 +42,15 @@ interface Driver {
  *  - `moviendose`: llegan posiciones y cambian de lugar. Está repartiendo.
  *  - `parado`: llegan posiciones y son todas del mismo lado. Está en un
  *    comercio, almorzando o esperando que le abran. LA APP ANDA.
- *  - `sin-senal`: dejaron de llegar. Sin señal, sin batería, o se cerró la app.
+ *  - `sin-senal`: dejaron de llegar y ÉL SIGUE CONECTADO. Sin señal, sin
+ *    batería, o se cerró la app. Es el único que pide levantar el teléfono.
+ *  - `desconectado`: terminó su jornada, o todavía no la empezó. El punto que
+ *    se ve es de dónde estaba la última vez, y no significa nada más.
  *
- * Las dos últimas se veían iguales y son problemas opuestos: una no requiere
- * hacer nada y la otra es levantar el teléfono y llamarlo.
+ * Las tres últimas se veían iguales —"última señal hace tanto"— y son cosas
+ * completamente distintas: dos no requieren hacer nada y una es una urgencia.
  */
-type EstadoRepartidor = 'moviendose' | 'parado' | 'sin-senal';
+type EstadoRepartidor = 'moviendose' | 'parado' | 'sin-senal' | 'desconectado';
 
 /** Dónde se lo vio por última vez, y por qué. */
 interface Repartidor {
@@ -216,6 +219,26 @@ export default function MapaAdminPage() {
 
       if (!vivo) return;
 
+      /*
+       * Quién está conectado AHORA. Se le pregunta a la base con la misma
+       * función que usa el celular (`esta_conectado`, paso 37) en vez de mirar
+       * `conectado_desde` y sacar la cuenta acá.
+       *
+       * Es a propósito: la conexión se vence sola a las dos horas, y si esa
+       * cuenta viviera en dos lugares terminarían diciendo cosas distintas. El
+       * panel mostraría "conectado" mientras el servidor descarta posiciones, y
+       * nadie entendería por qué.
+       */
+      const conectados = new Set<string>();
+      await Promise.all(
+        (drivers.length ? drivers : []).map(async (d) => {
+          const { data: vale } = await supabase.rpc('esta_conectado', { p_driver: d.id });
+          if (vale === true) conectados.add(d.id);
+        }),
+      );
+
+      if (!vivo) return;
+
       const candidatos: (Repartidor & { cuando: number })[] = [];
 
       const sumar = (
@@ -289,6 +312,17 @@ export default function MapaAdminPage() {
        * cada vez, y a la larga se deja de mirar.
        */
       for (const r of ultima.values()) {
+        /*
+         * Desconectado gana sobre todo lo demás. Un repartidor que terminó su
+         * jornada a las seis va a seguir teniendo su última posición guardada
+         * hasta tres horas después, y sin esto aparecería toda la tarde como
+         * "sin señal" —o sea, como una urgencia— cuando está en su casa.
+         */
+        if (!conectados.has(r.id)) {
+          r.estado = 'desconectado';
+          continue;
+        }
+
         if (r.haceMinutos >= MINUTOS_SIN_SENAL) {
           r.estado = 'sin-senal';
           continue;
@@ -329,7 +363,10 @@ export default function MapaAdminPage() {
       vivo = false;
       window.clearInterval(timer);
     };
-  }, [ready]);
+    // `drivers` va acá porque adentro se pregunta por cada uno si está
+    // conectado. Sin esta dependencia, el efecto se arma con la lista vacía y
+    // se queda con esa para siempre: nadie aparecería nunca como conectado.
+  }, [ready, drivers]);
 
   const CERRADOS: ShipmentStatus[] = useMemo(() => ['entregado', 'cancelado'], []);
 
@@ -363,6 +400,12 @@ export default function MapaAdminPage() {
    * mira el mapa está coordinando, no leyendo.
    */
   const comoEsta = (r: Repartidor): { texto: string; color: string } => {
+    if (r.estado === 'desconectado') {
+      return {
+        texto: `desconectado · estuvo hasta las ${r.hora}`,
+        color: 'var(--edr-muted)',
+      };
+    }
     if (r.estado === 'sin-senal') {
       return {
         texto: `sin señal desde las ${r.hora} · hace ${r.haceMinutos} min`,

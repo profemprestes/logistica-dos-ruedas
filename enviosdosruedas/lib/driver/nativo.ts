@@ -155,6 +155,8 @@ export async function seguirEnviandoNativo(
       // Si falla, seguimos igual: el GPS no depende de esto.
     }
 
+    ultimoFallo = null;
+
     const id = await gps.addWatcher(
       {
         backgroundTitle: AVISO_TITULO,
@@ -181,7 +183,15 @@ export async function seguirEnviandoNativo(
         distanceFilter: 0,
       },
       (posicion?: Location, error?: { code?: string }) => {
-        if (error) return;
+        /*
+         * El error más común acá es que el repartidor no dio el permiso de
+         * ubicación, y hasta hoy se descartaba en silencio: la app se veía
+         * perfecta y no mandaba una sola posición. Queda anotado.
+         */
+        if (error) {
+          ultimoFallo = error.code ?? 'el GPS devolvió un error sin código';
+          return;
+        }
         if (!posicion) return;
         if (!hayTrabajo()) return;
 
@@ -192,9 +202,11 @@ export async function seguirEnviandoNativo(
     return () => {
       void gps.removeWatcher({ id });
     };
-  } catch {
-    // El plugin no está o el permiso quedó denegado. La app sirve igual: se
-    // comporta como el navegador, que es como venía andando hasta ahora.
+  } catch (err) {
+    // El plugin no está, o el permiso quedó denegado. La app sirve igual: se
+    // comporta como el navegador, que es como venía andando hasta ahora. Pero
+    // eso no se adivina desde afuera, así que se anota.
+    ultimoFallo = err instanceof Error ? err.message : 'no se pudo arrancar el GPS';
     return null;
   }
 }

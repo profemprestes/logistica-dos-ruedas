@@ -83,8 +83,23 @@ export async function avisarPosicion(): Promise<boolean> {
   return guardarPosicion(fix.lat, fix.lng, fix.accuracy);
 }
 
-/** Nunca más de una por minuto, aunque el GPS avise cada dos segundos. */
-const MINIMO_ENTRE_ENVIOS = 60_000;
+/**
+ * El latido: cada cuánto se manda una posición aunque el repartidor esté quieto.
+ *
+ * Cumple dos papeles a la vez. Es el freno —el GPS puede avisar cada dos
+ * segundos y no tiene sentido mandar todo eso— y desde que la app de Android
+ * avisa aunque no haya movimiento (ver `nativo.ts`), es también el ritmo fijo
+ * con el que se sabe que el repartidor sigue ahí.
+ *
+ * ESE SEGUNDO PAPEL ES EL QUE IMPORTA. Sin latido, un repartidor parado y un
+ * repartidor con la app muerta se ven exactamente igual desde la oficina, y son
+ * dos problemas distintos.
+ *
+ * TREINTA SEGUNDOS ES PARA PROBAR. Para la calle probablemente convenga uno o
+ * dos minutos: alcanza para distinguir parado de muerto y son cuatro veces
+ * menos pedidos. Es esta línea y nada más.
+ */
+const LATIDO_MS = 30_000;
 
 /** Salvo que se haya movido esto, y entonces vale la pena aunque sea antes. */
 const METROS_PARA_MANDAR = 150;
@@ -122,7 +137,7 @@ export function seguirEnviando(hayTrabajo: () => boolean): () => void {
    * varias posiciones por minuto andando, y el mapa no se ve distinto por eso.
    */
   const mandarSiVale = (lat: number, lng: number, accuracy: number) => {
-    const rato = Date.now() - ultimoEnvio >= MINIMO_ENTRE_ENVIOS;
+    const rato = Date.now() - ultimoEnvio >= LATIDO_MS;
     const lejos =
       ultimoPunto !== null && distanciaAprox(ultimoPunto, { lat, lng }) > METROS_PARA_MANDAR;
 

@@ -35,6 +35,20 @@ interface Driver {
   full_name: string;
 }
 
+/**
+ * Qué está pasando con ese repartidor. Son tres cosas distintas y antes se
+ * mostraban las tres como "última señal hace tanto".
+ *
+ *  - `moviendose`: llegan posiciones y cambian de lugar. Está repartiendo.
+ *  - `parado`: llegan posiciones y son todas del mismo lado. Está en un
+ *    comercio, almorzando o esperando que le abran. LA APP ANDA.
+ *  - `sin-senal`: dejaron de llegar. Sin señal, sin batería, o se cerró la app.
+ *
+ * Las dos últimas se veían iguales y son problemas opuestos: una no requiere
+ * hacer nada y la otra es levantar el teléfono y llamarlo.
+ */
+type EstadoRepartidor = 'moviendose' | 'parado' | 'sin-senal';
+
 /** Dónde se lo vio por última vez, y por qué. */
 interface Repartidor {
   id: string;
@@ -46,25 +60,45 @@ interface Repartidor {
   hora: string;
   /** De dónde salió el punto: le cambia el sentido a lo que se está mirando. */
   origen: 'app' | 'entrega';
+  estado: EstadoRepartidor;
+  /** Si está parado, desde hace cuánto. Es el dato que se mira para decidir. */
+  quietoDesdeMin: number;
 }
 
 /**
- * Desde cuándo la señal deja de ser "de recién".
+ * Cuánto silencio hace falta para decir "sin señal".
  *
- * No es un filtro: se muestra igual. Sólo cambia lo que dice al lado.
+ * Tiene que ser bastante más que el latido de la app (ver `LATIDO_MS` en
+ * `lib/driver/posicion.ts`): que se pierda un latido por una antena saturada no
+ * es quedarse sin señal. Cinco minutos son varios latidos seguidos.
  *
- * Poner un tope fue un error que costó dos vueltas. Primero diez minutos,
- * después cuarenta y cinco, y en las dos el mapa aparecía vacío teniendo una
- * posición perfectamente útil guardada. El motivo no es la regla sino cómo
- * funciona un navegador: la app manda la posición mientras está EN PANTALLA, y
- * el celular congela los temporizadores de una pestaña que quedó atrás.
+ * OJO SI SE CAMBIA EL LATIDO: este número tiene que seguirlo. Con un latido de
+ * dos minutos, cinco es apenas dos fallas y va a dar falsas alarmas.
  *
- * El tope de verdad ya existe y está en la base: las posiciones se borran
- * solas a las tres horas. O sea que lo que hay guardado es siempre del día. Lo
- * correcto es mostrarlo y decir de cuándo es, que es lo que permite decidir si
- * ese punto todavía sirve.
+ * Y los que entran desde un navegador —Chrome, un iPhone— van a caer acá
+ * seguido, porque ahí la posición se manda sólo con la app en pantalla. En su
+ * caso "sin señal" es la verdad: el sistema no sabe dónde están.
  */
-const MINUTOS_RECIENTE = 20;
+const MINUTOS_SIN_SENAL = 5;
+
+/**
+ * Cuánto se puede mover algo que está quieto.
+ *
+ * El GPS de un celular tiembla. Con quince o veinte metros de precisión, dos
+ * lecturas del mismo lugar pueden estar a cuarenta metros una de otra sin que
+ * nadie se haya movido. Ochenta da margen sin llegar a tapar media cuadra.
+ */
+const METROS_QUIETO = 80;
+
+/** Sobre cuánto rato se mira si se movió o no. */
+const VENTANA_QUIETO_MIN = 6;
+
+/** Distancia rápida entre dos puntos, en metros. Alcanza y sobra para esto. */
+function metrosEntre(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = (b.lat - a.lat) * 111_320;
+  const dLng = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
 
 /**
  * El día entero sobre el mapa.
@@ -166,8 +200,11 @@ export default function MapaAdminPage() {
         supabase
           .from('driver_positions')
           .select('driver_id, lat, lng, taken_at, perfil:driver_id(full_name)')
+          // No alcanza con la última: para saber si se movió hay que comparar
+          // contra las de hace un rato. Con el latido de la app y tres o cuatro
+          // repartidores, 600 filas son más de media hora de historia.
           .order('taken_at', { ascending: false })
-          .limit(200),
+          .limit(600),
         supabase
           .from('delivery_logs')
           .select('driver_id, lat, lng, happened_at, perfil:driver_id(full_name)')
@@ -199,8 +236,14 @@ export default function MapaAdminPage() {
           haceMinutos: Math.max(0, Math.round((Date.now() - t) / 60_000)),
           hora: new Date(t).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
           origen,
+          // Se completan más abajo, cuando ya está toda la historia junta.
+          estado: 'moviendose',
+          quietoDesdeMin: 0,
         });
       };
+
+      /** Toda la historia de cada uno, de la más nueva a la más vieja. */
+      const historia = new Map<string, { ms: number; lat: number; lng: number }[]>();
 
       type Fila = {
         driver_id: string;
@@ -211,6 +254,10 @@ export default function MapaAdminPage() {
 
       for (const p of (posiciones.data ?? []) as unknown as (Fila & { taken_at: string })[]) {
         sumar(p.driver_id, p.perfil?.full_name ?? 'Repartidor', p.lat, p.lng, p.taken_at, 'app');
+
+        const previas = historia.get(p.driver_id) ?? [];
+        previas.push({ ms: new Date(p.taken_at).getTime(), lat: Number(p.lat), lng: Number(p.lng) });
+        historia.set(p.driver_id, previas);
       }
 
       for (const l of (entregas.data ?? []) as unknown as (Fila & { happened_at: string })[]) {
@@ -230,6 +277,46 @@ export default function MapaAdminPage() {
       for (const c of candidatos) {
         const previa = ultima.get(c.id);
         if (!previa || c.cuando > previa.cuando) ultima.set(c.id, c);
+      }
+
+      /*
+       * PARADO NO ES LO MISMO QUE SIN SEÑAL, y hasta ahora se veían igual.
+       *
+       * Sin señal es "no sé dónde está": hay que llamarlo. Parado es "sé
+       * exactamente dónde está y hace cuánto que no se mueve": puede ser un
+       * comercio que tarda, puede ser el almuerzo, y casi siempre no hay nada
+       * que hacer. Mostrarlos con el mismo cartel obliga a averiguar de nuevo
+       * cada vez, y a la larga se deja de mirar.
+       */
+      for (const r of ultima.values()) {
+        if (r.haceMinutos >= MINUTOS_SIN_SENAL) {
+          r.estado = 'sin-senal';
+          continue;
+        }
+
+        const suyas = historia.get(r.id) ?? [];
+        const corte = Date.now() - VENTANA_QUIETO_MIN * 60_000;
+        const enLaVentana = suyas.filter((p) => p.ms >= corte);
+
+        /*
+         * Con una sola posición en la ventana no se puede decir nada: recién
+         * apareció. Se lo deja como en movimiento, que es lo que menos asusta.
+         */
+        if (enLaVentana.length < 2) {
+          r.estado = 'moviendose';
+          continue;
+        }
+
+        const masLejos = Math.max(...enLaVentana.map((p) => metrosEntre(r, p)));
+
+        if (masLejos <= METROS_QUIETO) {
+          r.estado = 'parado';
+          // Desde la más vieja de las que siguen cerca: es cuándo llegó ahí.
+          const desde = enLaVentana[enLaVentana.length - 1].ms;
+          r.quietoDesdeMin = Math.max(1, Math.round((Date.now() - desde) / 60_000));
+        } else {
+          r.estado = 'moviendose';
+        }
       }
 
       setEnCalle([...ultima.values()]);
@@ -271,6 +358,29 @@ export default function MapaAdminPage() {
     return driverId ? enCalle.filter((r) => r.id === driverId) : enCalle;
   }, [enCalle, driverId, desde, hasta]);
 
+  /**
+   * Lo que se lee al lado del nombre. Una frase por estado, sin adornos: el que
+   * mira el mapa está coordinando, no leyendo.
+   */
+  const comoEsta = (r: Repartidor): { texto: string; color: string } => {
+    if (r.estado === 'sin-senal') {
+      return {
+        texto: `sin señal desde las ${r.hora} · hace ${r.haceMinutos} min`,
+        color: 'var(--edr-naranja-claro)',
+      };
+    }
+    if (r.estado === 'parado') {
+      return {
+        texto: `parado hace ${r.quietoDesdeMin} min`,
+        color: 'var(--edr-muted)',
+      };
+    }
+    return {
+      texto: r.origen === 'entrega' ? `en una entrega · ${r.hora}` : `en movimiento · ${r.hora}`,
+      color: 'var(--edr-verde-claro)',
+    };
+  };
+
   const puntos: PuntoMapa[] = useMemo(() => {
     const envios: PuntoMapa[] = conPunto.map((s) => {
       const marca = marcaDeEstado(s.status);
@@ -297,10 +407,7 @@ export default function MapaAdminPage() {
       etiqueta: r.nombre.trim().charAt(0).toUpperCase() || '·',
       color: '#7c3aed',
       titulo: r.nombre,
-      detalle:
-        `${r.origen === 'entrega' ? 'Cerró una entrega' : 'Última señal'} ${r.hora}` +
-        (r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : '') +
-        (r.haceMinutos > MINUTOS_RECIENTE ? ' · puede haberse movido' : ''),
+      detalle: comoEsta(r).texto,
     }));
 
     return [...envios, ...repartidores];
@@ -432,15 +539,10 @@ export default function MapaAdminPage() {
                   </span>
                   <strong>{r.nombre}</strong>
                   <span
-                    className={
-                      r.haceMinutos > MINUTOS_RECIENTE
-                        ? 'text-[var(--edr-muted)]'
-                        : 'font-bold text-[var(--edr-verde-claro)]'
-                    }
+                    className={r.estado === 'moviendose' ? 'font-bold' : ''}
+                    style={{ color: comoEsta(r).color }}
                   >
-                    {r.hora}
-                    {r.haceMinutos > 1 ? ` · hace ${r.haceMinutos} min` : ''}
-                    {r.origen === 'entrega' ? ' · en una entrega' : ''}
+                    {comoEsta(r).texto}
                   </span>
                 </span>
               ))}

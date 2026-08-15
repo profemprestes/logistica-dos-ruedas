@@ -143,9 +143,23 @@ export async function seguirEnviandoNativo(
         requestPermissions: true,
         // Posiciones viejas no sirven para decir dónde está ahora.
         stale: false,
-        // Andando, avisa cada 50 metros. Parado en un semáforo o almorzando no
-        // manda nada, que es justo lo que ahorra batería.
-        distanceFilter: 50,
+
+        /*
+         * QUE AVISE SIEMPRE, aunque no se haya movido. El espaciado lo decide
+         * `seguirEnviando`, no acá.
+         *
+         * Antes esto era 50 metros y parecía lo prolijo: parado no gasta. En la
+         * práctica dejaba a la oficina sin saber nada. Mirando el mapa, "sin
+         * señal hace 20 minutos" puede ser un repartidor almorzando o un
+         * repartidor al que se le murió la app, y hay que actuar distinto en
+         * cada caso. Con el filtro puesto, las dos cosas se ven iguales.
+         *
+         * Avisar siempre no gasta más batería, que es lo que uno supondría: el
+         * GPS está prendido igual mientras el servicio corre, y el filtro sólo
+         * decidía si nos enterábamos. Lo que se agrega es un pedido de red cada
+         * tanto, que al lado del GPS no se nota.
+         */
+        distanceFilter: 0,
       },
       (posicion?: Location, error?: { code?: string }) => {
         if (error) return;

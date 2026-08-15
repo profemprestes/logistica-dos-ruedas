@@ -7,8 +7,11 @@
 --   1. `status` volvía a 'retirado'. Un envío que ya estaba EN CAMINO
 --      retrocedía, y uno que había quedado NO ENTREGADO perdía ese estado y
 --      aparecía como si nunca se hubiera intentado.
---   2. Quedaba otro movimiento 'retirado' en el historial. Al escribir esto
---      había tres envíos con el retiro duplicado.
+--   2. Quedaba otro movimiento 'retirado' en el historial.
+--
+-- (Los tres envíos que hoy tienen el retiro duplicado NO son de esto: salieron
+-- de volver estados para atrás desde el panel, que escribe su propio
+-- movimiento. Eso está bien y no se toca.)
 --
 -- Y apareció algo que no se veía: EL QR IMPRESO LLEVA EL ID INTERNO, y al
 -- reprogramar (paso 31) nace un envío NUEVO, con otro id, que se queda con el
@@ -92,13 +95,24 @@ begin
    where id = v_shipment.id
    returning * into v_shipment;
 
-  -- Un solo retiro por envío. Con el candado de arriba esto no debería llegar
-  -- a hacer falta, pero el historial es lo que después se mira para discutir
-  -- una entrega: que no dependa de un solo candado.
+  /*
+   * Nada de retiros repetidos POR ACCIDENTE. Repetidos de verdad, sí.
+   *
+   * La primera versión de este paso escribía "un solo retiro por envío,
+   * nunca más". Está mal: si la oficina devuelve un envío a
+   * 'pendiente_retiro' —porque el repartidor marcó un estado por error, o
+   * porque el paquete volvió al comercio— y después se retira de nuevo, ese
+   * segundo retiro PASÓ, y el historial es lo que se mira meses después para
+   * discutir una entrega. Borrarlo sería hacerlo mentir.
+   *
+   * Así que la ventana es la misma de siempre en este sistema (paso 27 y 28):
+   * cinco minutos. Alcanza para el doble toque y no toca la historia real.
+   */
   select count(*) into v_repetido
   from delivery_logs
   where shipment_id = v_shipment.id
-    and event = 'retirado';
+    and event = 'retirado'
+    and happened_at > now() - interval '5 minutes';
 
   if v_repetido = 0 then
     insert into delivery_logs (shipment_id, driver_id, event, client_uuid)

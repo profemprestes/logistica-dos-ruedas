@@ -59,6 +59,8 @@ const ITEMS: Item[] = [
   { href: '/admin/stock', label: 'Stock', Icono: Warehouse },
 ];
 
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
 /** Iniciales para el redondel del pie. "Oficina Central" → "OC". */
 function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/).filter(Boolean);
@@ -147,11 +149,18 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     router.replace('/login');
   }
 
-  const hoy = new Date().toLocaleDateString('es-AR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-  });
+  /*
+   * "viernes 14/08", armado a mano.
+   *
+   * El marco se dibuja también en el servidor, así que el texto tiene que
+   * salir igual de los dos lados. `toLocaleDateString` acá devolvía
+   * "viernes 14-08" con guión, y el separador depende del navegador.
+   */
+  const hoy = (() => {
+    const d = new Date();
+    const dia = DIAS[d.getDay()];
+    return `${dia} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
 
   const navegacion = (
     <>

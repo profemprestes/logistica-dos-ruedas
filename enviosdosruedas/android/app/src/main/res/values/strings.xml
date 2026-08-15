@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DosRuedas Repartidor</string>
+    <string name="title_activity_main">DosRuedas Repartidor</string>
+    <string name="package_name">com.enviosdosruedas.repartidor</string>
+    <string name="custom_url_scheme">com.enviosdosruedas.repartidor</string>
+
+    <!--
+        El nombre que ve el repartidor si mantiene apretado el aviso fijo de
+        ubicación. Por defecto decía "Background Tracking", en inglés y sin
+        decir de qué app era.
+    -->
+    <string name="capacitor_background_geolocation_notification_channel_name">
+        Ubicación durante el reparto
+    </string>
+</resources>

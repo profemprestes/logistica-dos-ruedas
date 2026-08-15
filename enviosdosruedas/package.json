@@ -11,6 +11,10 @@
     "panel": "tsx --tsconfig tsconfig.json scripts/probar-panel.ts"
   },
   "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.26",
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/core": "^7.6.8",
+    "@capacitor/local-notifications": "^7.0.7",
     "@react-pdf/renderer": "^4.6.0",
     "@supabase/supabase-js": "^2.112.2",
     "@types/leaflet": "^1.9.22",
@@ -26,6 +30,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

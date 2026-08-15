@@ -36,6 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# app de android: la llave con la que se firma el APK.
+# Si se pierde no se puede sacar una actualización de la app, y si se filtra
+# cualquiera puede firmar un APK que el celular va a creer que es el nuestro.
+# Va guardada aparte, nunca acá.
+*.jks
+*.keystore
+android/keystore.properties
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

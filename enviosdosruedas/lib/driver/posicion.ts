@@ -16,6 +16,7 @@
  */
 import { supabase } from '@/lib/supabaseClient';
 import { getFix } from '@/lib/driver/geo';
+import { mandarPosicionNativa, seguirEnviandoNativo } from '@/lib/driver/nativo';
 
 /**
  * Cada cuánto se manda.
@@ -44,6 +45,17 @@ export async function guardarPosicion(
   lng: number,
   accuracy?: number | null,
 ): Promise<boolean> {
+  /*
+   * En la app de Android el pedido sale por afuera del navegador.
+   *
+   * No es capricho: con la app atrás, Android estrangula la red del navegador
+   * de adentro a los cinco minutos, que es justo el rato que la app existe
+   * para cubrir. El porqué largo está en `lib/driver/nativo.ts`. Desde un
+   * navegador devuelve null y sigue todo como siempre.
+   */
+  const porNativo = await mandarPosicionNativa(lat, lng, accuracy ?? null);
+  if (porNativo !== null) return porNativo;
+
   try {
     const { data, error } = await supabase.rpc('registrar_posicion', {
       p_lat: lat,
@@ -104,6 +116,19 @@ export function seguirEnviando(hayTrabajo: () => boolean): () => void {
     void guardarPosicion(lat, lng, accuracy);
   };
 
+  /**
+   * El freno, compartido por las dos fuentes que avisan seguido: el
+   * `watchPosition` del navegador y el GPS de Android. Las dos pueden tirar
+   * varias posiciones por minuto andando, y el mapa no se ve distinto por eso.
+   */
+  const mandarSiVale = (lat: number, lng: number, accuracy: number) => {
+    const rato = Date.now() - ultimoEnvio >= MINIMO_ENTRE_ENVIOS;
+    const lejos =
+      ultimoPunto !== null && distanciaAprox(ultimoPunto, { lat, lng }) > METROS_PARA_MANDAR;
+
+    if (rato || lejos) mandar(lat, lng, accuracy);
+  };
+
   const tic = () => {
     if (!navigator.onLine) return;
     if (!hayTrabajo()) return;
@@ -124,8 +149,9 @@ export function seguirEnviando(hayTrabajo: () => boolean): () => void {
    * perderse las diez cuadras de después.
    *
    * Lo que NO cambia es el límite de siempre: con la app atrás, el navegador
-   * también congela esto. Es seguimiento continuo mientras la usa, no
-   * continuo de verdad — para eso hace falta una app nativa.
+   * también congela esto. Es seguimiento continuo mientras la usa, no continuo
+   * de verdad. Para eso está la app de Android, más abajo; desde un navegador
+   * —Chrome, o el Safari de un iPhone— esto sigue siendo todo lo que hay.
    *
    * Se sube como mucho una posición por minuto, o antes si se movió más de
    * 150 metros. Sin ese freno, andando se mandarían varias por minuto sin que
@@ -139,11 +165,7 @@ export function seguirEnviando(hayTrabajo: () => boolean): () => void {
         if (!navigator.onLine || !hayTrabajo()) return;
 
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-        const rato = Date.now() - ultimoEnvio >= MINIMO_ENTRE_ENVIOS;
-        const lejos =
-          ultimoPunto !== null && distanciaAprox(ultimoPunto, { lat, lng }) > METROS_PARA_MANDAR;
-
-        if (rato || lejos) mandar(lat, lng, accuracy);
+        mandarSiVale(lat, lng, accuracy);
       },
       () => {
         // Sin permiso o sin señal de GPS: queda el reloj, que reintenta solo.
@@ -151,6 +173,29 @@ export function seguirEnviando(hayTrabajo: () => boolean): () => void {
       { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 },
     );
   }
+
+  /*
+   * Y ACÁ EL SEGUIMIENTO DE VERDAD, el de la app de Android.
+   *
+   * Todo lo de arriba se apaga cuando la app queda atrás. Esto no: el GPS lo
+   * maneja Android, no el navegador, así que sigue avisando con el celular en
+   * el bolsillo o con el repartidor mirando Maps. Es la única parte del
+   * sistema que la app hace distinto.
+   *
+   * Se deja arriba lo del navegador igual, sin sacar nada. Cubre el rato hasta
+   * que el permiso está dado, y es lo único que existe para el que entre desde
+   * Chrome o desde un iPhone. Los dos pasan por el mismo freno, así que tenerlos
+   * juntos no manda una posición de más.
+   */
+  let cortarNativo: (() => void) | null = null;
+  let sobra = false;
+
+  void seguirEnviandoNativo(hayTrabajo, mandarSiVale).then((cortar) => {
+    // Si el efecto se desarmó mientras se pedía el permiso, no dejamos el
+    // seguimiento prendido: cortarlo acá es la única oportunidad que hay.
+    if (sobra) cortar?.();
+    else cortarNativo = cortar;
+  });
 
   // Volver a la app es el momento más confiable que hay para tomar posición:
   // la pantalla está prendida y el GPS despierto.
@@ -160,9 +205,11 @@ export function seguirEnviando(hayTrabajo: () => boolean): () => void {
   document.addEventListener('visibilitychange', alVolver);
 
   return () => {
+    sobra = true;
     window.clearInterval(timer);
     document.removeEventListener('visibilitychange', alVolver);
     if (watchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
+    cortarNativo?.();
   };
 }
 

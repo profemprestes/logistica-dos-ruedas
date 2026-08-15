@@ -165,3 +165,42 @@ export async function seguirEnviandoNativo(
     return null;
   }
 }
+
+/**
+ * Que el botón atrás de Android cierre el cuadro y no la app.
+ *
+ * CAPACITOR NO TOCA EL BOTÓN ATRÁS: Android cierra la actividad directamente y
+ * el navegador de adentro nunca se entera. O sea que todo el trabajo de
+ * `useCerrarConAtras` —que agrega un paso al historial y espera que se lo
+ * saquen— no llegaba a correr nunca. Probado en la calle el 15/08/2026: abrir
+ * el escáner, tocar atrás, y quedarse afuera de la app.
+ *
+ * Enganchándose acá, el atrás de Android pasa a ser un "atrás" del navegador y
+ * a partir de ahí funciona lo que ya estaba escrito, sin tocarlo. Por eso el
+ * arreglo va de este lado y no en `useAtras`: en un navegador ese código anda
+ * bien, y el que entre desde un iPhone no tiene por qué cargar con esto.
+ *
+ * Y CUANDO NO HAY NADA ATRÁS la app se manda al fondo en vez de cerrarse. Es lo
+ * que hace cualquier app de Android, y acá importa más que en otras: cerrarla
+ * corta el seguimiento de la jornada.
+ */
+export async function manejarAtrasNativo(): Promise<void> {
+  if (!(await esAppNativa())) return;
+
+  try {
+    const { App } = await import('@capacitor/app');
+
+    void App.addListener('backButton', ({ canGoBack }) => {
+      // El paso del cuadro abierto está arriba de todo en el historial:
+      // retroceder lo saca y `useCerrarConAtras` cierra el cuadro.
+      if (window.history.state?.edrCuadro === true || canGoBack) {
+        window.history.back();
+        return;
+      }
+
+      void App.minimizeApp();
+    });
+  } catch (err) {
+    console.error('[nativo] no se pudo enganchar el botón atrás', err);
+  }
+}

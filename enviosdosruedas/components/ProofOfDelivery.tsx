@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageCircle, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 import Logo from '@/components/Logo';
 import SiteFooter, { WHATSAPP } from '@/components/SiteFooter';
 import { fechaHoraAR, STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
@@ -336,7 +337,45 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
   const soloMapa = mapa && !data.proof?.photoUrl;
 
   return (
-    <article className="overflow-hidden rounded-2xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)]">
+    <>
+      {/* ---------- Encabezado de la página ----------
+          Está acá adentro y no en la pantalla que lo contiene porque el botón
+          de actualizar necesita el estado que vive en este componente, y el
+          lugar donde se lo busca es arriba a la derecha, al lado del título. */}
+      <header className="mb-6 flex items-center gap-3">
+        <Link href="/" className="shrink-0">
+          <Logo size={48} />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <h1 className="font-anton text-2xl uppercase leading-tight tracking-[-.02em]">
+            Seguimiento de envío
+          </h1>
+          <p className="edr-mono truncate text-sm text-[var(--edr-muted)]">{data.code}</p>
+        </div>
+
+        {/* En un envío ya cerrado no aparece: no hay nada que pueda cambiar, y
+            un botón que nunca hace nada enseña a no tocarlo. */}
+        {!CERRADOS.includes(data.status) && (
+          <button
+            onClick={actualizarAMano}
+            disabled={buscando}
+            title="Buscar novedades de este envío"
+            /* 48px de alto: en el celular queda como ícono solo, y más chico
+               que eso se falla el toque. */
+            className="flex min-h-12 shrink-0 items-center gap-2 rounded-full border-2 border-[var(--edr-yellow)] px-4 font-bebas text-base tracking-[.07em] text-[var(--edr-yellow)] transition hover:bg-[var(--edr-surface)] disabled:opacity-70"
+          >
+            <RefreshCw
+              size={16}
+              strokeWidth={2.5}
+              className={buscando ? 'animate-spin' : undefined}
+            />
+            {/* En el celular queda sólo la flecha: el título ya ocupa el ancho. */}
+            <span className="hidden sm:inline">{buscando ? 'BUSCANDO…' : 'ACTUALIZAR'}</span>
+          </button>
+        )}
+      </header>
+
+      <article className="overflow-hidden rounded-2xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface)]">
       {/* ---------- Encabezado ---------- */}
       <header className="flex items-center gap-3 border-b-2 border-[var(--edr-yellow)] px-5 py-4">
         <Logo size={44} />
@@ -462,28 +501,6 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
         )}
       </div>
 
-      {/* ---------- Actualizar ----------
-          Mientras el envío viaja la pantalla se refresca sola, pero eso el que
-          espera no lo sabe: se queda mirando un número quieto sin saber si es
-          el de hace un rato. El botón es para eso, para poder pedirlo. En un
-          envío ya cerrado no aparece: no hay nada que pueda cambiar. */}
-      {!CERRADOS.includes(data.status) && (
-        <div className="px-5 pt-4">
-          <button
-            onClick={actualizarAMano}
-            disabled={buscando}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border-2 border-[var(--edr-yellow)] px-6 font-bebas text-lg tracking-[.07em] text-[var(--edr-yellow)] transition hover:bg-[var(--edr-surface-2)] disabled:opacity-70"
-          >
-            <RefreshCw
-              size={18}
-              strokeWidth={2.5}
-              className={buscando ? 'animate-spin' : undefined}
-            />
-            {buscando ? 'BUSCANDO NOVEDADES…' : 'ACTUALIZAR'}
-          </button>
-        </div>
-      )}
-
       {/* ---------- Escribirnos ----------
           El que abre esto y ve algo que no cuadra —la dirección mal, el envío
           parado hace horas, "no entregado" sin haber estado ausente— hoy tenía
@@ -580,8 +597,8 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
         </p>
         <SiteFooter compacto />
       </footer>
-
-    </article>
+      </article>
+    </>
   );
 }
 

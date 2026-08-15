@@ -79,19 +79,25 @@ export default async function SeguimientoPorCodigoPage({
   return (
     <div className="min-h-dvh px-4 py-8">
       <div className="mx-auto w-full max-w-3xl">
-        <header className="mb-6 flex items-center gap-3">
-          <Link href="/" className="shrink-0">
-            <Logo size={48} />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="font-anton text-2xl uppercase leading-tight tracking-[-.02em]">
-              Seguimiento de envío
-            </h1>
-            <p className="edr-mono truncate text-sm text-[var(--edr-muted)]">
-              {decodeURIComponent(codigo).toUpperCase()}
-            </p>
-          </div>
-        </header>
+        {/* El encabezado con el botón de actualizar lo dibuja
+            `ProofOfDelivery`: el botón necesita el estado que vive ahí. Cuando
+            no hay envío que mostrar, acá va uno igual pero sin botón, porque no
+            hay nada que refrescar. */}
+        {!resultado.ok && (
+          <header className="mb-6 flex items-center gap-3">
+            <Link href="/" className="shrink-0">
+              <Logo size={48} />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="font-anton text-2xl uppercase leading-tight tracking-[-.02em]">
+                Seguimiento de envío
+              </h1>
+              <p className="edr-mono truncate text-sm text-[var(--edr-muted)]">
+                {decodeURIComponent(codigo).toUpperCase()}
+              </p>
+            </div>
+          </header>
+        )}
 
         {resultado.ok ? (
           <ProofOfDelivery data={resultado.data} />

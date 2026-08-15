@@ -21,6 +21,25 @@ import type { BackgroundGeolocationPlugin, Location } from '@capacitor-community
 /** Se resuelve una sola vez: preguntar en cada punto no tiene sentido. */
 let nativo: boolean | null = null;
 
+/**
+ * Por qué no arrancó el seguimiento, si no arrancó.
+ *
+ * ESTO EXISTE POR UN ERROR QUE COSTÓ UNA TARDE. Todo este archivo estaba
+ * escrito para fallar en silencio, con el argumento de que el repartidor no
+ * tiene que ver errores rojos por el GPS. Suena bien y está mal: cuando el
+ * servicio no arrancó, la app se veía perfecta, no mandaba una sola posición y
+ * nadie tenía forma de saber por qué. Se perdieron horas adivinando entre el
+ * permiso, la batería del fabricante y el plugin.
+ *
+ * Sigue sin interrumpir al repartidor. Pero queda anotado y se puede mirar.
+ */
+let ultimoFallo: string | null = null;
+
+/** Qué pasó con el GPS nativo. `null` significa que anda, o que no aplica. */
+export function falloDelGpsNativo(): string | null {
+  return ultimoFallo;
+}
+
 /** ¿Estamos adentro del APK? */
 export async function esAppNativa(): Promise<boolean> {
   if (nativo !== null) return nativo;

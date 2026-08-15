@@ -126,6 +126,16 @@ export default function DriverDashboardPage() {
 
   /** El botón vive en la barra de abajo; acá se dibuja el lector. */
   const { abierto: escaneando, cerrar: cerrarEscaner } = useEscaner();
+
+  /*
+   * Al salir de la hoja de ruta, el lector se apaga.
+   *
+   * El estado vive en el shell —para que el botón de la barra lo pueda abrir
+   * desde cualquier pantalla— pero el lector se dibuja acá. Sin esto, abrirlo,
+   * volver atrás, pasar por otra sección y regresar lo mostraba abierto de
+   * nuevo, sin que nadie lo hubiera pedido.
+   */
+  useEffect(() => cerrarEscaner, [cerrarEscaner]);
   const [selected, setSelected] = useState<Shipment | null>(null);
   const [resolving, setResolving] = useState<DeliveryKind | null>(null);
 

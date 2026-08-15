@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -46,19 +54,28 @@ export const useEscaner = () => useContext(EscanerCtx);
 export default function DriverShell({ children }: { children: ReactNode }) {
   const [escaner, setEscaner] = useState(false);
 
+  /*
+   * Las dos funciones se memorizan y el valor del contexto también.
+   *
+   * No es prolijidad: la hoja de ruta apaga el lector cuando se va de pantalla,
+   * y para eso el `cerrar` que recibe tiene que ser SIEMPRE EL MISMO. Si
+   * cambiara en cada dibujo, ese apagado correría todo el tiempo y el lector se
+   * cerraría solo apenas se abre.
+   */
+  const abrir = useCallback(() => setEscaner(true), []);
+  const cerrar = useCallback(() => setEscaner(false), []);
+  const escanerCtx = useMemo(
+    () => ({ abierto: escaner, abrir, cerrar }),
+    [escaner, abrir, cerrar],
+  );
+
   return (
     <ToastProvider>
       {/* El rol se mira ANTES que los permisos: al admin no hay por qué
           pedirle cámara y GPS para después echarlo de esta app. */}
       <RoleGate>
         <PermissionGate>
-          <EscanerCtx.Provider
-            value={{
-              abierto: escaner,
-              abrir: () => setEscaner(true),
-              cerrar: () => setEscaner(false),
-            }}
-          >
+          <EscanerCtx.Provider value={escanerCtx}>
             {/* Alto fijo y el medio con scroll propio: así la cabecera y la
                 barra no se van de la pantalla al deslizar la lista. */}
             <div className="edr-driver flex h-dvh flex-col overflow-hidden bg-[var(--edr-dark)]">

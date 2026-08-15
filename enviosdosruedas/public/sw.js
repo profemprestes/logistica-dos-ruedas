@@ -19,7 +19,7 @@
 //
 // Subir este número es OBLIGATORIO cada vez que cambie el armazón: `activate`
 // borra el caché anterior y vuelve a guardar el nuevo.
-const CACHE = 'dosruedas-repartidor-v7';
+const CACHE = 'dosruedas-repartidor-v8';
 
 const SHELL = ['/driver', '/driver/dashboard', '/driver/caja'];
 

@@ -298,6 +298,34 @@ export default function DriverDashboardPage() {
     async (code: string) => {
       cerrarEscaner();
 
+      /*
+       * Si ya lo tenía, no se vuelve a escanear.
+       *
+       * Pasa todo el tiempo: se escanea de nuevo por las dudas, o porque el
+       * paquete se movió de bolso. Y no era inofensivo. El escaneo asigna y
+       * pone "en camino", y la app inmediatamente después lo pasa a
+       * "retirado": un envío que YA había salido volvía para atrás, y uno con
+       * un intento fallido perdía ese estado y aparecía como si nunca hubiera
+       * pasado nada. También quedaba un movimiento de retiro repetido en el
+       * historial del envío.
+       *
+       * La ruta son justamente los envíos que este repartidor tiene, así que
+       * alcanza con mirar ahí. Va antes que el aviso de "sin señal" porque
+       * contestar esto no necesita internet.
+       */
+      const buscado = code.trim().toUpperCase();
+      const yaEsMio = rutaRef.current.find(
+        (s) => String(s.id) === buscado || s.tracking_code?.toUpperCase() === buscado,
+      );
+
+      if (yaEsMio) {
+        toast(
+          `Ya lo tenés: ${yaEsMio.address_street} · ${ETIQUETA_ESTADO[yaEsMio.status]}.`,
+          'warn',
+        );
+        return;
+      }
+
       if (!navigator.onLine) {
         toast('Sin señal: para sumar un paquete hace falta internet.', 'error');
         return;

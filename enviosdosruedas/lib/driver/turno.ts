@@ -27,6 +27,26 @@ export interface Turno {
 const DESCONECTADO: Turno = { conectado: false, desde: null };
 
 /**
+ * Lo último que contestó el servidor, para no volver a arrancar de cero.
+ *
+ * EL PROBLEMA QUE RESUELVE. Cambiar de pantalla vuelve a montar la hoja de
+ * ruta, y preguntar el estado tarda un viaje al servidor. Durante ese medio
+ * segundo la app mostraba "No estás conectado" —o sea, afirmaba algo falso— y
+ * después saltaba a la hoja de ruta. Se veía en cada cambio de pantalla.
+ *
+ * Vive en el módulo y no en el componente a propósito: el módulo no se recarga
+ * al navegar entre pantallas, así que el valor sobrevive. Se sigue preguntando
+ * igual, sólo que ahora mientras tanto se muestra lo último que se sabía en vez
+ * de una suposición.
+ */
+let ultimoConocido: Turno | null = null;
+
+/** Lo último que se supo, o null si todavía no se preguntó nunca. */
+export function turnoConocido(): Turno | null {
+  return ultimoConocido;
+}
+
+/**
  * Cómo está ahora. Pregunta a la base y no a lo que la app se acuerde.
  *
  * Importa que sea así: la conexión se vence sola a las dos horas, y de eso la
@@ -47,14 +67,21 @@ export async function leerTurno(): Promise<Turno> {
 
     const desde = (perfil as { conectado_desde: string | null } | null)?.conectado_desde;
 
-    return {
+    ultimoConocido = {
       conectado: vale === true,
       desde: vale === true && desde ? new Date(desde) : null,
     };
+    return ultimoConocido;
   } catch {
-    // Sin internet no se puede saber. Se contesta "desconectado" a propósito:
-    // es la respuesta que no promete nada que no se pueda cumplir.
-    return DESCONECTADO;
+    /*
+     * Sin internet no se puede saber, y acá conviene NO cambiar nada.
+     *
+     * Antes se contestaba "desconectado", y eso le sacaba la hoja de ruta al
+     * repartidor apenas se metía en un sótano — justo cuando más la necesita y
+     * cuando la app está preparada para trabajar sin señal. Se queda con lo
+     * último que se supo; el servidor decide igual al reconectar.
+     */
+    return ultimoConocido ?? DESCONECTADO;
   }
 }
 
@@ -67,7 +94,8 @@ export async function conectarse(): Promise<Turno | null> {
     return null;
   }
 
-  return { conectado: true, desde: data ? new Date(data as string) : new Date() };
+  ultimoConocido = { conectado: true, desde: data ? new Date(data as string) : new Date() };
+  return ultimoConocido;
 }
 
 /** Termina la jornada. A partir de acá no se guarda ninguna posición más. */
@@ -79,6 +107,7 @@ export async function desconectarse(): Promise<boolean> {
     return false;
   }
 
+  ultimoConocido = DESCONECTADO;
   return true;
 }
 

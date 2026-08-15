@@ -41,7 +41,14 @@ import { flushPending } from '@/lib/driver/sync';
 import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
 import { aplicarOrden, moverEncima, moverUno } from '@/lib/driver/orden';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
-import { conectarse, desconectarse, desdeCuando, leerTurno, type Turno } from '@/lib/driver/turno';
+import {
+  conectarse,
+  desconectarse,
+  desdeCuando,
+  leerTurno,
+  turnoConocido,
+  type Turno,
+} from '@/lib/driver/turno';
 import { falloDelGpsNativo } from '@/lib/driver/nativo';
 
 /**
@@ -103,8 +110,19 @@ export default function DriverDashboardPage() {
 
   const [driver, setDriver] = useState<{ id: string; name: string } | null>(null);
   const [route, setRoute] = useState<Shipment[]>([]);
-  /** Si arrancó la jornada. Sin esto no se ve la ruta ni se registra posición. */
-  const [turno, setTurno] = useState<Turno>({ conectado: false, desde: null });
+  /**
+   * Si arrancó la jornada. Sin esto no se ve la ruta ni se registra posición.
+   *
+   * `null` es "todavía no sé", y es distinto de "desconectado". Arrancaba en
+   * desconectado y eso le hacía afirmar algo falso durante el medio segundo que
+   * tarda la consulta: cada vez que se cambiaba de pantalla aparecía "No estás
+   * conectado" y después saltaba a la hoja de ruta.
+   *
+   * Se siembra con lo último que se supo, que sobrevive al cambio de pantalla
+   * (ver `turnoConocido`). La primera vez del día no hay nada y ahí sí se
+   * espera, mostrando que está cargando y no una suposición.
+   */
+  const [turno, setTurno] = useState<Turno | null>(() => turnoConocido());
   const [turnoOcupado, setTurnoOcupado] = useState(false);
   /** Si la lista de cerrados de hoy está desplegada. */
   const [verCerrados, setVerCerrados] = useState(false);
@@ -187,7 +205,7 @@ export default function DriverDashboardPage() {
         setTurno((antes) => {
           // Si se venció solo, hay que decirlo. Apagarse en silencio deja al
           // repartidor convencido de que estaba trabajando.
-          if (antes.conectado && !t.conectado) {
+          if (antes?.conectado && !t.conectado) {
             toast('Se cerró tu jornada por inactividad. Volvé a conectarte si seguís.', 'warn');
           }
           return t;
@@ -207,7 +225,7 @@ export default function DriverDashboardPage() {
   const alternarTurno = useCallback(async () => {
     setTurnoOcupado(true);
     try {
-      if (turno.conectado) {
+      if (turno?.conectado) {
         if (await desconectarse()) {
           setTurno({ conectado: false, desde: null });
           toast('Listo, te desconectaste. Dejamos de registrar tu ubicación.', 'ok');
@@ -227,7 +245,7 @@ export default function DriverDashboardPage() {
     } finally {
       setTurnoOcupado(false);
     }
-  }, [turno.conectado, toast]);
+  }, [turno?.conectado, toast]);
 
   // --- hoja de ruta ------------------------------------------------------
   useEffect(() => {
@@ -349,8 +367,8 @@ export default function DriverDashboardPage() {
    */
   const conectadoRef = useRef(false);
   useEffect(() => {
-    conectadoRef.current = turno.conectado;
-  }, [turno.conectado]);
+    conectadoRef.current = turno?.conectado === true;
+  }, [turno?.conectado]);
 
   /**
    * La hoja de ruta por referencia, para el guardia del escáner.
@@ -364,7 +382,7 @@ export default function DriverDashboardPage() {
   }, [route]);
 
   useEffect(() => {
-    if (!turno.conectado) return;
+    if (!turno?.conectado) return;
     const cortar = seguirEnviando(() => conectadoRef.current);
 
     /*
@@ -389,7 +407,7 @@ export default function DriverDashboardPage() {
       window.clearTimeout(revisar);
       cortar();
     };
-  }, [turno.conectado, toast]);
+  }, [turno?.conectado, toast]);
 
   // --- escaneo -----------------------------------------------------------
   const handleDetected = useCallback(
@@ -529,6 +547,16 @@ export default function DriverDashboardPage() {
    * envíos, toca el botón. Se corrige solo en el primer segundo, sin que nadie
    * tenga que acordarse de nada ni llamarlo por teléfono.
    */
+  // Todavía no se sabe: no se dibuja ni la ruta ni el cartel de desconectado.
+  // Afirmar cualquiera de las dos cosas sin saberla es peor que esperar.
+  if (turno === null) {
+    return (
+      <p className="px-3.5 py-10 text-center font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
+        CARGANDO…
+      </p>
+    );
+  }
+
   if (!turno.conectado) {
     return <Desconectado ocupado={turnoOcupado} onConectar={alternarTurno} />;
   }

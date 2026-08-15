@@ -2,8 +2,9 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
+import { MessageCircle } from 'lucide-react';
 import Logo from '@/components/Logo';
-import SiteFooter from '@/components/SiteFooter';
+import SiteFooter, { WHATSAPP } from '@/components/SiteFooter';
 import { STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
 import { mapaEmbedUrl } from '@/lib/mapa';
 import { MINUTOS_SIN_NOVEDAD } from '@/lib/eta';
@@ -81,6 +82,39 @@ const HITOS: Record<string, string> = {
   reprogramado: 'Reprogramado',
   cancelado: 'Cancelado',
 };
+
+/**
+ * El color de la tarjeta de estado.
+ *
+ * Los cuatro son claros con texto oscuro, encima del azul de la página: es lo
+ * que hace que el estado salte a la vista sin depender de leerlo. El verde de
+ * entregado es el mismo #DCFCE7 del chip de la tabla, así que el que ve las dos
+ * pantallas ve el mismo verde.
+ */
+function SELLO(cancelado: boolean, entregado: boolean, fallido: boolean): string {
+  if (cancelado) return 'bg-[#FEE2E2] text-[#991B1B]';
+  if (entregado) return 'bg-[#DCFCE7] text-[#166534]';
+  if (fallido) return 'bg-[#FFEDD5] text-[#9A3412]';
+  // En curso: el amarillo de la marca, y sobre amarillo el texto es el azul.
+  return 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]';
+}
+
+/**
+ * La casita del mapa, dibujada y no en emoji.
+ *
+ * El punto del mapa lo arma Leaflet con un texto de HTML, así que no se le
+ * puede pasar un componente: va el dibujo escrito. Es el mismo ícono de Lucide
+ * que usa el resto del sistema. Con emoji, cada celular ponía el suyo —una
+ * casita distinta en Android que en iPhone, y de otro color— arriba de un
+ * círculo azul de la marca.
+ */
+const CASITA =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" ' +
+  'fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" ' +
+  'stroke-linejoin="round" style="display:block;margin:4px auto">' +
+  '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>' +
+  '<path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' +
+  '</svg>';
 
 const fecha = (iso: string) =>
   new Date(iso).toLocaleString('es-AR', {
@@ -240,7 +274,7 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
             id: 1,
             lat: data.lat,
             lng: data.lng,
-            etiqueta: '🏠',
+            etiqueta: CASITA,
             color: '#0636a5',
             titulo: 'Tu domicilio',
             detalle: data.address,
@@ -250,7 +284,8 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
             lat: data.courier.lat,
             lng: data.courier.lng,
             radio: data.courier.radio,
-            etiqueta: '🛵',
+            // No se dibuja: manda `imagen`. Queda por si algún día falta.
+            etiqueta: '',
             imagen: '/logo-simple.webp',
             color: '#ea580c',
             titulo: 'Por acá anda el repartidor',
@@ -276,33 +311,30 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
       <header className="flex items-center gap-3 border-b-2 border-[var(--edr-yellow)] px-5 py-4">
         <Logo size={44} />
         <div className="min-w-0 flex-1">
-          <div className="text-lg font-black leading-tight">Envíos DosRuedas</div>
-          <div className="text-xs font-semibold uppercase tracking-widest text-[var(--edr-muted)]">
-            Comprobante de entrega
+          <div className="font-anton text-lg uppercase leading-[.9] tracking-[-.01em] text-white">
+            Envíos<span className="text-[var(--edr-yellow)]">DosRuedas</span>
+          </div>
+          <div className="font-bebas text-sm tracking-[.1em] text-[var(--edr-muted)]">
+            COMPROBANTE DE ENTREGA
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
-            Seguimiento
+          <div className="font-bebas text-xs tracking-[.1em] text-[var(--edr-muted)]">
+            SEGUIMIENTO
           </div>
           <div className="edr-mono text-sm font-black">{data.code}</div>
         </div>
       </header>
 
-      {/* ---------- Sello de estado ---------- */}
+      {/* ---------- Sello de estado ----------
+          Tarjeta llena y no un recuadro: es lo primero y muchas veces lo único
+          que mira el que abre el link, así que el estado tiene que leerse de
+          lejos y de un vistazo. El color dice lo mismo que la palabra —verde
+          entregado, amarillo en curso, naranja no entregado, rojo cancelado—
+          para que se entienda antes de leer. */}
       <div className="px-5 pt-5">
-        <div
-          className={`rounded-xl border-4 px-4 py-4 text-center ${
-            cancelado
-              ? 'border-red-400 bg-red-500/15'
-              : entregado
-                ? 'border-emerald-400 bg-emerald-500/15'
-                : fallido
-                  ? 'border-orange-400 bg-orange-500/15'
-                  : 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/10'
-          }`}
-        >
-          <div className="text-3xl font-black leading-none tracking-wide">
+        <div className={`rounded-2xl px-5 py-5 text-center ${SELLO(cancelado, entregado, fallido)}`}>
+          <div className="font-anton text-[34px] uppercase leading-none tracking-[-.02em]">
             {cancelado
               ? 'CANCELADO'
               : entregado
@@ -312,65 +344,64 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
                   : (HITOS[data.status] ?? STATUS_LABEL[data.status] ?? '').toUpperCase()}
           </div>
           {fechaSello && (
-            <div className="mt-2 text-sm font-bold text-[var(--edr-muted)]">
-              {fecha(fechaSello)}
-            </div>
+            <div className="edr-mono mt-2 text-sm font-bold opacity-80">{fecha(fechaSello)}</div>
           )}
 
-          <div className="mt-2 text-sm font-bold text-[var(--edr-muted)]">
-            {explicacion(data)}
-          </div>
+          {explicacion(data) && (
+            <div className="mt-2 text-sm font-semibold opacity-90">{explicacion(data)}</div>
+          )}
+
+          {/* ---------- Cuánto falta ----------
+              Va ADENTRO de la tarjeta de estado y no en un recuadro aparte: el
+              estado y el tiempo son la misma noticia, y separados competían
+              entre sí por la atención en la primera pantalla. */}
+          {data.status === 'en_camino' && (
+            <div className="mt-4 border-t-2 border-[var(--edr-blue)]/20 pt-4">
+              <div className="font-bebas text-sm tracking-[.1em] opacity-75">
+                {data.courier?.eta ? 'LLEGA APROXIMADAMENTE EN' : 'EL REPARTIDOR ESTÁ EN LA CALLE'}
+              </div>
+              <div className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
+                {data.courier?.eta?.texto ?? 'En camino'}
+              </div>
+
+              {/* Sin posición publicable todavía —los primeros minutos siempre, y
+                  cada vez que el repartidor tiene el celular guardado— hay que
+                  decir por qué no hay mapa. Una pantalla que no explica su propio
+                  vacío se lee como rota. */}
+              <p className="mt-2 text-xs font-medium leading-snug opacity-80">
+                {data.courier ? (
+                  <>
+                    Es un estimado: puede cambiar por el tránsito o por las entregas que tenga
+                    antes que la tuya. En el mapa, el círculo marca la zona por donde anda.
+                  </>
+                ) : (
+                  <>
+                    Ya salió con tu envío. En cuanto tengamos su posición vas a ver por qué zona
+                    viene y cuánto falta.
+                  </>
+                )}
+              </p>
+
+              {/* De cuándo es lo que se está mostrando. Recién se dice cuando ya
+                  pasó un rato: aclarar "hace 1 minuto" es ruido, y callarlo a los
+                  veinte es dejar que alguien salga a la vereda al pedo. */}
+              {data.courier && data.courier.haceMinutos >= MINUTOS_SIN_NOVEDAD && (
+                <p className="mt-2 rounded-lg bg-[var(--edr-blue)]/10 px-3 py-2 text-xs font-bold">
+                  Última señal del repartidor hace {data.courier.haceMinutos} minutos. Puede estar
+                  más cerca de lo que marca el mapa.
+                </p>
+              )}
+
+              {cambioDeTiempo && (
+                <p className="mt-2 rounded-lg bg-[var(--edr-blue)] px-3 py-2 text-xs font-bold text-[var(--edr-yellow)]">
+                  Actualizamos el tiempo de entrega. Puede pasar por demoras que tenga el
+                  repartidor con otros envíos anteriores al tuyo.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* ---------- Cuánto falta ---------- */}
-      {data.status === 'en_camino' && (
-        <div className="px-5 pt-4">
-          <div className="rounded-xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/10 px-4 py-4 text-center">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--edr-muted)]">
-              {data.courier?.eta ? 'Llega aproximadamente en' : 'El repartidor está en la calle'}
-            </div>
-            <div className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
-              {data.courier?.eta?.texto ?? 'En camino'}
-            </div>
-
-            {/* Sin posición publicable todavía —los primeros minutos siempre, y
-                cada vez que el repartidor tiene el celular guardado— hay que
-                decir por qué no hay mapa. Una pantalla que no explica su propio
-                vacío se lee como rota. */}
-            <p className="mt-2 text-xs leading-snug text-[var(--edr-muted)]">
-              {data.courier ? (
-                <>
-                  Es un estimado: puede cambiar por el tránsito o por las entregas que tenga
-                  antes que la tuya. En el mapa, el círculo marca la zona por donde anda.
-                </>
-              ) : (
-                <>
-                  Ya salió con tu envío. En cuanto tengamos su posición vas a ver por qué zona
-                  viene y cuánto falta.
-                </>
-              )}
-            </p>
-
-            {/* De cuándo es lo que se está mostrando. Recién se dice cuando ya
-                pasó un rato: aclarar "hace 1 minuto" es ruido, y callarlo a los
-                veinte es dejar que alguien salga a la vereda al pedo. */}
-            {data.courier && data.courier.haceMinutos >= MINUTOS_SIN_NOVEDAD && (
-              <p className="mt-2 rounded-lg bg-[var(--edr-surface-2)] px-3 py-2 text-xs font-bold">
-                Última señal del repartidor hace {data.courier.haceMinutos} minutos. Puede estar
-                más cerca de lo que marca el mapa.
-              </p>
-            )}
-
-            {cambioDeTiempo && (
-              <p className="mt-2 rounded-lg border border-[var(--edr-yellow)] bg-[var(--edr-yellow)]/15 px-3 py-2 text-xs font-bold">
-                Actualizamos el tiempo de entrega. Puede pasar por demoras que tenga el
-                repartidor con otros envíos anteriores al tuyo.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ---------- Datos ---------- */}
       <div className="grid grid-cols-1 gap-3 px-5 py-5 sm:grid-cols-2">
@@ -399,6 +430,25 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
             className="sm:col-span-2"
           />
         )}
+      </div>
+
+      {/* ---------- Escribirnos ----------
+          El que abre esto y ve algo que no cuadra —la dirección mal, el envío
+          parado hace horas, "no entregado" sin haber estado ausente— hoy tenía
+          que salir a buscar por dónde avisar. Va con el código adentro del
+          mensaje: del otro lado se busca una sola vez. */}
+      <div className="px-5 pb-5">
+        <a
+          href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
+            `Hola! Consulto por el envío ${data.code}.`,
+          )}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-[var(--edr-whatsapp)] px-6 font-bebas text-lg tracking-[.07em] text-white transition hover:brightness-95"
+        >
+          <MessageCircle size={20} strokeWidth={2.5} />
+          ESCRIBINOS POR WHATSAPP
+        </a>
       </div>
 
       {/* ---------- Prueba ---------- */}
@@ -444,17 +494,31 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
 
       {/* ---------- Línea de tiempo ---------- */}
       {data.timeline.length > 0 && (
-        <ol className="border-t border-[var(--edr-border)] px-5 py-4 text-sm">
-          {data.timeline.map((t, i) => (
-            <li key={i} className="flex items-baseline gap-3 py-1">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--edr-yellow)]" />
-              <span className="font-bold">{HITOS[t.event] ?? t.event.replace('_', ' ')}</span>
-              <span className="edr-mono ml-auto text-xs text-[var(--edr-muted)]">
-                {fecha(t.happenedAt)}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <div className="border-t border-[var(--edr-border)] px-5 py-4">
+          <div className="mb-2 font-bebas text-sm tracking-[.1em] text-[var(--edr-muted)]">
+            EL RECORRIDO
+          </div>
+          {/* La línea que une los puntos se dibuja con un borde a la izquierda
+              de cada renglón, así crece sola con los movimientos que haya. */}
+          <ol className="text-sm">
+            {data.timeline.map((t, i) => (
+              <li
+                key={i}
+                className={`flex items-baseline gap-3 border-l-2 py-2 pl-4 ${
+                  i === data.timeline.length - 1
+                    ? 'border-transparent'
+                    : 'border-[var(--edr-yellow)]/40'
+                }`}
+              >
+                <span className="-ml-[21px] h-2.5 w-2.5 shrink-0 self-center rounded-full bg-[var(--edr-yellow)]" />
+                <span className="font-bold">{HITOS[t.event] ?? t.event.replace('_', ' ')}</span>
+                <span className="edr-mono ml-auto text-xs text-[var(--edr-muted)]">
+                  {fecha(t.happenedAt)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
 
       {/* ---------- Pie ---------- */}

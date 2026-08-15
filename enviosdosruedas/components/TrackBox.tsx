@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Search } from 'lucide-react';
 
 /**
  * Buscador de envíos, en la portada misma.
@@ -39,9 +40,10 @@ export default function TrackBox() {
       <button
         onClick={buscar}
         disabled={yendo || !code.trim()}
-        className="rounded-full bg-[var(--edr-blue)] px-8 py-4 text-lg font-bold uppercase tracking-wide text-white transition hover:brightness-110 disabled:opacity-40"
+        className="flex items-center justify-center gap-2 rounded-full bg-[var(--edr-blue)] px-8 py-4 font-bebas text-xl tracking-[.07em] text-white transition hover:brightness-110 disabled:opacity-40"
       >
-        {yendo ? 'Buscando…' : 'Seguir envío'}
+        <Search size={18} strokeWidth={2.5} />
+        {yendo ? 'BUSCANDO…' : 'SEGUIR ENVÍO'}
       </button>
     </div>
   );

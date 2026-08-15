@@ -209,7 +209,11 @@ export default function ShippingLabel({ shipment }: { shipment: Shipment }) {
         }}
       >
         <span>{shipment.is_flex ? 'ENVÍO FLEX' : 'Seguimiento en logisticadosruedas.com'}</span>
-        <span className="edr-mono">{shipment.scheduled_date}</span>
+        {/* Día y mes, no la fecha como la guarda la base: esto lo lee alguien
+            parado en la vereda con el paquete en la mano. */}
+        <span className="edr-mono">
+          {shipment.scheduled_date.split('-').reverse().slice(0, 2).join('/')}
+        </span>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import TrackBox from '@/components/TrackBox';
@@ -33,7 +34,12 @@ export default function Home() {
       <header className="border-b border-[var(--edr-border)]">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-5 py-4">
           <Logo size={44} />
-          <span className="text-lg font-black tracking-tight">Envíos DosRuedas</span>
+          {/* El nombre en dos colores, como en la app: es la firma de la marca
+              y hace que la portada y la pantalla del repartidor se reconozcan
+              como la misma cosa. */}
+          <span className="font-anton text-lg uppercase leading-[.9] tracking-[-.01em] text-white">
+            Envíos<span className="text-[var(--edr-yellow)]">DosRuedas</span>
+          </span>
 
           {/* El ingreso vive acá arriba, como una pestaña más: el que entra ya
               sabe quién es y no necesita que se lo expliquen. */}
@@ -42,15 +48,16 @@ export default function Home() {
               href="https://www.enviosdosruedas.com"
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-[var(--edr-border)] px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)] transition hover:bg-[var(--edr-surface)] hover:text-[var(--edr-yellow)]"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--edr-border)] px-4 py-2 font-bebas text-sm tracking-[.06em] text-[var(--edr-muted)] transition hover:bg-[var(--edr-surface)] hover:text-[var(--edr-yellow)]"
             >
-              Ir a la web ↗
+              IR A LA WEB
+              <ArrowUpRight size={14} strokeWidth={2.5} />
             </a>
             <Link
               href="/login"
-              className="rounded-full bg-[var(--edr-yellow)] px-5 py-2.5 text-xs font-black uppercase tracking-wide text-[var(--edr-blue-dark)] transition hover:brightness-95"
+              className="rounded-full bg-[var(--edr-yellow)] px-5 py-2.5 font-bebas text-sm tracking-[.06em] text-[var(--edr-blue)] transition hover:brightness-95"
             >
-              Ingresar
+              INGRESAR
             </Link>
           </nav>
         </div>
@@ -58,10 +65,10 @@ export default function Home() {
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:py-14">
         {/* ---------- Titular ---------- */}
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--edr-yellow)]">
-          Mar del Plata · Mensajería y logística
+        <p className="font-bebas text-sm tracking-[.12em] text-[var(--edr-yellow)]">
+          MAR DEL PLATA · MENSAJERÍA Y LOGÍSTICA
         </p>
-        <h1 className="mt-3 text-4xl font-black uppercase leading-[0.95] tracking-tighter sm:text-6xl">
+        <h1 className="mt-3 font-anton text-[40px] uppercase leading-[0.92] tracking-[-.02em] sm:text-6xl">
           Seguimiento y gestión
           <br />
           de envíos
@@ -84,19 +91,20 @@ export default function Home() {
           {PASTILLAS.map((p) => (
             <li
               key={p}
-              className="rounded-full border border-[var(--edr-border)] px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)]"
+              className="rounded-full border border-[var(--edr-border)] px-4 py-1.5 font-bebas text-sm tracking-[.07em] text-[var(--edr-muted)]"
             >
-              {p}
+              {p.toUpperCase()}
             </li>
           ))}
         </ul>
 
         {/* ---------- Seguimiento ---------- */}
-        <section className="mt-10 rounded-3xl bg-[var(--edr-yellow)] p-6 text-[var(--edr-blue-dark)] sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
-            Para vos, que estás esperando un paquete
+        {/* Sobre amarillo el texto es siempre el azul de la marca. */}
+        <section className="mt-10 rounded-3xl bg-[var(--edr-yellow)] p-6 text-[var(--edr-blue)] shadow-[var(--edr-sombra)] sm:p-8">
+          <p className="font-bebas text-sm tracking-[.12em] opacity-75">
+            PARA VOS, QUE ESTÁS ESPERANDO UN PAQUETE
           </p>
-          <h2 className="mt-2 text-2xl font-black uppercase tracking-tight sm:text-3xl">
+          <h2 className="mt-2 font-anton text-3xl uppercase leading-none tracking-[-.02em] sm:text-4xl">
             Seguí tu envío
           </h2>
           <p className="mt-2 text-sm font-semibold opacity-80">
@@ -118,9 +126,9 @@ export default function Home() {
           <span className="text-base font-bold">¿Tenés usuario del sistema?</span>
           <Link
             href="/login"
-            className="rounded-full bg-[var(--edr-yellow)] px-8 py-3 text-base font-black uppercase tracking-wide text-[var(--edr-blue-dark)] transition hover:brightness-95"
+            className="rounded-full bg-[var(--edr-yellow)] px-8 py-3 font-bebas text-lg tracking-[.07em] text-[var(--edr-blue)] transition hover:brightness-95"
           >
-            Ingresar
+            INGRESAR
           </Link>
         </div>
 
@@ -131,10 +139,10 @@ export default function Home() {
           rel="noreferrer"
           className="mt-8 block rounded-3xl border-2 border-[var(--edr-yellow)] px-6 py-6 text-center transition hover:bg-[var(--edr-surface)] sm:px-8"
         >
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--edr-muted)]">
-            ¿Todavía no sos cliente?
+          <p className="font-bebas text-sm tracking-[.12em] text-[var(--edr-muted)]">
+            ¿TODAVÍA NO SOS CLIENTE?
           </p>
-          <p className="mt-2 text-xl font-black uppercase tracking-tight sm:text-2xl">
+          <p className="mt-2 font-anton text-2xl uppercase leading-tight tracking-[-.02em] sm:text-3xl">
             Cotizá tu envío en enviosdosruedas.com
           </p>
           <p className="mt-2 text-sm font-semibold text-[var(--edr-muted)]">

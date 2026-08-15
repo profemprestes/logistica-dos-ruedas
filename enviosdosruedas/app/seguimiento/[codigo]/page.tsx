@@ -38,12 +38,24 @@ export async function generateMetadata({
     return { title: 'Seguimiento · Envíos DosRuedas' };
   }
 
+  /*
+   * El mismo orden que la tarjeta de adentro: primero lo que el envío ES.
+   *
+   * Antes mandaba el último movimiento, y eso hacía que un envío cancelado
+   * después de un intento fallido dijera "No se pudo entregar" en el título y
+   * "CANCELADO" adentro. Se nota ahora que cancelar un no entregado es una
+   * decisión de todos los días, y se nota donde peor cae: el título es lo que
+   * se ve en la vista previa de WhatsApp, o sea lo que lee el destinatario
+   * antes de abrir nada.
+   */
   const estado =
-    r.data.proof?.event === 'entregado'
-      ? 'Entregado'
-      : r.data.proof?.event === 'no_entregado'
-        ? 'No se pudo entregar'
-        : (STATUS_LABEL[r.data.status as ShipmentStatus] ?? 'En curso');
+    r.data.status === 'cancelado'
+      ? 'Cancelado'
+      : r.data.status === 'entregado' || r.data.proof?.event === 'entregado'
+        ? 'Entregado'
+        : r.data.proof?.event === 'no_entregado'
+          ? 'No se pudo entregar'
+          : (STATUS_LABEL[r.data.status as ShipmentStatus] ?? 'En curso');
 
   return {
     title: `${r.data.code} · ${estado} · Envíos DosRuedas`,
@@ -72,7 +84,9 @@ export default async function SeguimientoPorCodigoPage({
             <Logo size={48} />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-2xl font-black leading-tight">Seguimiento de envío</h1>
+            <h1 className="font-anton text-2xl uppercase leading-tight tracking-[-.02em]">
+              Seguimiento de envío
+            </h1>
             <p className="edr-mono truncate text-sm text-[var(--edr-muted)]">
               {decodeURIComponent(codigo).toUpperCase()}
             </p>
@@ -111,9 +125,11 @@ export default async function SeguimientoPorCodigoPage({
           href="https://www.enviosdosruedas.com"
           target="_blank"
           rel="noreferrer"
-          className="mt-6 block rounded-2xl bg-[var(--edr-yellow)] px-6 py-5 text-center text-black transition hover:brightness-95"
+          className="mt-6 block rounded-2xl bg-[var(--edr-yellow)] px-6 py-5 text-center text-[var(--edr-blue)] transition hover:brightness-95"
         >
-          <span className="block text-lg font-black">¿Necesitás enviar algo?</span>
+          <span className="block font-anton text-xl uppercase tracking-[-.01em]">
+            ¿Necesitás enviar algo?
+          </span>
           <span className="mt-1 block text-sm font-bold">
             Cotizá tu envío y conocé todos nuestros servicios en enviosdosruedas.com →
           </span>

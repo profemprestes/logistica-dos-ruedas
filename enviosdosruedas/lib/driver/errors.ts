@@ -19,6 +19,12 @@ const TEXT: Record<string, string> = {
   ESTADO_NO_PERMITIDO: 'Ese cambio de estado no está permitido.',
   ENVIO_PROGRAMADO:
     'Ese envío está cargado para más adelante: no se puede tocar hasta el día que le toca.',
+  // --- del paso 34, al escanear ---
+  ENVIO_CERRADO: 'Ese envío ya está cerrado: no lo lleves.',
+  ENVIO_YA_ASIGNADO_A_OTRO_REPARTIDOR: 'Ese envío ya está asignado a otro repartidor.',
+  YA_LO_TENES: 'Ese envío ya lo tenés: está en tu ruta.',
+  ENVIO_NO_ENTREGADO:
+    'Ese envío quedó como no entregado. Lo tiene que reprogramar la oficina antes de volver a llevarlo.',
 };
 
 /**
@@ -36,6 +42,11 @@ const PERMANENT = new Set([
   // Reintentar no sirve HOY, y mañana serviría: la entrega entraría con fecha
   // vieja y descuadraría el cierre de caja del día. Mejor que salte a la vista.
   'ENVIO_PROGRAMADO',
+  'ENVIO_CERRADO',
+  'ENVIO_YA_ASIGNADO_A_OTRO_REPARTIDOR',
+  'ENVIO_NO_ENTREGADO',
+  // No es un error: es que no hay nada que hacer. Reintentarlo daría lo mismo.
+  'YA_LO_TENES',
 ]);
 
 /** Códigos de Postgres que también son definitivos. */

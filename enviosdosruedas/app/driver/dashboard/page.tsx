@@ -337,7 +337,9 @@ export default function DriverDashboardPage() {
 
       if (error) {
         console.error('[escaneo] scan_and_assign falló', { code: error.code, message: error.message });
-        toast(errorText(error.message), 'error');
+        // "Ya lo tenés" no es un error: es que no hay nada que hacer. En rojo
+        // parece que algo salió mal y lo manda a llamar a la oficina.
+        toast(errorText(error.message), error.message.includes('YA_LO_TENES') ? 'warn' : 'error');
         return;
       }
 

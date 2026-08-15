@@ -107,8 +107,25 @@ export default function AdminShell({ children }: { children: ReactNode }) {
    * directo; desde afuera, la dirección alcanza.
    */
   function mandarA(seccion: string, evento: string, dato: string, url: string) {
-    if (pathname === seccion) window.dispatchEvent(new CustomEvent(evento, { detail: dato }));
-    else router.push(url);
+    if (pathname === seccion) {
+      window.dispatchEvent(new CustomEvent(evento, { detail: dato }));
+      return;
+    }
+
+    router.push(url);
+
+    /*
+     * Y además se avisa, por las dudas.
+     *
+     * La pantalla de destino lee la dirección al montarse, pero eso depende de
+     * que Next la monte de nuevo y no la traiga de su caché. Si la trajo de la
+     * caché, el aviso lo agarra el que ya estaba escuchando. Y si la montó de
+     * nuevo, el aviso llega a una pantalla que ya se abrió sola: abrir dos
+     * veces el mismo cuadro es abrirlo una.
+     *
+     * El respiro es para que la pantalla nueva alcance a ponerse a escuchar.
+     */
+    setTimeout(() => window.dispatchEvent(new CustomEvent(evento, { detail: dato })), 250);
   }
 
   /**

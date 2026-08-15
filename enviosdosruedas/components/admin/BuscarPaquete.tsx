@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy, PackageSearch, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { ETIQUETA_ESTADO, type Shipment } from '@/lib/format';
@@ -160,6 +160,8 @@ export default function BuscarPaquete({ verPrueba }: { verPrueba: (s: Shipment) 
   const [hallazgo, setHallazgo] = useState<Hallazgo | null>(null);
   const [aviso, setAviso] = useState('');
   const [copiado, setCopiado] = useState(false);
+  /** La última búsqueda, para no repetirla. */
+  const ultima = useRef({ q: '', cuando: 0 });
 
   async function elegir(envio: Shipment) {
     setOpciones([]);
@@ -168,6 +170,18 @@ export default function BuscarPaquete({ verPrueba }: { verPrueba: (s: Shipment) 
 
   const correr = useCallback(async (q: string) => {
     if (!q.trim()) return;
+
+    /*
+     * La misma búsqueda dos veces seguidas se hace una sola.
+     *
+     * La barra de arriba manda el dato por dos caminos a la vez —la dirección
+     * y el aviso— para que funcione se monte o no se monte la pantalla de
+     * nuevo. Cuando funcionan los dos, esto evita la segunda consulta y el
+     * parpadeo del "Buscando…".
+     */
+    const ahora = Date.now();
+    if (ultima.current.q === q && ahora - ultima.current.cuando < 2000) return;
+    ultima.current = { q, cuando: ahora };
 
     setTexto(q);
     setBuscando(true);

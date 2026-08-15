@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { leerSesion } from '@/lib/role';
 import { hoyLocal } from '@/lib/scheduled';
 import { shipmentCash, type Shipment } from '@/lib/format';
 import { buscarAtrasos, type Atraso } from '@/lib/admin/atrasos';
@@ -120,10 +121,33 @@ async function traer(hoy: string) {
 export function ProveedorDelDia({ children }: { children: ReactNode }) {
   const [datos, setDatos] = useState(VACIO);
   const [tick, setTick] = useState(0);
+  const [esAdmin, setEsAdmin] = useState(false);
 
   const refrescar = useCallback(() => setTick((n) => n + 1), []);
 
+  /*
+   * No se consulta nada hasta saber que del otro lado hay un admin.
+   *
+   * El marco del panel es de todas las pantallas de /admin, así que se dibuja
+   * también en el instante en que un repartidor que escribió la dirección a
+   * mano todavía no fue echado. Lo que traiga la base va a estar filtrado por
+   * sus permisos igual —no vería nada ajeno— pero son cuatro consultas al
+   * pedo y números de la oficina dibujados arriba de alguien que no es de la
+   * oficina. El guardia de cada pantalla es el que echa; esto es para que
+   * mientras tanto no se muestre ni se pida nada.
+   */
   useEffect(() => {
+    let vivo = true;
+    leerSesion().then((s) => {
+      if (vivo) setEsAdmin(s.rol === 'admin');
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!esAdmin) return;
     let vivo = true;
 
     traer(hoyLocal())
@@ -210,13 +234,14 @@ export function ProveedorDelDia({ children }: { children: ReactNode }) {
     return () => {
       vivo = false;
     };
-  }, [tick]);
+  }, [tick, esAdmin]);
 
   // Se mira todo el día de reojo: si no se refresca solo, no sirve.
   useEffect(() => {
+    if (!esAdmin) return;
     const t = setInterval(refrescar, 60_000);
     return () => clearInterval(t);
-  }, [refrescar]);
+  }, [refrescar, esAdmin]);
 
   const valor = useMemo(() => ({ ...datos, refrescar }), [datos, refrescar]);
 

@@ -1,5 +1,29 @@
 apply plugin: 'com.android.application'
 
+/*
+ * La firma de la app.
+ *
+ * POR QUÉ NO ALCANZA EL APK DE PRUEBA. El que sale de `assembleDebug` va
+ * firmado con una clave genérica que usa todo el mundo, y encima queda
+ * "depurable": cualquiera con un cable puede abrirlo y leer lo que hay adentro,
+ * incluida la sesión del repartidor. Para la calle no sirve.
+ *
+ * LA CONTRASEÑA NO VA EN EL REPOSITORIO. Se lee de `android/keystore.properties`,
+ * que está en el .gitignore junto con el archivo .jks. Si ese archivo no existe,
+ * la compilación de release igual funciona pero sale sin firmar: es a propósito,
+ * así el proyecto se puede clonar y compilar sin tener la clave de la empresa.
+ *
+ * EL .jks ES IRREEMPLAZABLE. Si se pierde, no se puede volver a sacar una
+ * actualización de esta app: Android sólo acepta actualizar una app con la misma
+ * firma con la que se instaló. Habría que desinstalarla de todos los celulares y
+ * publicar otra con otro nombre de paquete.
+ */
+def clavesFile = rootProject.file('keystore.properties')
+def claves = new Properties()
+if (clavesFile.exists()) {
+    claves.load(new FileInputStream(clavesFile))
+}
+
 android {
     namespace "com.enviosdosruedas.repartidor"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,10 +40,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (claves['storeFile']) {
+                storeFile file(claves['storeFile'])
+                storePassword claves['storePassword']
+                keyAlias claves['keyAlias']
+                keyPassword claves['keyPassword'] ?: claves['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Sin la clave, sale sin firmar en vez de romper la compilación.
+            signingConfig claves['storeFile'] ? signingConfigs.release : null
         }
     }
 }

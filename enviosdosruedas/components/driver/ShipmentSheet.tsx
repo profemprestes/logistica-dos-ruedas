@@ -18,6 +18,7 @@ import {
   Phone,
 } from 'lucide-react';
 import MiniMapa from '@/components/driver/MiniMapa';
+import { useCerrarConAtras } from '@/lib/driver/useAtras';
 import { trackUrl } from '@/lib/trackUrl';
 
 /** Detalle del envío con las dos únicas salidas posibles: entregado o no entregado. */
@@ -32,6 +33,9 @@ export default function ShipmentSheet({
   onResolve: (kind: DeliveryKind) => void;
   onEstado: (shipment: Shipment, estado: 'retirado' | 'en_camino') => void;
 }) {
+  // El atrás del celular vuelve a la hoja de ruta, no sale de la app.
+  useCerrarConAtras(onClose);
+
   const cash = shipmentCash(shipment);
   const flex = Boolean(shipment.is_flex);
   /** Cargado para otro día: se mira, no se toca. */

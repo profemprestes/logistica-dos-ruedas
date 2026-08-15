@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useCerrarConAtras } from '@/lib/driver/useAtras';
 import type { Html5Qrcode } from 'html5-qrcode';
 
 const CONTAINER_ID = 'edr-qr-reader';
@@ -22,6 +23,9 @@ export default function QrScannerModal({
 }) {
   const [error, setError] = useState('');
   const [manual, setManual] = useState('');
+
+  // El atrás del celular cierra el lector, no la app.
+  useCerrarConAtras(onClose);
 
   // El handler se guarda en un ref para que cambiarlo no reinicie la cámara.
   const onDetectedRef = useRef(onDetected);

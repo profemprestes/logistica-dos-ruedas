@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
+import { useCerrarConAtras } from '@/lib/driver/useAtras';
 
 /**
  * Cámara adentro de la app.
@@ -39,6 +40,9 @@ export default function CamaraModal({
   const [listo, setListo] = useState(false);
   const [error, setError] = useState('');
   const [sacando, setSacando] = useState(false);
+
+  // El atrás del celular apaga la cámara y vuelve, no sale de la app.
+  useCerrarConAtras(onCerrar);
 
   useEffect(() => {
     let cerrado = false;

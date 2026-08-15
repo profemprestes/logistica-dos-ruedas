@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, ChevronLeft, MapPin } from 'lucide-react';
 import PhotoInput from '@/components/driver/PhotoInput';
+import { useCerrarConAtras } from '@/lib/driver/useAtras';
 import { useToast } from '@/components/driver/Toast';
 import { getFix, type Fix } from '@/lib/driver/geo';
 import {
@@ -48,6 +49,10 @@ export default function ResolveDeliveryModal({
   onSynced: () => void;
 }) {
   const toast = useToast();
+
+  /* El atrás del celular cierra el cuadro. Lo que llevaba cargado no se pierde:
+     queda en el borrador, y al volver a entrar aparece. */
+  useCerrarConAtras(onClose);
   const [receiverName, setReceiverName] = useState('');
   const [receiverDni, setReceiverDni] = useState('');
   const [comment, setComment] = useState('');

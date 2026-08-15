@@ -11,6 +11,7 @@
  *  - NUNCA se mete con las llamadas a Supabase: los datos los maneja la cola
  *    de IndexedDB, y una respuesta cacheada de la API sería peor que un error.
  */
+// v7: el atras del celular cierra el cuadro en vez de salir de la app.
 // v6: arreglo del lector de QR, que quedaba abierto al volver a la hoja de ruta.
 // v5: el rediseño cambió el armazón entero —cabecera, barra de abajo, tipografías—
 // y además apareció /driver/caja. Sin subir el número, un celular sin señal
@@ -18,7 +19,7 @@
 //
 // Subir este número es OBLIGATORIO cada vez que cambie el armazón: `activate`
 // borra el caché anterior y vuelve a guardar el nuevo.
-const CACHE = 'dosruedas-repartidor-v6';
+const CACHE = 'dosruedas-repartidor-v7';
 
 const SHELL = ['/driver', '/driver/dashboard', '/driver/caja'];
 

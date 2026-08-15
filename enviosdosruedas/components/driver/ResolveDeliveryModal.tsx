@@ -286,12 +286,12 @@ export default function ResolveDeliveryModal({
         )}
 
         {flexEntregado ? (
-          <div className="rounded-2xl border-4 border-black bg-[var(--edr-yellow)] px-4 py-5 text-center text-black">
-            <div className="text-3xl font-black leading-none">ENVÍO FLEX</div>
-            <div className="mt-2 text-lg font-black leading-tight">
-              COMPLETAR EN LA APP DE ENVÍOS FLEX
+          <div className="rounded-2xl bg-[var(--edr-blue-soft)] px-4 py-4 text-[var(--edr-blue-dark)]">
+            <div className="font-bebas text-[22px] tracking-[.06em]">ENVÍO FLEX</div>
+            <div className="font-bebas text-[17px] tracking-[.06em]">
+              COMPLETALO EN LA APP DE ELLOS
             </div>
-            <p className="mt-3 text-sm font-bold leading-snug">
+            <p className="mt-2 text-sm font-semibold leading-snug">
               Cerrá la entrega en la app de Envíos Flex y recién después confirmá acá.
               No hacen falta nombre ni DNI, pero la foto sí: sacá el paquete con la
               fachada de fondo.

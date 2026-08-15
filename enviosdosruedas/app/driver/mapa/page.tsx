@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigation } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
@@ -112,27 +111,19 @@ export default function MapaRepartidorPage() {
   );
 
   return (
-    <div className="min-h-dvh pb-8">
-      <header className="bg-[var(--edr-surface-2)] px-4 py-3 text-white">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-lg font-black leading-tight">Mapa del día</h1>
-            <p className="text-xs text-white/70">
-              {cargando ? 'Cargando…' : `${conPunto.length} de ${deHoy.length} en el mapa`}
-            </p>
-          </div>
-          <Link
-            href="/driver/dashboard"
-            className="shrink-0 rounded-lg bg-white/15 px-4 py-2 text-sm font-bold"
-          >
-            ← Hoja de ruta
-          </Link>
-        </div>
+    <div className="pb-6">
+      <header className="px-3.5 pt-4">
+        <h1 className="font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
+          Mapa del día
+        </h1>
+        <p className="mt-1 font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
+          {cargando ? 'CARGANDO…' : `${conPunto.length} DE ${deHoy.length} EN EL MAPA`}
+        </p>
       </header>
 
-      <div className="space-y-3 px-3 py-3">
+      <div className="space-y-3 px-3.5 py-3">
         {!online && (
-          <p className="rounded-xl bg-amber-400 px-3 py-2 text-center text-sm font-black text-black">
+          <p className="rounded-2xl bg-[var(--edr-yellow)] px-4 py-2.5 text-center font-bebas text-base tracking-[.05em] text-[var(--edr-blue)]">
             Sin señal: los puntos están, pero el mapa no se va a dibujar hasta que vuelva.
           </p>
         )}

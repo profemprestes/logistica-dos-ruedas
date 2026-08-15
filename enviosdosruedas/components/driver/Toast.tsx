@@ -10,11 +10,19 @@ interface ToastItem {
   tone: Tone;
 }
 
+/**
+ * Todos sobre el azul profundo, y el color sólo en el ícono.
+ *
+ * Antes cada tono pintaba la píldora entera —verde, ámbar, rojo—, y sobre el
+ * azul de la app tres colores distintos apareciendo abajo era ruido. Ahora la
+ * píldora es siempre la misma y lo que cambia es la marca de la izquierda, que
+ * es lo que se mira.
+ */
 const TONE_CLASS: Record<Tone, string> = {
-  info: 'bg-[var(--edr-blue)] text-white',
-  ok: 'bg-emerald-600 text-white',
-  warn: 'bg-amber-400 text-black',
-  error: 'bg-red-600 text-white',
+  info: 'bg-[var(--edr-dark)] text-white',
+  ok: 'bg-[var(--edr-dark)] text-white',
+  warn: 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]',
+  error: 'bg-[var(--edr-rojo)] text-white',
 };
 
 const ToastContext = createContext<(text: string, tone?: Tone) => void>(() => {});

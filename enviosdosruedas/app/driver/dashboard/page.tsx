@@ -470,7 +470,7 @@ export default function DriverDashboardPage() {
                   toast('Todavía no hay señal para enviarlas.', 'warn');
               })
             }
-            className="mt-2 w-full rounded-lg bg-amber-400 px-3 py-2 text-center text-sm font-black text-black"
+            className="w-full rounded-2xl bg-[var(--edr-yellow)] px-4 py-3 text-center font-bebas text-base tracking-[.06em] text-[var(--edr-blue)]"
           >
             {pending.sendable} entrega(s) sin enviar · tocá para reintentar
             {pending.lastError && (
@@ -485,7 +485,7 @@ export default function DriverDashboardPage() {
         {pending.blocked > 0 && (
           <button
             onClick={discardBlocked}
-            className="mt-2 w-full rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-black text-white"
+            className="w-full rounded-2xl bg-[var(--edr-rojo)] px-4 py-3 text-center font-bebas text-base tracking-[.06em] text-white"
           >
             {pending.blocked} entrega(s) no se pueden enviar · tocá para descartar
             <span className="mt-1 block text-xs font-semibold opacity-90">

@@ -18,15 +18,12 @@ const inputCls =
   'w-full rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 text-lg outline-none focus:border-[var(--edr-yellow)]';
 const labelCls = 'mb-1 block text-sm font-bold uppercase tracking-wide text-[var(--edr-muted)]';
 
-
 export default function DriverProfilePage() {
   const router = useRouter();
   const toast = useToast();
   const online = useOnline();
 
   const [driver, setDriver] = useState<{ id: string; name: string; email: string } | null>(null);
-  /** Envío que se está reabriendo para marcarlo como entregado. */
-  /** Se incrementa para forzar que el resumen se vuelva a pedir. */
   const [push, setPush] = useState<EstadoPush | null>(null);
   const [pushOcupado, setPushOcupado] = useState(false);
 
@@ -102,22 +99,15 @@ export default function DriverProfilePage() {
   }
 
   return (
-    <div className="min-h-dvh pb-10">
-      <header className="flex items-center justify-between bg-[var(--edr-surface-2)] px-4 py-3 text-white">
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-black leading-tight">{driver?.name || 'Mi perfil'}</h1>
-          <p className="truncate text-xs opacity-75">{driver?.email}</p>
-        </div>
-        <Link
-          href="/driver/dashboard"
-          className="shrink-0 rounded-lg bg-white/15 px-3 py-2 text-sm font-bold"
-        >
-          Hoja de ruta
-        </Link>
+    <div className="pb-6">
+      <header className="px-4 pt-4">
+        <h1 className="truncate font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
+          {driver?.name || 'Mi perfil'}
+        </h1>
+        <p className="truncate text-sm text-[var(--edr-muted)]">{driver?.email}</p>
       </header>
 
       <main className="space-y-5 px-4 py-4">
-        {/* ---------- Período ---------- */}
         {/* La caja del día se mudó a su propia pantalla: es lo que el
             repartidor mira todos los días antes de pasar por la oficina, y
             acá quedaba abajo de todo, mezclada con la contraseña. */}
@@ -155,7 +145,7 @@ export default function DriverProfilePage() {
               className={`mt-3 w-full rounded-xl px-6 py-5 text-lg font-black active:scale-[0.99] disabled:opacity-60 ${
                 push === 'activo'
                   ? 'border-2 border-emerald-400 text-emerald-400'
-                  : 'bg-[var(--edr-yellow)] text-black'
+                  : 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
               }`}
             >
               {pushOcupado ? (
@@ -206,7 +196,7 @@ export default function DriverProfilePage() {
               <button
                 onClick={changePassword}
                 disabled={saving}
-                className="w-full rounded-xl bg-[var(--edr-yellow)] px-6 py-5 text-lg font-black text-black active:scale-[0.99] disabled:opacity-60"
+                className="w-full rounded-xl bg-[var(--edr-yellow)] px-6 py-5 text-lg font-black text-[var(--edr-blue)] active:scale-[0.99] disabled:opacity-60"
               >
                 {saving ? 'Guardando…' : 'Guardar contraseña'}
               </button>

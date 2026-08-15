@@ -166,7 +166,7 @@ export default function CamaraModal({
             <p className="text-lg font-black text-white">{error}</p>
             <button
               onClick={onSinCamara}
-              className="w-full max-w-xs rounded-xl bg-[var(--edr-yellow)] px-6 py-4 text-lg font-black text-black"
+              className="w-full max-w-xs rounded-full bg-[var(--edr-yellow)] px-6 py-4 font-bebas text-xl tracking-[.06em] text-[var(--edr-blue)]"
             >
               Usar la cámara del celular
             </button>

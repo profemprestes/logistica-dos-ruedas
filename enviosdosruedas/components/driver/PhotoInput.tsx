@@ -206,7 +206,7 @@ export default function PhotoInput({
       )}
 
       {aviso && (
-        <p className="mt-2 rounded-xl bg-amber-400 px-3 py-2 text-center text-sm font-bold text-black">
+        <p className="mt-2 rounded-xl bg-[var(--edr-yellow)] px-3 py-2 text-center text-sm font-bold text-[var(--edr-blue)]">
           {aviso}
         </p>
       )}

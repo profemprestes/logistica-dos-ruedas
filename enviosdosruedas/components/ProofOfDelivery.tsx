@@ -164,7 +164,9 @@ function explicacion(data: TrackResult): string {
     case 'pendiente_retiro':
       return 'Un repartidor está yendo al comercio a buscarlo.';
     case 'retirado':
-      return 'Ya lo retiramos del comercio. Cuando salga a la calle vas a ver acá por dónde viene.';
+      // Dice qué falta Y qué va a aparecer cuando pase. El "por dónde viene"
+      // anterior prometía un mapa sin decir de qué dependía que apareciera.
+      return 'Ya lo retiramos del comercio. Cuando el repartidor marque "en camino", podrás ver un aproximado de llegada y la zona donde se encuentra.';
     case 'en_camino':
       return 'El repartidor ya salió con tu envío.';
     case 'pendiente_entrega':

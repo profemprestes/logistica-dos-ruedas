@@ -1,14 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import QrScannerModal from '@/components/driver/QrScannerModal';
+import { useEscaner } from '@/components/driver/DriverShell';
+import Link from 'next/link';
+import {
+  ArrowUpDown,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  GripVertical,
+  RefreshCw,
+  XCircle,
+} from 'lucide-react';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import ShipmentCard from '@/components/driver/ShipmentCard';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
-import Logo from '@/components/Logo';
 import { useToast } from '@/components/driver/Toast';
 import {
   avisarPosicionSiCorresponde,
@@ -18,6 +29,8 @@ import {
 import {
   cacheRoute,
   dropBlocked,
+  guardarOrden,
+  leerOrden,
   listPending,
   readCachedRoute,
   type DeliveryKind,
@@ -25,8 +38,8 @@ import {
 import { errorText } from '@/lib/driver/errors';
 import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
-import { useOnline } from '@/lib/driver/useOnline';
-import { money, shipmentCash, type Shipment } from '@/lib/format';
+import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
+import { aplicarOrden, moverEncima, moverUno } from '@/lib/driver/orden';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
 
 /**
@@ -85,12 +98,22 @@ function fetchRoute(driverId: string) {
 export default function DriverDashboardPage() {
   const router = useRouter();
   const toast = useToast();
-  const online = useOnline();
 
   const [driver, setDriver] = useState<{ id: string; name: string } | null>(null);
   const [route, setRoute] = useState<Shipment[]>([]);
   /** Si la lista de cerrados de hoy está desplegada. */
   const [verCerrados, setVerCerrados] = useState(false);
+  /** El orden que eligió el repartidor, por id. Vacío = el que vino. */
+  const [orden, setOrden] = useState<number[]>([]);
+  const [modoOrden, setModoOrden] = useState(false);
+  const [arrastrando, setArrastrando] = useState<number | null>(null);
+  /**
+   * La foto del orden al empezar a arrastrar.
+   *
+   * Es lo que hace que soltar dos veces —el navegador lo dispara más de una
+   * vez— no corra la tarjeta de más. Ver `lib/driver/orden`.
+   */
+  const arrastreRef = useRef<{ id: number; base: number[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<{
     /** Se siguen reintentando solas. */
@@ -101,7 +124,8 @@ export default function DriverDashboardPage() {
     lastError: string | null;
   }>({ sendable: 0, blocked: 0, blockedCodes: [], lastError: null });
 
-  const [scanning, setScanning] = useState(false);
+  /** El botón vive en la barra de abajo; acá se dibuja el lector. */
+  const { abierto: escaneando, cerrar: cerrarEscaner } = useEscaner();
   const [selected, setSelected] = useState<Shipment | null>(null);
   const [resolving, setResolving] = useState<DeliveryKind | null>(null);
 
@@ -182,6 +206,23 @@ export default function DriverDashboardPage() {
     });
   }, [driver, toast]);
 
+  // --- el orden que eligió el repartidor ---------------------------------
+  useEffect(() => {
+    let vivo = true;
+    leerOrden().then((ids) => {
+      if (vivo && ids.length) setOrden(ids);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /** Guarda el orden nuevo, en la pantalla y en el celular. */
+  const acomodar = useCallback((ids: number[]) => {
+    setOrden(ids);
+    void guardarOrden(ids);
+  }, []);
+
   // --- cola offline ------------------------------------------------------
   const refreshPending = useCallback(() => {
     listPending().then((items) => {
@@ -245,7 +286,7 @@ export default function DriverDashboardPage() {
   // --- escaneo -----------------------------------------------------------
   const handleDetected = useCallback(
     async (code: string) => {
-      setScanning(false);
+      cerrarEscaner();
 
       if (!navigator.onLine) {
         toast('Sin señal: para sumar un paquete hace falta internet.', 'error');
@@ -275,7 +316,7 @@ export default function DriverDashboardPage() {
       );
       toast(`Retirado: ${shipment.address_street}`, 'ok');
     },
-    [toast],
+    [toast, cerrarEscaner],
   );
 
   /** Marca retirado / en camino y refleja el cambio en la lista al instante. */
@@ -299,7 +340,10 @@ export default function DriverDashboardPage() {
 
       toast(estado === 'retirado' ? 'Marcado como retirado.' : 'Marcado en camino.', 'ok');
     },
-    [toast],
+    // `setSelected` va en la lista aunque sea estable: el compilador de React
+    // no da por buena la memorizacion si no coinciden, y sin eso deja de
+    // optimizar toda la pantalla.
+    [toast, setSelected],
   );
 
   // --- cierre de entrega -------------------------------------------------
@@ -323,7 +367,10 @@ export default function DriverDashboardPage() {
   const { deHoy, proximos } = partirRuta(route);
 
   /** Lo que falta hacer, que es de lo que se trata la pantalla. */
-  const pendientes = deHoy.filter((s) => !CERRADOS.includes(s.status));
+  const pendientes = aplicarOrden(
+    deHoy.filter((s) => !CERRADOS.includes(s.status)),
+    orden,
+  );
   /** Lo de hoy que ya terminó, para repasar o corregir. */
   const cerrados = deHoy.filter((s) => CERRADOS.includes(s.status));
 
@@ -332,22 +379,53 @@ export default function DriverDashboardPage() {
   // entregado, por el mismo motivo: es plata que ya tiene en el bolsillo.
   const totalCash = pendientes.reduce((acc, s) => acc + shipmentCash(s).total, 0);
 
+  /* Lo hecho sobre lo del día: es el número que el repartidor mira para saber
+     cuánto le falta, y el que hace que la barra de progreso signifique algo. */
+  const hechos = cerrados.length;
+  const total = deHoy.length;
+  const avance = total > 0 ? Math.round((hechos / total) * 100) : 0;
+
   return (
-    <div className="min-h-dvh pb-32">
+    <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
       {/* ---------- Encabezado ---------- */}
-      <header className="bg-[var(--edr-surface-2)] px-4 py-3 text-white">
-        <div className="flex items-center justify-between gap-3">
-          <Logo size={34} className="shrink-0 rounded bg-[var(--edr-surface)]/95 p-0.5" />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-black leading-tight">
-              {driver?.name || 'Hoja de ruta'}
-            </h1>
-            <p className="text-xs text-white/70">
-              {pendientes.length} envío(s) por hacer
-              {proximos.length > 0 && ` · ${proximos.length} para después`} ·{' '}
-              {online ? 'con señal' : 'sin señal'}
-            </p>
-          </div>
+      <header className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between gap-2.5">
+          <h1 className="font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
+            Hoja de ruta
+          </h1>
+          <span className="edr-mono text-[15px] font-bold text-[var(--edr-yellow)]">
+            {hechos}/{total}
+          </span>
+        </div>
+
+        {/* La barra dice de un vistazo cuánto queda, que es lo que se pregunta
+            veinte veces por día. */}
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-[var(--edr-yellow)] transition-[width] duration-300 ease-[var(--edr-smooth)]"
+            style={{ width: `${avance}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
+            {pendientes.length} POR HACER
+            {proximos.length > 0 && ` · ${proximos.length} PARA DESPUÉS`}
+          </span>
+
+          {pendientes.length > 1 && (
+            <button
+              onClick={() => setModoOrden((v) => !v)}
+              className={`ml-auto flex items-center gap-1.5 rounded-full border border-[var(--edr-yellow)] px-3.5 py-2 font-bebas text-sm tracking-[.06em] transition active:scale-95 ${
+                modoOrden
+                  ? 'bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
+                  : 'text-[var(--edr-yellow)]'
+              }`}
+            >
+              {modoOrden ? <Check size={16} strokeWidth={2.5} /> : <ArrowUpDown size={16} strokeWidth={2} />}
+              {modoOrden ? 'LISTO' : 'REORDENAR'}
+            </button>
+          )}
           {/* Actualiza los datos SIN recargar la página: una recarga volvería a
               disparar el pedido de permisos de cámara y GPS. */}
           <button
@@ -355,33 +433,26 @@ export default function DriverDashboardPage() {
               recargar();
               refreshPending();
             }}
-            title="Actualizar"
             aria-label="Actualizar"
-            className="shrink-0 rounded-lg bg-white/15 px-3 py-2 text-xl leading-none"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-[var(--edr-muted)] transition active:scale-95"
           >
-            ⟳
+            <RefreshCw size={18} strokeWidth={2} />
           </button>
-
-          <Link
-            href="/driver/mapa"
-            className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
-          >
-            🗺️ Mapa
-          </Link>
-
-          <Link
-            href="/driver/profile"
-            className="shrink-0 rounded-lg bg-[var(--edr-surface)]/15 px-3 py-2 text-sm font-bold"
-          >
-            👤 Mi perfil
-          </Link>
         </div>
 
         {totalCash > 0 && (
-          <div className="mt-2 rounded-lg bg-[var(--edr-fluo)] text-black px-3 py-2 text-center text-black">
-            <span className="text-sm font-black uppercase tracking-wide">A cobrar hoy: </span>
-            <span className="edr-mono text-lg font-black">{money(totalCash)}</span>
-          </div>
+          <Link
+            href="/driver/caja"
+            className="flex items-center justify-between gap-3 rounded-full bg-[var(--edr-yellow)] px-5 py-3 text-[var(--edr-blue)] shadow-[var(--edr-sombra)] transition active:scale-95"
+          >
+            <span className="font-bebas text-[17px] tracking-[.1em]">A COBRAR HOY</span>
+            <span className="flex items-center gap-1">
+              <span className="edr-mono text-[22px] font-extrabold tracking-[-.03em]">
+                {money(totalCash)}
+              </span>
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </span>
+          </Link>
         )}
 
         {/* En camino: se reintentan solas, sólo hay que esperar. */}
@@ -399,7 +470,7 @@ export default function DriverDashboardPage() {
                   toast('Todavía no hay señal para enviarlas.', 'warn');
               })
             }
-            className="mt-2 w-full rounded-lg bg-amber-400 px-3 py-2 text-center text-sm font-black text-black"
+            className="w-full rounded-2xl bg-[var(--edr-yellow)] px-4 py-3 text-center font-bebas text-base tracking-[.06em] text-[var(--edr-blue)]"
           >
             {pending.sendable} entrega(s) sin enviar · tocá para reintentar
             {pending.lastError && (
@@ -414,7 +485,7 @@ export default function DriverDashboardPage() {
         {pending.blocked > 0 && (
           <button
             onClick={discardBlocked}
-            className="mt-2 w-full rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-black text-white"
+            className="w-full rounded-2xl bg-[var(--edr-rojo)] px-4 py-3 text-center font-bebas text-base tracking-[.06em] text-white"
           >
             {pending.blocked} entrega(s) no se pueden enviar · tocá para descartar
             <span className="mt-1 block text-xs font-semibold opacity-90">
@@ -425,7 +496,7 @@ export default function DriverDashboardPage() {
       </header>
 
       {/* ---------- Hoja de ruta ---------- */}
-      <main className="space-y-3 px-3 py-3">
+      <main className="flex flex-col gap-3.5">
         {loading && (
           <p className="py-10 text-center text-base font-semibold text-[var(--edr-muted)]">
             Cargando tu hoja de ruta…
@@ -450,45 +521,158 @@ export default function DriverDashboardPage() {
           </div>
         )}
 
-        {pendientes.map((s) => (
-          <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
-        ))}
+        {modoOrden ? (
+          <>
+            <p className="rounded-2xl border-2 border-dashed border-[var(--edr-border)] px-4 py-3 text-sm font-semibold text-[var(--edr-muted)]">
+              Arrastrá las filas para armar tu recorrido, o usá las flechas si estás con guantes.
+              El orden queda guardado en este celular.
+            </p>
+
+            {pendientes.map((s, i) => (
+              <div
+                key={s.id}
+                draggable
+                onDragStart={(e) => {
+                  // La foto del orden al empezar: la cuenta del soltar se hace
+                  // siempre contra esto. Ver `lib/driver/orden`.
+                  arrastreRef.current = { id: s.id, base: pendientes.map((x) => x.id) };
+                  e.dataTransfer.effectAllowed = 'move';
+                  setArrastrando(s.id);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const d = arrastreRef.current;
+                  if (d && d.id !== s.id) acomodar(moverEncima(d.base, d.id, s.id));
+                  setArrastrando(null);
+                }}
+                onDragEnd={() => {
+                  arrastreRef.current = null;
+                  setArrastrando(null);
+                }}
+                className={`flex items-center gap-2.5 rounded-2xl border bg-[var(--edr-blue)] p-2.5 ${
+                  arrastrando === s.id
+                    ? 'border-[var(--edr-yellow)] opacity-50'
+                    : 'border-white/10'
+                }`}
+              >
+                <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-white/10 text-[var(--edr-muted)]">
+                  <GripVertical size={18} strokeWidth={2} />
+                </span>
+
+                <span className="edr-mono w-5 shrink-0 text-sm font-bold text-[var(--edr-yellow)]">
+                  {i + 1}
+                </span>
+
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-anton text-xl uppercase leading-tight text-white">
+                    {s.address_street}
+                  </span>
+                  <span className="block truncate text-[12.5px] text-[var(--edr-muted)]">
+                    {ETIQUETA_ESTADO[s.status]}
+                    {shipmentCash(s).total > 0 && ` · cobrar ${money(shipmentCash(s).total)}`}
+                  </span>
+                </span>
+
+                <button
+                  onClick={() => acomodar(moverUno(pendientes.map((x) => x.id), s.id, -1))}
+                  disabled={i === 0}
+                  aria-label="Subir"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 text-white transition active:scale-95 disabled:opacity-30"
+                >
+                  <ChevronUp size={20} strokeWidth={2.5} />
+                </button>
+                <button
+                  onClick={() => acomodar(moverUno(pendientes.map((x) => x.id), s.id, 1))}
+                  disabled={i === pendientes.length - 1}
+                  aria-label="Bajar"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 text-white transition active:scale-95 disabled:opacity-30"
+                >
+                  <ChevronDown size={20} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+
+            <button
+              onClick={() => setModoOrden(false)}
+              className="mt-1 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-[var(--edr-yellow)] font-bebas text-xl tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95"
+            >
+              <Check size={20} strokeWidth={2.5} />
+              LISTO, ASÍ VOY
+            </button>
+          </>
+        ) : (
+          pendientes.map((s) => (
+            <ShipmentCard
+              key={s.id}
+              shipment={s}
+              onOpen={setSelected}
+              onEstado={cambiarEstado}
+              onCerrarEntrega={(x) => {
+                setSelected(x);
+                setResolving('entregado');
+              }}
+            />
+          ))
+        )}
 
         {/* Cerrados de hoy. Plegado, porque no es trabajo: es para repasar la
             jornada, o para entrar a uno que se cerró mal y corregirlo. */}
         {cerrados.length > 0 && (
-          <>
+          <div className="mt-1 overflow-hidden rounded-2xl border border-white/10">
             <button
               onClick={() => setVerCerrados((v) => !v)}
-              className="mt-4 w-full rounded-2xl border-2 border-[var(--edr-border)] px-4 py-3 text-left"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
             >
-              <span className="text-sm font-black uppercase tracking-widest text-[var(--edr-muted)]">
-                Cerrados hoy · {cerrados.length} {verCerrados ? '▾' : '▸'}
+              <span>
+                <span className="font-bebas text-base tracking-[.08em] text-white">
+                  CERRADOS HOY · {cerrados.length}
+                </span>
+                <span className="mt-0.5 block text-xs text-[var(--edr-muted)]">
+                  {cerrados.filter((s) => s.status === 'entregado').length} entregados ·{' '}
+                  {cerrados.filter((s) => s.status === 'pendiente_entrega').length} sin entregar
+                </span>
               </span>
-              <span className="mt-0.5 block text-xs text-[var(--edr-muted)]">
-                {cerrados.filter((s) => s.status === 'entregado').length} entregado(s) ·{' '}
-                {cerrados.filter((s) => s.status === 'pendiente_entrega').length} sin entregar
-              </span>
+              {verCerrados ? (
+                <ChevronUp size={20} strokeWidth={2} className="shrink-0 text-[var(--edr-muted)]" />
+              ) : (
+                <ChevronDown size={20} strokeWidth={2} className="shrink-0 text-[var(--edr-muted)]" />
+              )}
             </button>
 
+            {/* Filas compactas y no tarjetas: acá no hay nada que hacer, sólo
+                mirar. Entrando se corrige uno que se cerró mal. */}
             {verCerrados &&
               cerrados.map((s) => (
-                <ShipmentCard
+                <button
                   key={s.id}
-                  shipment={s}
-                  onOpen={setSelected}
-                  onEstado={cambiarEstado}
-                />
+                  onClick={() => setSelected(s)}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-4 py-3 text-left"
+                >
+                  {s.status === 'entregado' ? (
+                    <CheckCircle2 size={20} strokeWidth={2} className="shrink-0 text-emerald-400" />
+                  ) : (
+                    <XCircle size={20} strokeWidth={2} className="shrink-0 text-red-400" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-anton text-lg uppercase leading-tight text-white">
+                      {s.address_street}
+                    </span>
+                    <span className="block truncate text-xs text-[var(--edr-muted)]">
+                      {s.recipient_name} · {ETIQUETA_ESTADO[s.status]}
+                    </span>
+                  </span>
+                </button>
               ))}
-          </>
+          </div>
         )}
 
         {/* Programados: se ven para poder organizarse, pero no se tocan hasta
             el día. El candado real está en la base (paso 14). */}
         {proximos.length > 0 && (
           <>
-            <h2 className="px-1 pt-4 text-sm font-black uppercase tracking-widest text-[var(--edr-muted)]">
-              Próximos días · {proximos.length}
+            <h2 className="px-1 pt-2 font-bebas text-base tracking-[.08em] text-[var(--edr-muted)]">
+              PRÓXIMOS DÍAS · {proximos.length}
             </h2>
             {proximos.map((s) => (
               <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
@@ -497,19 +681,9 @@ export default function DriverDashboardPage() {
         )}
       </main>
 
-      {/* ---------- Botón gigante ---------- */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button
-          onClick={() => setScanning(true)}
-          className="w-full rounded-2xl bg-[var(--edr-yellow)] px-6 py-7 text-3xl font-black text-black active:scale-[0.99]"
-        >
-          📷 ESCANEAR PAQUETE
-        </button>
-      </div>
-
       {/* ---------- Capas ---------- */}
-      {scanning && (
-        <QrScannerModal onDetected={handleDetected} onClose={() => setScanning(false)} />
+      {escaneando && (
+        <QrScannerModal onDetected={handleDetected} onClose={cerrarEscaner} />
       )}
 
       {selected && !resolving && (

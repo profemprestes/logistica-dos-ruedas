@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AlertCircle, ChevronLeft, MapPin } from 'lucide-react';
 import PhotoInput from '@/components/driver/PhotoInput';
 import { useToast } from '@/components/driver/Toast';
 import { getFix, type Fix } from '@/lib/driver/geo';
@@ -27,7 +28,8 @@ export const FAILURE_REASONS = [
 
 const inputCls =
   'w-full rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 text-lg outline-none focus:border-[var(--edr-yellow)]';
-const labelCls = 'mb-1 block text-sm font-bold uppercase tracking-wide text-[var(--edr-muted)]';
+const labelCls =
+  'mb-2 block font-bebas text-[17px] tracking-[.08em] text-[var(--edr-yellow)]';
 
 export default function ResolveDeliveryModal({
   shipment,
@@ -236,22 +238,23 @@ export default function ResolveDeliveryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[var(--edr-paper)]">
-      <header
-        className={`flex items-center justify-between px-4 py-3 ${
-          entregado ? 'bg-emerald-600' : 'bg-orange-600'
-        } text-white`}
-      >
-        <div className="min-w-0">
-          <h2 className="text-xl font-black">{entregado ? 'Entregado' : 'No entregado'}</h2>
-          <p className="edr-mono truncate text-xs opacity-90">{shipment.tracking_code}</p>
-        </div>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <button
           onClick={onClose}
           disabled={saving}
-          className="rounded-lg bg-black/20 px-4 py-2 text-base font-bold disabled:opacity-50"
+          className="flex items-center gap-1.5 font-bebas text-base tracking-[.08em] text-[var(--edr-muted)] transition active:scale-95 disabled:opacity-50"
         >
-          Volver
+          <ChevronLeft size={18} strokeWidth={2.5} />
+          VOLVER
         </button>
+        <div className="min-w-0 text-right">
+          <h2 className="font-bebas text-xl tracking-[.06em] text-[var(--edr-yellow)]">
+            {entregado ? 'CERRAR ENTREGA' : 'NO SE PUDO ENTREGAR'}
+          </h2>
+          <p className="edr-mono truncate text-xs text-[var(--edr-muted)]">
+            {shipment.tracking_code}
+          </p>
+        </div>
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 pb-8">
@@ -283,12 +286,12 @@ export default function ResolveDeliveryModal({
         )}
 
         {flexEntregado ? (
-          <div className="rounded-2xl border-4 border-black bg-[var(--edr-yellow)] px-4 py-5 text-center text-black">
-            <div className="text-3xl font-black leading-none">ENVÍO FLEX</div>
-            <div className="mt-2 text-lg font-black leading-tight">
-              COMPLETAR EN LA APP DE ENVÍOS FLEX
+          <div className="rounded-2xl bg-[var(--edr-blue-soft)] px-4 py-4 text-[var(--edr-blue-dark)]">
+            <div className="font-bebas text-[22px] tracking-[.06em]">ENVÍO FLEX</div>
+            <div className="font-bebas text-[17px] tracking-[.06em]">
+              COMPLETALO EN LA APP DE ELLOS
             </div>
-            <p className="mt-3 text-sm font-bold leading-snug">
+            <p className="mt-2 text-sm font-semibold leading-snug">
               Cerrá la entrega en la app de Envíos Flex y recién después confirmá acá.
               No hacen falta nombre ni DNI, pero la foto sí: sacá el paquete con la
               fachada de fondo.
@@ -297,7 +300,7 @@ export default function ResolveDeliveryModal({
         ) : entregado ? (
           <>
             <div>
-              <label className={labelCls}>Nombre de quien recibe *</label>
+              <label className={labelCls}>2 · QUIÉN RECIBE</label>
               <input
                 className={inputCls}
                 value={receiverName}
@@ -306,7 +309,7 @@ export default function ResolveDeliveryModal({
               />
             </div>
             <div>
-              <label className={labelCls}>DNI *</label>
+              <label className={labelCls}>3 · DNI</label>
               <input
                 className={`${inputCls} edr-mono`}
                 value={receiverDni}
@@ -318,19 +321,26 @@ export default function ResolveDeliveryModal({
           </>
         ) : (
           <div>
-            <label className={labelCls}>Motivo *</label>
-            <select
-              className={inputCls}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            >
-              <option value="">Elegí un motivo…</option>
+            <label className={labelCls}>2 · MOTIVO</label>
+            {/* Chips y no un desplegable: un desplegable en el celular tapa la
+                pantalla y hay que apuntarle a un renglón de la lista. Acá el
+                motivo se toca de una, y se ve cuál quedó elegido. */}
+            <div className="flex flex-wrap gap-2">
               {FAILURE_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setReason(r)}
+                  className={`min-h-[52px] rounded-2xl border-2 px-4 font-bebas text-base tracking-[.06em] transition active:scale-95 ${
+                    reason === r
+                      ? 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
+                      : 'border-white/20 text-white'
+                  }`}
+                >
+                  {r.toUpperCase()}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
         )}
 
@@ -338,7 +348,7 @@ export default function ResolveDeliveryModal({
             dónde quedó el paquete. Es lo que después zanja una discusión con
             el comercio, así que va en el comprobante que se le manda. */}
         <div>
-          <label className={labelCls}>Comentario (opcional)</label>
+          <label className={labelCls}>{entregado ? '4' : '3'} · COMENTARIO (OPCIONAL)</label>
           <textarea
             className={inputCls}
             rows={2}
@@ -369,25 +379,25 @@ export default function ResolveDeliveryModal({
 
         <div>
           <label className={labelCls}>
-            {flexEntregado ? 'Foto del paquete con la fachada de fondo *' : 'Comprobante *'}
+            1 · {flexEntregado ? 'FOTO DEL PAQUETE CON LA FACHADA' : 'FOTO DEL COMPROBANTE'}
           </label>
           <PhotoInput
             photos={photos}
             onPhotos={setPhotos}
             etiquetaPrimera={
-              flexEntregado ? '📷 Sacar foto del paquete y la fachada' : '📷 Sacar foto (obligatoria)'
+              flexEntregado ? 'Sacar foto del paquete y la fachada' : 'Sacar foto (obligatoria)'
             }
           />
         </div>
 
-        <p className="text-center text-sm font-semibold text-[var(--edr-muted)]">
-          {fix
-            ? `📍 Ubicación tomada (±${Math.round(fix.accuracy)} m)`
-            : '📍 Buscando ubicación…'}
+        <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-[var(--edr-muted)]">
+          <MapPin size={16} strokeWidth={2} className="shrink-0" />
+          {fix ? `Ubicación tomada (±${Math.round(fix.accuracy)} m)` : 'Buscando ubicación…'}
         </p>
 
         {error && (
-          <p className="rounded-xl bg-red-600 px-4 py-3 text-center text-base font-bold text-white">
+          <p className="flex items-center gap-2 rounded-2xl bg-[var(--edr-rojo)] px-4 py-3.5 text-base font-bold text-white">
+            <AlertCircle size={20} strokeWidth={2} className="shrink-0" />
             {error}
           </p>
         )}
@@ -397,11 +407,9 @@ export default function ResolveDeliveryModal({
         <button
           onClick={submit}
           disabled={saving}
-          className={`w-full rounded-2xl px-6 py-6 text-2xl font-black text-white active:scale-[0.99] disabled:opacity-60 ${
-            entregado ? 'bg-emerald-600' : 'bg-orange-600'
-          }`}
+          className="flex min-h-[68px] w-full items-center justify-center gap-2 rounded-full bg-[var(--edr-yellow)] font-bebas text-[26px] tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95 disabled:opacity-60"
         >
-          {saving ? 'Guardando…' : entregado ? 'Confirmar entrega' : 'Confirmar no entregado'}
+          {saving ? 'GUARDANDO…' : entregado ? 'CONFIRMAR ENTREGA' : 'CONFIRMAR'}
         </button>
       </div>
     </div>

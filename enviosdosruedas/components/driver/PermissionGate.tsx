@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Settings, ShieldAlert } from 'lucide-react';
 import { checkCamera, checkGeolocation } from '@/lib/driver/permissions';
 
 type Phase = 'pidiendo' | 'ok' | 'bloqueado';
@@ -126,8 +127,8 @@ export default function PermissionGate({ children }: { children: ReactNode }) {
   if (phase === 'bloqueado') {
     return (
       <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 overflow-y-auto bg-red-600 px-6 py-10 text-center text-white">
-        <div className="text-7xl" aria-hidden>
-          ⛔
+        <div aria-hidden>
+          <ShieldAlert size={72} strokeWidth={2} />
         </div>
 
         <h1 className="text-3xl font-black leading-tight">Permisos requeridos</h1>
@@ -151,7 +152,9 @@ export default function PermissionGate({ children }: { children: ReactNode }) {
         </button>
 
         <p className="max-w-sm text-sm text-white/85">
-          Si no aparece el cartel: candado ⚙️ al lado de la dirección →{' '}
+          Si no aparece el cartel: el candado o{' '}
+          <Settings size={14} strokeWidth={2} className="inline align-text-bottom" /> al lado de la
+          dirección →{' '}
           <strong>Permisos del sitio</strong> → permitir <strong>Cámara</strong> y{' '}
           <strong>Ubicación</strong>. Después volvé acá.
         </p>

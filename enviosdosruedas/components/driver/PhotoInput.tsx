@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 import CamaraModal from '@/components/driver/CamaraModal';
 import { compressPhoto } from '@/lib/driver/photo';
 
@@ -32,7 +33,7 @@ export default function PhotoInput({
   photos,
   onPhotos,
   max = 2,
-  etiquetaPrimera = '📷 Sacar foto (obligatoria)',
+  etiquetaPrimera = 'Sacar foto (obligatoria)',
 }: {
   photos: Blob[];
   onPhotos: (photos: Blob[]) => void;
@@ -175,11 +176,14 @@ export default function PhotoInput({
               : 'bg-[var(--edr-blue)] text-white'
           }`}
         >
-          {busy
-            ? 'Procesando foto…'
-            : photos.length > 0
-              ? '📷 Agregar otra foto (opcional)'
-              : etiquetaPrimera}
+          {busy ? (
+            'Procesando foto…'
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <Camera size={22} strokeWidth={2} />
+              {photos.length > 0 ? 'Agregar otra foto (opcional)' : etiquetaPrimera}
+            </span>
+          )}
         </button>
       )}
 
@@ -188,9 +192,10 @@ export default function PhotoInput({
           type="button"
           onClick={() => galeriaRef.current?.click()}
           disabled={busy}
-          className="mt-2 w-full rounded-xl border-2 border-[var(--edr-border)] px-4 py-3 text-base font-bold text-[var(--edr-muted)] active:scale-[0.99] disabled:opacity-60"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[var(--edr-border)] px-4 py-3 text-base font-bold text-[var(--edr-muted)] active:scale-[0.99] disabled:opacity-60"
         >
-          🖼️ Elegir de la galería
+          <ImageIcon size={20} strokeWidth={2} />
+          Elegir de la galería
         </button>
       )}
 
@@ -201,7 +206,7 @@ export default function PhotoInput({
       )}
 
       {aviso && (
-        <p className="mt-2 rounded-xl bg-amber-400 px-3 py-2 text-center text-sm font-bold text-black">
+        <p className="mt-2 rounded-xl bg-[var(--edr-yellow)] px-3 py-2 text-center text-sm font-bold text-[var(--edr-blue)]">
           {aviso}
         </p>
       )}

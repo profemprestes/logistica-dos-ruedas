@@ -11,11 +11,15 @@
  *  - NUNCA se mete con las llamadas a Supabase: los datos los maneja la cola
  *    de IndexedDB, y una respuesta cacheada de la API sería peor que un error.
  */
-// v4: el armazón viejo de /driver no miraba el rol y le abría la hoja de ruta
-// al admin. Subir el número hace que `activate` borre el caché anterior.
-const CACHE = 'dosruedas-repartidor-v4';
+// v5: el rediseño cambió el armazón entero —cabecera, barra de abajo, tipografías—
+// y además apareció /driver/caja. Sin subir el número, un celular sin señal
+// abriría la app vieja, con nombres de archivo que ya no existen en el servidor.
+//
+// Subir este número es OBLIGATORIO cada vez que cambie el armazón: `activate`
+// borra el caché anterior y vuelve a guardar el nuevo.
+const CACHE = 'dosruedas-repartidor-v5';
 
-const SHELL = ['/driver', '/driver/dashboard'];
+const SHELL = ['/driver', '/driver/dashboard', '/driver/caja'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

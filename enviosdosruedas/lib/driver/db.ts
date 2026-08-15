@@ -7,6 +7,7 @@
  *  - `hoja`: la hoja de ruta cacheada, para poder ver direcciones en un sótano.
  *  - `borrador`: la entrega a medio cerrar, por si Android mata la app mientras
  *    el repartidor saca la foto. Ver `guardarBorrador`.
+ *  - `orden`: en qué orden decidió hacer la ruta. Ver `guardarOrden`.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Shipment } from '@/lib/format';
@@ -79,6 +80,24 @@ export interface BorradorEntrega {
   guardadoEn: number;
 }
 
+/**
+ * El orden en que el repartidor decidió hacer la ruta.
+ *
+ * Se guarda en el celular y no en el servidor a propósito: es una decisión
+ * suya, que cambia cinco veces en la mañana según el tránsito y lo que le
+ * queda cerca, y a la oficina no le aporta nada saberla. Guardarla en la base
+ * seria además una escritura por cada arrastre, con la señal que hay en la
+ * calle.
+ *
+ * Son ids y no envíos enteros: si un envío se cancela o se suma otro, la lista
+ * se acomoda sola contra la hoja de ruta que llegó del servidor.
+ */
+export interface OrdenRuta {
+  id: 'actual';
+  ids: number[];
+  guardadoEn: number;
+}
+
 interface DriverDB extends DBSchema {
   pending: {
     key: string;
@@ -92,10 +111,14 @@ interface DriverDB extends DBSchema {
     key: string;
     value: BorradorEntrega;
   };
+  orden: {
+    key: string;
+    value: OrdenRuta;
+  };
 }
 
 const DB_NAME = 'dosruedas-repartidor';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<DriverDB>> | null = null;
 
@@ -114,6 +137,9 @@ function getDB() {
         // igual, y volver a correr esto nunca rompe nada.
         if (!db.objectStoreNames.contains('borrador')) {
           db.createObjectStore('borrador', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('orden')) {
+          db.createObjectStore('orden', { keyPath: 'id' });
         }
       },
     });
@@ -266,5 +292,37 @@ export async function borrarBorrador(): Promise<void> {
     await db.delete('borrador', 'actual');
   } catch {
     // Si no se pudo borrar, el que quede vence solo a las 12 horas.
+  }
+}
+
+
+/* ------------------------------------------------------- el orden de la ruta */
+
+/** Más viejo que esto es de otra jornada y no sirve. */
+const ORDEN_VIVE_MS = 20 * 60 * 60 * 1000;
+
+export async function guardarOrden(ids: number[]): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.put('orden', { id: 'actual', ids, guardadoEn: Date.now() });
+  } catch (e) {
+    // Que falle guardar el orden no puede frenar el reparto: en el peor caso
+    // la lista vuelve al orden de siempre.
+    console.warn('[orden] no se pudo guardar', e);
+  }
+}
+
+export async function leerOrden(): Promise<number[]> {
+  try {
+    const db = await getDB();
+    const o = await db.get('orden', 'actual');
+    if (!o) return [];
+    if (Date.now() - o.guardadoEn > ORDEN_VIVE_MS) {
+      await db.delete('orden', 'actual');
+      return [];
+    }
+    return o.ids;
+  } catch {
+    return [];
   }
 }

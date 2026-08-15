@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/colors.css">
+<link rel="stylesheet" href="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/tokens/typography.css">
+<script src="_ds/xtra-music-design-system-bd806237-1fd5-4d39-863b-2aad0685714f/_ds_bundle.js"></script>
+<script src="https://unpkg.com/lucide@0.544.0/dist/umd/lucide.js"></script>
+<style>body{margin:0;background:#efeee9;font-family:Outfit,system-ui,sans-serif}a{color:#0636a5}a:hover{color:#0950f6}svg{display:block}</style>
+</helmet>
+
+<section style="padding:40px 44px 60px;display:flex;gap:44px;align-items:flex-start;flex-wrap:wrap">
+
+  <div style="width:420px;display:flex;flex-direction:column;gap:18px">
+    <span style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.1em;padding:4px 8px;background:#0636a5;color:#ffec01;border-radius:4px;align-self:flex-start">REDISEÑO · PROTOTIPO NAVEGABLE</span>
+    <h1 style="font-family:Anton,system-ui;font-weight:400;font-size:46px;line-height:.92;letter-spacing:-.02em;margin:0;text-transform:uppercase;color:#0f172a">La app del<br>repartidor<br><span style="color:#0636a5">marplatense</span></h1>
+    <p style="margin:0;font-size:15px;line-height:1.6;color:#3b4457;text-wrap:pretty">Mismo flujo del código actual (escanear → retirar → en camino → cerrar con foto), con la identidad de la marca y las decisiones de calle que pediste. <b>Tocá todo</b>: cambia estados, valida el formulario, guarda en cola cuando cortás la señal.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.5;color:#3b4457">
+      <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">01</span><span><b>Una sola mano.</b> Navegación fija abajo con el escáner al centro; toda acción primaria vive en el tercio inferior. Ningún control menor a 56px.</span></div>
+      <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">02</span><span><b>Un solo amarillo por pantalla.</b> El #FFEC01 queda reservado a la plata y a la acción siguiente; el resto es azul de marca. Antes competían cuatro bloques flúor.</span></div>
+      <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">03</span><span><b>Cero emoji.</b> Iconografía Lucide 2px, la misma que ya importa el repo, en un tono por ícono.</span></div>
+      <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">04</span><span><b>La señal es un estado visible</b>, no una sorpresa: banda ámbar, contador de cola y pantalla propia para reintentar.</span></div>
+      <div style="display:flex;gap:10px"><span style="font-family:Anton;color:#0636a5;font-size:18px">05</span><span><b>Caja del día</b> como pantalla de primer nivel: lo que tiene que rendir, de dónde sale y qué le queda a favor.</span></div>
+    </div>
+    <div style="border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:14px 16px;background:#fff;font-size:13px;line-height:1.5;color:#6b7280">
+      <b style="color:#0f172a">Para probar:</b> tocá el chip de señal del encabezado para cortar internet, cerrá una entrega y mirá la cola. El escáner del centro suma un paquete nuevo a la hoja de ruta. En Tweaks podés agrandar el texto, pasar a modo noche y esconder los programados.
+    </div>
+    <p style="margin:0;font-size:13px;line-height:1.5;color:#9aa1ad">Falta definir con vos: si el orden de la ruta lo decide el repartidor o lo sugiere el sistema, y si el cierre de caja se firma desde el celular.</p>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font:600 11px ui-monospace,Menlo,monospace;color:#6b7280">iPhone 390 × 844 · tocá para navegar</div>
+    <div style="width:390px;height:844px;border-radius:32px;overflow:hidden;background:#001035;box-shadow:0 18px 50px rgba(6,54,165,.28),0 0 0 8px #0b1220;display:flex;flex-direction:column;font-size:{{ escala }}">
+
+      <sc-if value="{{ esLogin }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:28px;padding:32px 28px;background:#0636a5">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="logo-simple.webp" alt="" style="width:44px;height:44px">
+            <div style="font-family:Anton;font-size:26px;line-height:.9;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Envíos<br><span style="color:#ffec01">DosRuedas</span></div>
+          </div>
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.1em;color:#ffec01">APP DE REPARTO</div>
+            <h1 style="margin:6px 0 0;font-family:Anton;font-weight:400;font-size:38px;line-height:.95;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Sistema de<br>gestión<br><span style="color:#ffec01">de envíos</span></h1>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.08em;color:#b7cbff;margin-bottom:6px">USUARIO</div>
+              <input value="{{ usuario }}" onInput="{{ setUsuario }}" placeholder="juan.perez" style="width:100%;box-sizing:border-box;border:none;border-radius:999px;background:#e6eefe;color:#00277c;padding:18px 22px;font-family:Outfit;font-size:18px;font-weight:600;outline:none">
+            </div>
+            <div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.08em;color:#b7cbff;margin-bottom:6px">CONTRASEÑA</div>
+              <input type="password" value="{{ clave }}" onInput="{{ setClave }}" placeholder="••••••••" style="width:100%;box-sizing:border-box;border:none;border-radius:999px;background:#e6eefe;color:#00277c;padding:18px 22px;font-family:Outfit;font-size:18px;font-weight:600;outline:none">
+            </div>
+            <button onClick="{{ entrar }}" style="border:none;border-radius:999px;background:#ffec01;color:#0636a5;padding:22px;font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)">CONECTARSE</button>
+          </div>
+          <p style="margin:0;font-size:13px;line-height:1.5;color:#b7cbff">Al entrar la app pide cámara y GPS: sin los dos no se puede cerrar una entrega.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ enApp }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+
+          <div style="background:#001035;padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid rgba(255,255,255,.1)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <img src="logo-simple.webp" alt="" style="width:30px;height:30px;flex:none">
+              <div style="font-family:Anton;font-size:15px;line-height:.9;letter-spacing:-.01em;text-transform:uppercase;color:#fff;flex:1">Envíos<br><span style="color:#ffec01">DosRuedas</span></div>
+              <button onClick="{{ toggleSenal }}" style="display:flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:{{ senalFondo }};color:{{ senalColor }};padding:9px 12px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;cursor:pointer">
+                <i data-lucide="{{ senalIcono }}" style="width:15px;height:15px"></i>{{ senalLabel }}
+              </button>
+              <button onClick="{{ goPerfil }}" style="width:40px;height:40px;flex:none;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:#0636a5;color:#ffec01;font-family:Anton;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer">JP</button>
+            </div>
+          </div>
+
+          <sc-if value="{{ offline }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#ffec01;color:#00277c;padding:9px 16px;display:flex;align-items:center;gap:8px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.05em">
+              <i data-lucide="wifi-off" style="width:16px;height:16px"></i>SIN SEÑAL · SE GUARDA TODO EN EL CELULAR
+            </div>
+          </sc-if>
+
+          <div style="flex:1;overflow-y:auto;min-height:0">
+
+            <sc-if value="{{ esRuta }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <div>
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                    <div style="font-family:Anton;font-size:26px;line-height:1;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Hoja de ruta</div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;letter-spacing:-.03em;color:#ffec01">{{ hechos }}/{{ total }}</div>
+                  </div>
+                  <div style="margin-top:8px;height:8px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden">
+                    <div style="height:100%;width:{{ progreso }};background:#ffec01;border-radius:999px;transition:width .3s cubic-bezier(.25,.8,.25,1)"></div>
+                  </div>
+                  <div style="margin-top:6px;display:flex;align-items:center;gap:10px">
+                    <span style="flex:1;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;color:#b7cbff">JUEVES 14 · {{ pendientesCount }} POR HACER</span>
+                    <button onClick="{{ toggleOrden }}" style="display:flex;align-items:center;gap:7px;border:1px solid {{ ordenBorde }};border-radius:999px;background:{{ ordenFondo }};color:{{ ordenColor }};padding:9px 14px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;cursor:pointer" style-active="transform:scale(.95)">
+                      <i data-lucide="{{ ordenIcono }}" style="width:15px;height:15px"></i>{{ ordenLabel }}
+                    </button>
+                  </div>
+                </div>
+
+                <sc-if value="{{ modoOrden }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;align-items:center;gap:9px;border:1px dashed rgba(255,236,1,.5);border-radius:16px;background:rgba(255,236,1,.08);padding:12px 14px">
+                      <i data-lucide="hand" style="width:17px;height:17px;flex:none;color:#ffec01"></i>
+                      <span style="font-family:Outfit;font-size:13.5px;line-height:1.45;color:#e6eefe">Arrastrá de la manija para armar tu vuelta, o usá las flechas si andás con guantes. El orden queda guardado en el celular.</span>
+                    </div>
+                    <sc-for list="{{ pendientes }}" as="o" hint-placeholder-count="4">
+                      <div draggable="true" onDragStart="{{ o.dragStart }}" onDragOver="{{ o.dragOver }}" onDrop="{{ o.soltar }}" onDragEnd="{{ o.dragEnd }}" style="display:flex;align-items:center;gap:10px;border:2px solid {{ o.ordenBorde }};border-radius:20px;background:#0636a5;padding:12px;opacity:{{ o.ordenOpacidad }};cursor:grab">
+                        <span style="width:34px;height:34px;flex:none;border-radius:10px;background:rgba(255,255,255,.1);color:#ffec01;display:flex;align-items:center;justify-content:center"><i data-lucide="grip-vertical" style="width:18px;height:18px"></i></span>
+                        <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.03em;color:#ffec01;width:22px;flex:none;text-align:center">{{ o.puesto }}</span>
+                        <span style="flex:1;min-width:0">
+                          <span style="display:block;font-family:Anton;font-size:20px;line-height:1.05;text-transform:uppercase;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ o.calle }}</span>
+                          <span style="display:block;font-family:Outfit;font-size:12.5px;color:#b7cbff">{{ o.estadoLabel }}{{ o.cobroBreve }}</span>
+                        </span>
+                        <button onClick="{{ o.subir }}" style="width:48px;height:48px;flex:none;border:1px solid rgba(255,255,255,.2);border-radius:14px;background:rgba(255,255,255,.06);color:#ffec01;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="transform:scale(.92)"><i data-lucide="chevron-up" style="width:20px;height:20px"></i></button>
+                        <button onClick="{{ o.bajar }}" style="width:48px;height:48px;flex:none;border:1px solid rgba(255,255,255,.2);border-radius:14px;background:rgba(255,255,255,.06);color:#ffec01;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="transform:scale(.92)"><i data-lucide="chevron-down" style="width:20px;height:20px"></i></button>
+                      </div>
+                    </sc-for>
+                    <button onClick="{{ toggleOrden }}" style="border:none;border-radius:999px;background:#ffec01;color:#0636a5;min-height:60px;font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)">LISTO, ASÍ VOY</button>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ verLista }}" hint-placeholder-val="{{ true }}">
+
+                <button onClick="{{ goCaja }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:none;border-radius:999px;background:{{ acento }};color:#0636a5;padding:14px 20px;text-align:left;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)">
+                  <span style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.06em">A COBRAR HOY</span>
+                  <span style="display:flex;align-items:center;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:22px;font-weight:800;letter-spacing:-.03em">{{ aCobrarFmt }}</span><i data-lucide="arrow-up-right" style="width:18px;height:18px"></i></span>
+                </button>
+
+                <sc-if value="{{ hayCola }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ goCola }}" style="display:flex;align-items:center;gap:10px;border:1px solid #ffec01;border-radius:16px;background:rgba(255,236,1,.1);color:#ffec01;padding:14px 16px;text-align:left;cursor:pointer">
+                    <i data-lucide="cloud-off" style="width:20px;height:20px;flex:none"></i>
+                    <span style="flex:1;font-family:Outfit;font-size:15px;font-weight:600;line-height:1.3">{{ cola }} entrega(s) guardadas en el celular</span>
+                    <i data-lucide="chevron-right" style="width:18px;height:18px;flex:none"></i>
+                  </button>
+                </sc-if>
+
+                <sc-for list="{{ pendientes }}" as="s" hint-placeholder-count="3">
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:24px;background:#0636a5;padding:16px;box-shadow:4px 4px 0 #0742ca;display:flex;flex-direction:column;gap:12px">
+                    <button onClick="{{ s.abrir }}" style="border:none;background:none;padding:0;text-align:left;color:inherit;display:flex;flex-direction:column;gap:8px;cursor:pointer">
+                      <span style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;letter-spacing:-.02em;color:#b7cbff">{{ s.codigo }}</span>
+                        <span style="border-radius:999px;background:rgba(255,255,255,.12);padding:4px 10px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#ffec01">{{ s.estadoLabel }}</span>
+                      </span>
+                      <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#ffec01">{{ s.comercio }}</span>
+                      <span style="font-family:Anton;font-size:29px;line-height:.98;letter-spacing:-.02em;text-transform:uppercase;color:#fff">{{ s.calle }}</span>
+                      <sc-if value="{{ s.tieneExtra }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family:Outfit;font-size:16px;font-weight:600;color:#fff">{{ s.extra }}</span>
+                      </sc-if>
+                      <span style="font-family:Outfit;font-size:15px;font-weight:500;color:#b7cbff">{{ s.dest }}</span>
+                      <sc-if value="{{ s.esFlex }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:flex;align-items:center;gap:8px;border-radius:12px;background:#e6eefe;color:#00277c;padding:10px 12px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.05em"><i data-lucide="camera" style="width:16px;height:16px;flex:none"></i>FLEX · CERRALO EN SU APP, LA FOTO VA ACÁ</span>
+                      </sc-if>
+                      <sc-if value="{{ s.tieneRetiro }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:flex;align-items:center;gap:8px;border-radius:12px;background:rgba(255,255,255,.08);padding:10px 12px;font-family:Outfit;font-size:14px;font-weight:600;color:#e6eefe"><i data-lucide="package" style="width:16px;height:16px;flex:none;color:#ffec01"></i>Retirar en {{ s.retiro }}</span>
+                      </sc-if>
+                      <sc-if value="{{ s.cobra }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:flex;align-items:center;justify-content:space-between;border-radius:16px;background:{{ acento }};color:#0636a5;padding:12px 16px">
+                          <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em">{{ s.cobroLabel }}</span>
+                          <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:800;letter-spacing:-.03em">{{ s.cobrarFmt }}</span>
+                        </span>
+                      </sc-if>
+                    </button>
+                    <div style="display:flex;gap:8px">
+                      <button onClick="{{ s.accion }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;min-height:56px;padding:0 16px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.06em;cursor:pointer" style-active="transform:scale(.95)">
+                        <i data-lucide="{{ s.accionIcono }}" style="width:19px;height:19px"></i>{{ s.accionLabel }}
+                      </button>
+                      <a href="tel:+542235550000" style="width:56px;height:56px;flex:none;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.06);color:#ffec01;display:flex;align-items:center;justify-content:center;text-decoration:none"><i data-lucide="phone" style="width:20px;height:20px"></i></a>
+                      <a href="https://www.google.com/maps" target="_blank" rel="noreferrer" style="width:56px;height:56px;flex:none;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.06);color:#ffec01;display:flex;align-items:center;justify-content:center;text-decoration:none"><i data-lucide="navigation" style="width:20px;height:20px"></i></a>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <button onClick="{{ toggleCerrados }}" style="display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.04);padding:14px 16px;cursor:pointer">
+                  <span style="text-align:left">
+                    <span style="display:block;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#b7cbff">CERRADOS HOY · {{ cerradosCount }}</span>
+                    <span style="display:block;font-family:Outfit;font-size:13px;color:#7f9de8">{{ resumenCerrados }}</span>
+                  </span>
+                  <i data-lucide="{{ chevronCerrados }}" style="width:20px;height:20px;color:#b7cbff"></i>
+                </button>
+
+                <sc-if value="{{ verCerrados }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:10px">
+                    <sc-for list="{{ cerrados }}" as="c" hint-placeholder-count="2">
+                      <button onClick="{{ c.abrir }}" style="display:flex;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.04);padding:14px;text-align:left;cursor:pointer">
+                        <i data-lucide="{{ c.icono }}" style="width:22px;height:22px;flex:none;color:{{ c.color }}"></i>
+                        <span style="flex:1;min-width:0">
+                          <span style="display:block;font-family:Anton;font-size:18px;letter-spacing:-.01em;text-transform:uppercase;color:#fff">{{ c.calle }}</span>
+                          <span style="display:block;font-family:Outfit;font-size:13px;color:#b7cbff">{{ c.detalle }}</span>
+                        </span>
+                        <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#7f9de8">{{ c.hora }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ verProximos }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#b7cbff">PRÓXIMOS DÍAS · {{ proximosCount }}</div>
+                    <sc-for list="{{ proximos }}" as="p" hint-placeholder-count="1">
+                      <div style="border:1px dashed rgba(255,255,255,.25);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;opacity:.75">
+                        <span style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.08em;color:#ffec01">{{ p.cuando }}</span>
+                        <span style="font-family:Anton;font-size:22px;letter-spacing:-.01em;text-transform:uppercase;color:#fff">{{ p.calle }}</span>
+                        <span style="font-family:Outfit;font-size:13px;color:#b7cbff">{{ p.dest }} · todavía no se puede tocar</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esDetalle }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <button onClick="{{ goRuta }}" style="display:flex;align-items:center;gap:8px;border:none;background:none;padding:0;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#b7cbff;cursor:pointer"><i data-lucide="chevron-left" style="width:18px;height:18px"></i>HOJA DE RUTA</button>
+                <div>
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#ffec01">{{ selComercio }} · {{ selEstado }}</div>
+                  <h2 style="margin:4px 0 0;font-family:Anton;font-weight:400;font-size:36px;line-height:.95;letter-spacing:-.02em;text-transform:uppercase;color:#fff">{{ selCalle }}</h2>
+                  <div style="margin-top:4px;font-family:Outfit;font-size:16px;font-weight:600;color:#e6eefe">{{ selExtra }}</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#7f9de8">{{ selCodigo }}</div>
+                </div>
+
+                <sc-if value="{{ selCobra }}" hint-placeholder-val="{{ true }}">
+                  <div style="border-radius:24px;background:{{ acento }};color:#0636a5;padding:20px;box-shadow:4px 4px 0 #0742ca">
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.1em">{{ selCobroLabel }}</div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:52px;font-weight:800;line-height:.95;letter-spacing:-.04em">{{ selCobrarFmt }}</div>
+                    <div style="font-family:Outfit;font-size:13px;font-weight:600;opacity:.8">{{ selDesglose }}</div>
+                  </div>
+                </sc-if>
+
+                <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:#0636a5;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:8px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#ffec01"><i data-lucide="package" style="width:16px;height:16px"></i>RETIRAR EN</div>
+                  <div style="font-family:Outfit;font-size:18px;font-weight:700;line-height:1.3;color:#fff">{{ selRetiro }}</div>
+                  <div style="font-family:Outfit;font-size:14px;color:#b7cbff">{{ selRetiroNota }}</div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px;background:rgba(255,255,255,.04)">
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#7f9de8">DESTINATARIO</div>
+                    <div style="font-family:Outfit;font-size:16px;font-weight:600;color:#fff">{{ selDest }}</div>
+                  </div>
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px;background:rgba(255,255,255,.04)">
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.08em;color:#7f9de8">VENTANA</div>
+                    <div style="font-family:Outfit;font-size:16px;font-weight:600;color:#fff">{{ selVentana }}</div>
+                  </div>
+                </div>
+
+                <div style="border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.12);height:150px;background:#e8e6df;position:relative">
+                  <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 40px,rgba(0,0,0,.07) 40px 41px),repeating-linear-gradient(90deg,transparent 0 40px,rgba(0,0,0,.07) 40px 41px)"></div>
+                  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:999px;background:#0636a5;border:4px solid #ffec01;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>
+                  <div style="position:absolute;left:0;right:0;bottom:0;padding:8px 12px;background:rgba(0,16,53,.8);font-family:Outfit;font-size:12px;font-weight:600;color:#e6eefe">Referencia aproximada · para navegar usá Cómo llegar</div>
+                </div>
+
+                <div style="display:flex;gap:10px">
+                  <a href="tel:+542235550000" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.06);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;text-decoration:none"><i data-lucide="phone" style="width:18px;height:18px;color:#ffec01"></i>LLAMAR</a>
+                  <a href="https://wa.me/5492235550000" target="_blank" rel="noreferrer" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.06);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;text-decoration:none"><i data-lucide="message-circle" style="width:18px;height:18px;color:#25d366"></i>WHATSAPP</a>
+                </div>
+                <a href="https://www.google.com/maps" target="_blank" rel="noreferrer" style="display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;border-radius:999px;background:#0636a5;border:1px solid rgba(255,255,255,.2);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:.06em;text-decoration:none"><i data-lucide="navigation" style="width:19px;height:19px;color:#ffec01"></i>CÓMO LLEGAR A DESTINO</a>
+
+                <div style="height:1px;background:rgba(255,255,255,.12);margin:2px 0"></div>
+
+                <button onClick="{{ abrirEntregado }}" style="display:flex;align-items:center;justify-content:center;gap:10px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;min-height:68px;font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)"><i data-lucide="check" style="width:24px;height:24px"></i>ENTREGADO</button>
+                <button onClick="{{ abrirNoEntregado }}" style="display:flex;align-items:center;justify-content:center;gap:10px;border:2px solid #ffec01;border-radius:999px;background:transparent;color:#ffec01;min-height:56px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.06em;cursor:pointer" style-active="transform:scale(.95)"><i data-lucide="alert-triangle" style="width:19px;height:19px"></i>NO SE PUDO ENTREGAR</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esCerrar }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <button onClick="{{ volverDetalle }}" style="display:flex;align-items:center;gap:8px;border:none;background:none;padding:0;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#b7cbff;cursor:pointer"><i data-lucide="chevron-left" style="width:18px;height:18px"></i>VOLVER AL ENVÍO</button>
+                <div>
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#ffec01">{{ selCalle }} · {{ selCodigo }}</div>
+                  <h2 style="margin:4px 0 0;font-family:Anton;font-weight:400;font-size:34px;line-height:.95;letter-spacing:-.02em;text-transform:uppercase;color:#fff">{{ tituloCierre }}</h2>
+                </div>
+
+                <sc-if value="{{ cobrarPrimero }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-radius:20px;background:{{ acento }};color:#0636a5;padding:16px;text-align:center;box-shadow:4px 4px 0 #0742ca">
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.1em">COBRAR ANTES DE ENTREGAR</div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:42px;font-weight:800;line-height:1;letter-spacing:-.04em">{{ selCobrarFmt }}</div>
+                  </div>
+                </sc-if>
+
+                <div>
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#b7cbff;margin-bottom:8px">1 · FOTO {{ fotoNota }}</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <sc-if value="{{ tieneFoto1 }}" hint-placeholder-val="{{ false }}">
+                      <div style="height:132px;border-radius:16px;background:linear-gradient(135deg,#0950f6,#00277c);border:1px solid rgba(255,255,255,.2);position:relative;display:flex;align-items:flex-end;padding:10px;box-sizing:border-box">
+                        <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em;color:#e6eefe">FOTO 1</span>
+                        <button onClick="{{ quitarFoto }}" style="position:absolute;top:8px;right:8px;width:32px;height:32px;border:none;border-radius:999px;background:rgba(0,16,53,.8);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ tieneFoto2 }}" hint-placeholder-val="{{ false }}">
+                      <div style="height:132px;border-radius:16px;background:linear-gradient(135deg,#0950f6,#00277c);border:1px solid rgba(255,255,255,.2);display:flex;align-items:flex-end;padding:10px;box-sizing:border-box">
+                        <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em;color:#e6eefe">FOTO 2</span>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ puedeFoto }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ sacarFoto }}" style="height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:2px dashed rgba(255,236,1,.6);border-radius:16px;background:rgba(255,236,1,.08);color:#ffec01;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;cursor:pointer" style-active="transform:scale(.97)">
+                        <i data-lucide="camera" style="width:28px;height:28px"></i>SACAR FOTO
+                      </button>
+                    </sc-if>
+                  </div>
+                </div>
+
+                <sc-if value="{{ pideDatos }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <div>
+                      <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#b7cbff;margin-bottom:6px">2 · QUIÉN RECIBE</div>
+                      <input value="{{ nombre }}" onInput="{{ setNombre }}" placeholder="Nombre y apellido" style="width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.06);color:#fff;padding:18px;font-family:Outfit;font-size:18px;font-weight:600;outline:none">
+                    </div>
+                    <div>
+                      <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#b7cbff;margin-bottom:6px">3 · DNI</div>
+                      <input value="{{ dni }}" onInput="{{ setDni }}" inputMode="numeric" placeholder="00.000.000" style="width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.06);color:#fff;padding:18px;font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:-.02em;outline:none">
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ pideMotivo }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#b7cbff;margin-bottom:8px">2 · MOTIVO</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px">
+                      <sc-for list="{{ motivos }}" as="m" hint-placeholder-count="5">
+                        <button onClick="{{ m.elegir }}" style="min-height:52px;border:2px solid {{ m.borde }};border-radius:999px;background:{{ m.fondo }};color:{{ m.color }};padding:0 18px;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.05em;cursor:pointer">{{ m.label }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div>
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#b7cbff;margin-bottom:8px">COMENTARIO (OPCIONAL)</div>
+                  <input value="{{ comentario }}" onInput="{{ setComentario }}" placeholder="{{ comentarioPh }}" style="width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.06);color:#fff;padding:16px;font-family:Outfit;font-size:16px;outline:none">
+                  <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px">
+                    <sc-for list="{{ sugerencias }}" as="g" hint-placeholder-count="3">
+                      <button onClick="{{ g.elegir }}" style="min-height:44px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.04);color:#b7cbff;padding:0 14px;font-family:Outfit;font-size:14px;font-weight:600;cursor:pointer">{{ g.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:8px;font-family:Outfit;font-size:14px;font-weight:600;color:#b7cbff"><i data-lucide="map-pin" style="width:16px;height:16px;color:#ffec01"></i>Ubicación tomada (±12 m)</div>
+
+                <sc-if value="{{ hayError }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:8px;border-radius:16px;background:#dc2626;color:#fff;padding:14px 16px;font-family:Outfit;font-size:15px;font-weight:700"><i data-lucide="alert-circle" style="width:18px;height:18px;flex:none"></i>{{ error }}</div>
+                </sc-if>
+
+                <button onClick="{{ confirmar }}" style="display:flex;align-items:center;justify-content:center;gap:10px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;min-height:68px;font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)"><i data-lucide="check-check" style="width:22px;height:22px"></i>{{ labelConfirmar }}</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esEscaner }}" hint-placeholder-val="{{ false }}">
+              <div style="min-height:100%;background:#000;display:flex;flex-direction:column">
+                <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#1b2333,#000)">
+                  <div style="width:74%;aspect-ratio:1;border-radius:24px;position:relative">
+                    <div style="position:absolute;left:0;top:0;width:44px;height:44px;border-left:5px solid #ffec01;border-top:5px solid #ffec01;border-radius:16px 0 0 0"></div>
+                    <div style="position:absolute;right:0;top:0;width:44px;height:44px;border-right:5px solid #ffec01;border-top:5px solid #ffec01;border-radius:0 16px 0 0"></div>
+                    <div style="position:absolute;left:0;bottom:0;width:44px;height:44px;border-left:5px solid #ffec01;border-bottom:5px solid #ffec01;border-radius:0 0 0 16px"></div>
+                    <div style="position:absolute;right:0;bottom:0;width:44px;height:44px;border-right:5px solid #ffec01;border-bottom:5px solid #ffec01;border-radius:0 0 16px 0"></div>
+                  </div>
+                  <div style="position:absolute;left:0;right:0;top:20px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.08em;color:#fff">APUNTÁ AL QR DE LA ETIQUETA</div>
+                </div>
+                <div style="padding:16px;display:flex;flex-direction:column;gap:12px;background:#001035">
+                  <button onClick="{{ simularLectura }}" style="display:flex;align-items:center;justify-content:center;gap:10px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;min-height:64px;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)"><i data-lucide="scan-line" style="width:22px;height:22px"></i>SIMULAR LECTURA</button>
+                  <div style="display:flex;gap:8px">
+                    <input value="{{ codigoManual }}" onInput="{{ setCodigoManual }}" placeholder="CÓDIGO A MANO" style="flex:1;min-width:0;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.06);color:#fff;padding:16px 20px;font-family:ui-monospace,Menlo,monospace;font-size:16px;text-transform:uppercase;outline:none">
+                    <button onClick="{{ simularLectura }}" style="border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.06);color:#ffec01;padding:0 22px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;cursor:pointer">USAR</button>
+                  </div>
+                  <button onClick="{{ goRuta }}" style="border:none;background:none;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.08em;color:#b7cbff;padding:12px;cursor:pointer">CERRAR</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esMapa }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between">
+                  <h2 style="margin:0;font-family:Anton;font-weight:400;font-size:28px;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Mapa del día</h2>
+                  <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em;color:#b7cbff">{{ pendientesCount }} PUNTOS</span>
+                </div>
+                <div style="border-radius:24px;overflow:hidden;border:1px solid rgba(255,255,255,.12);height:400px;background:#e8e6df;position:relative">
+                  <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 44px,rgba(0,0,0,.07) 44px 45px),repeating-linear-gradient(90deg,transparent 0 44px,rgba(0,0,0,.07) 44px 45px)"></div>
+                  <div style="position:absolute;left:-10%;top:38%;width:130%;height:26px;background:rgba(6,54,165,.12);transform:rotate(-8deg)"></div>
+                  <sc-for list="{{ puntos }}" as="pt" hint-placeholder-count="5">
+                    <button onClick="{{ pt.abrir }}" style="position:absolute;left:{{ pt.x }};top:{{ pt.y }};transform:translate(-50%,-50%);width:36px;height:36px;border:3px solid #fff;border-radius:999px;background:{{ pt.color }};box-shadow:0 3px 10px rgba(0,0,0,.35);cursor:pointer" style-active="transform:translate(-50%,-50%) scale(.9)"></button>
+                  </sc-for>
+                  <div style="position:absolute;left:47%;top:56%;width:18px;height:18px;border-radius:999px;background:#0950f6;border:3px solid #fff;box-shadow:0 0 0 10px rgba(9,80,246,.18)"></div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;font-family:Outfit;font-size:13px;font-weight:600;color:#b7cbff">
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:999px;background:#ffec01"></span>Por entregar</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:999px;background:#059669"></span>Entregado</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:999px;background:#dc2626"></span>No entregado</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:999px;background:#0950f6"></span>Vos</span>
+                </div>
+                <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:#0636a5;padding:16px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.08em;color:#ffec01">EL ORDEN LO ARMÁS VOS</span>
+                  <span style="font-family:Outfit;font-size:15px;line-height:1.45;color:#e6eefe">La app no te impone recorrido: muestra dónde cae cada punto —amarillo lo que falta, verde lo entregado, rojo lo que no se pudo— y vos decidís por dónde arrancar.</span>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esCaja }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <h2 style="margin:0;font-family:Anton;font-weight:400;font-size:28px;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Caja del día</h2>
+                <div style="display:flex;gap:8px">
+                  <sc-for list="{{ periodos }}" as="pr" hint-placeholder-count="3">
+                    <button onClick="{{ pr.elegir }}" style="flex:1;min-height:48px;border:1px solid {{ pr.borde }};border-radius:999px;background:{{ pr.fondo }};color:{{ pr.color }};font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;cursor:pointer">{{ pr.label }}</button>
+                  </sc-for>
+                </div>
+
+                <div style="border-radius:24px;background:{{ acento }};color:#0636a5;padding:22px;box-shadow:4px 4px 0 #0742ca">
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:.1em">TENÉS QUE RENDIR</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:56px;font-weight:800;line-height:.95;letter-spacing:-.04em">{{ rendirFmt }}</div>
+                  <div style="font-family:Outfit;font-size:13px;font-weight:600;opacity:.75">efectivo cobrado {{ periodoLabel }}</div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:rgba(255,255,255,.04);padding:16px">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:800;letter-spacing:-.03em;color:#fff">{{ entregadosCount }}</div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.08em;color:#7f9de8">ENTREGADOS</div>
+                  </div>
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:rgba(255,255,255,.04);padding:16px">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:800;letter-spacing:-.03em;color:#fff">{{ fallidosCount }}</div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.08em;color:#7f9de8">NO ENTREGADOS</div>
+                  </div>
+                </div>
+
+                <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:#0636a5;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#ffec01">DE DÓNDE SALE</span>
+                    <span style="border-radius:999px;background:#e6eefe;color:#00277c;padding:4px 10px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em">{{ estadoCaja }}</span>
+                  </div>
+                  <sc-for list="{{ lineas }}" as="l" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:8px">
+                      <span style="font-family:Outfit;font-size:15px;color:#b7cbff">{{ l.label }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:16px;font-weight:700;letter-spacing:-.02em;color:#fff">{{ l.valor }}</span>
+                    </div>
+                  </sc-for>
+                  <div style="display:flex;align-items:center;justify-content:space-between;border-radius:16px;background:#001035;padding:14px 16px">
+                    <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#ffec01">TE QUEDA A FAVOR</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#fff">{{ favorFmt }}</span>
+                  </div>
+                </div>
+
+                <div style="border:1px dashed rgba(255,255,255,.25);border-radius:20px;padding:14px 16px;font-family:Outfit;font-size:14px;line-height:1.5;color:#b7cbff">La comisión la ajusta la oficina al cerrar el día. Si algo no te cuadra, mandalo por WhatsApp antes de rendir.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esCola }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <button onClick="{{ goRuta }}" style="display:flex;align-items:center;gap:8px;border:none;background:none;padding:0;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.08em;color:#b7cbff;cursor:pointer"><i data-lucide="chevron-left" style="width:18px;height:18px"></i>HOJA DE RUTA</button>
+                <h2 style="margin:0;font-family:Anton;font-weight:400;font-size:28px;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Guardado en el celular</h2>
+                <p style="margin:0;font-family:Outfit;font-size:15px;line-height:1.5;color:#b7cbff">Estas entregas ya están cerradas: se suben solas cuando vuelva la señal. No hace falta que hagas nada.</p>
+                <sc-for list="{{ colaItems }}" as="q" hint-placeholder-count="2">
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:#0636a5;padding:16px;display:flex;align-items:center;gap:12px">
+                    <i data-lucide="cloud-upload" style="width:22px;height:22px;flex:none;color:#ffec01"></i>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:Anton;font-size:20px;letter-spacing:-.01em;text-transform:uppercase;color:#fff">{{ q.calle }}</div>
+                      <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#b7cbff">{{ q.codigo }} · {{ q.hora }} · con foto</div>
+                    </div>
+                    <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em;color:#ffec01">EN ESPERA</span>
+                  </div>
+                </sc-for>
+                <button onClick="{{ reintentar }}" style="display:flex;align-items:center;justify-content:center;gap:10px;border:none;border-radius:999px;background:#ffec01;color:#0636a5;min-height:60px;font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:.06em;box-shadow:4px 4px 0 #0742ca;cursor:pointer" style-active="transform:scale(.95)"><i data-lucide="refresh-cw" style="width:20px;height:20px"></i>REINTENTAR AHORA</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ esPerfil }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center;gap:14px">
+                  <div style="width:64px;height:64px;flex:none;border-radius:999px;background:#ffec01;color:#0636a5;display:flex;align-items:center;justify-content:center;font-family:Anton;font-size:24px;box-shadow:4px 4px 0 #0742ca">JP</div>
+                  <div>
+                    <div style="font-family:Anton;font-size:26px;line-height:1;letter-spacing:-.02em;text-transform:uppercase;color:#fff">Juan Pérez</div>
+                    <div style="font-family:Outfit;font-size:14px;color:#b7cbff">juan.perez · moto 04</div>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.04);padding:14px 10px;text-align:center">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#ffec01">98%</div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em;color:#7f9de8">ENTREGA</div>
+                  </div>
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.04);padding:14px 10px;text-align:center">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#ffec01">112</div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em;color:#7f9de8">ESTA SEMANA</div>
+                  </div>
+                  <div style="border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.04);padding:14px 10px;text-align:center">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:-.03em;color:#ffec01">4,9</div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.06em;color:#7f9de8">PUNTAJE</div>
+                  </div>
+                </div>
+                <button onClick="{{ togglePush }}" style="display:flex;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.12);border-radius:20px;background:#0636a5;padding:16px;text-align:left;cursor:pointer">
+                  <i data-lucide="bell" style="width:22px;height:22px;flex:none;color:#ffec01"></i>
+                  <span style="flex:1">
+                    <span style="display:block;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;color:#fff">NOTIFICACIONES</span>
+                    <span style="display:block;font-family:Outfit;font-size:13px;color:#b7cbff">Envíos asignados a mano y cierre de caja</span>
+                  </span>
+                  <span style="width:56px;height:32px;flex:none;border-radius:999px;background:{{ pushFondo }};position:relative;transition:background .2s">
+                    <span style="position:absolute;top:4px;left:{{ pushX }};width:24px;height:24px;border-radius:999px;background:#fff;transition:left .2s cubic-bezier(.34,1.56,.64,1)"></span>
+                  </span>
+                </button>
+                <div style="border:1px solid rgba(255,255,255,.12);border-radius:20px;background:rgba(255,255,255,.04);padding:4px 16px">
+                  <div style="display:flex;align-items:center;gap:12px;padding:16px 0;border-bottom:1px solid rgba(255,255,255,.1)"><i data-lucide="key-round" style="width:20px;height:20px;color:#b7cbff"></i><span style="flex:1;font-family:Outfit;font-size:16px;font-weight:600;color:#fff">Cambiar contraseña</span><i data-lucide="chevron-right" style="width:18px;height:18px;color:#7f9de8"></i></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:16px 0;border-bottom:1px solid rgba(255,255,255,.1)"><i data-lucide="shield-check" style="width:20px;height:20px;color:#b7cbff"></i><span style="flex:1;font-family:Outfit;font-size:16px;font-weight:600;color:#fff">Permisos de cámara y GPS</span><span style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.06em;color:#34d399">OK</span></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:16px 0"><i data-lucide="help-circle" style="width:20px;height:20px;color:#b7cbff"></i><span style="flex:1;font-family:Outfit;font-size:16px;font-weight:600;color:#fff">Hablar con la oficina</span><i data-lucide="chevron-right" style="width:18px;height:18px;color:#7f9de8"></i></div>
+                </div>
+                <button onClick="{{ salir }}" style="border:2px solid rgba(255,255,255,.2);border-radius:999px;background:transparent;color:#b7cbff;min-height:56px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;cursor:pointer">SALIR DE LA CUENTA</button>
+                <div style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#4b6bb5">v2.0 · Mar del Plata</div>
+              </div>
+            </sc-if>
+
+          </div>
+
+          <sc-if value="{{ hayToast }}" hint-placeholder-val="{{ false }}">
+            <div style="margin:0 14px 8px;display:flex;align-items:center;gap:10px;border-radius:16px;background:#e6eefe;color:#00277c;padding:14px 16px;box-shadow:0 8px 20px rgba(0,0,0,.3)">
+              <i data-lucide="check-circle-2" style="width:20px;height:20px;flex:none"></i>
+              <span style="font-family:Outfit;font-size:15px;font-weight:600;line-height:1.35">{{ toast }}</span>
+            </div>
+          </sc-if>
+
+          <div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:4px;background:#0636a5;border-top:1px solid rgba(255,255,255,.12);padding:10px 12px 18px">
+            <button onClick="{{ goRuta }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;border:none;background:none;color:{{ colorRuta }};min-height:56px;justify-content:center;cursor:pointer"><i data-lucide="list-checks" style="width:24px;height:24px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em">RUTA</span></button>
+            <button onClick="{{ goMapa }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;border:none;background:none;color:{{ colorMapa }};min-height:56px;justify-content:center;cursor:pointer"><i data-lucide="map" style="width:24px;height:24px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em">MAPA</span></button>
+            <button onClick="{{ goEscaner }}" style="width:72px;height:72px;flex:none;margin-top:-26px;border:4px solid #001035;border-radius:999px;background:#ffec01;color:#0636a5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;box-shadow:0 6px 18px rgba(255,236,1,.3);cursor:pointer" style-active="transform:scale(.95)"><i data-lucide="scan-line" style="width:28px;height:28px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:.06em">ESCANEAR</span></button>
+            <button onClick="{{ goCaja }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;border:none;background:none;color:{{ colorCaja }};min-height:56px;justify-content:center;cursor:pointer"><i data-lucide="wallet" style="width:24px;height:24px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em">CAJA</span></button>
+            <button onClick="{{ goPerfil }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;border:none;background:none;color:{{ colorPerfil }};min-height:56px;justify-content:center;cursor:pointer"><i data-lucide="user" style="width:24px;height:24px"></i><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.06em">PERFIL</span></button>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:950},&quot;textoGrande&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Calle&quot;},&quot;modoNoche&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Calle&quot;},&quot;ocultarProgramados&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hoja de ruta&quot;}}">
+const MOTIVOS = ['Ausente', 'Intransitable', 'Dirección incorrecta', 'Teléfono incorrecto', 'Rechazado'];
+
+const DATA = [
+  { id: 1, codigo: 'EDR-2K48F1', comercio: 'Bazar Rivadavia', calle: 'Falucho 1832', extra: 'Piso 4 · Depto B', dest: 'Marcela Ferreyra', ventana: '14 a 18 hs', estado: 'en_camino', cobrar: 62000, cuando: 'puerta', envio: 4200, retiro: 'Rivadavia 3120, local 4', retiroNota: 'Preguntar por Vanina, entrada por el pasillo', x: '30%', y: '26%' },
+  { id: 2, codigo: 'EDR-4TT519', comercio: 'Veterinaria Constitución', calle: 'Roca 2233', extra: '', dest: 'Ana Ledesma', ventana: 'Todo el día', estado: 'retirado', cobrar: 22500, cuando: 'puerta', envio: 3700, retiro: 'Constitución 4180', retiroNota: 'Timbre del costado', x: '58%', y: '20%' },
+  { id: 3, codigo: 'EDR-77BX20', comercio: 'Tienda Nube MDQ', calle: 'Rodríguez Peña 4120', extra: '', dest: 'Laura Giménez', ventana: '9 a 13 hs', estado: 'retirado', cobrar: 0, flex: true, retiro: 'Depósito Güemes 2871', retiroNota: 'Estante FLEX', x: '68%', y: '48%' },
+  { id: 4, codigo: 'EDR-9QM03T', comercio: 'Pañalera Sol', calle: 'Alberti 3455', extra: 'Timbre 2', dest: 'Diego Sosa', ventana: 'Tarde', estado: 'pendiente_retiro', cobrar: 18000, cuando: 'retiro', envio: 3700, retiro: 'Güemes 2871', retiroNota: 'Cobrar el envío al retirar', x: '22%', y: '62%' },
+  { id: 5, codigo: 'EDR-51PLQ0', comercio: 'Kiosco 9 de Julio', calle: 'Jara 1490', extra: '', dest: 'Pablo Ruiz', ventana: '', estado: 'pendiente_retiro', cobrar: 0, retiro: '9 de Julio 3320', retiroNota: '', x: '44%', y: '72%' },
+  { id: 6, codigo: 'EDR-118KKX', comercio: 'Bazar Rivadavia', calle: 'Colón 4550', extra: '', dest: 'Nicolás Vera', ventana: '', estado: 'entregado', cobrar: 25000, cuando: 'puerta', envio: 4200, retiro: 'Rivadavia 3120', retiroNota: '', hora: '11:20', x: '78%', y: '66%' },
+  { id: 7, codigo: 'EDR-20FZ9M', comercio: 'Pañalera Sol', calle: 'Olavarría 2310', extra: '', dest: 'Julieta Paz', ventana: '', estado: 'entregado', cobrar: 0, envio: 3700, retiro: 'Güemes 2871', retiroNota: '', hora: '10:05', x: '16%', y: '40%' },
+  { id: 8, codigo: 'EDR-33HHQ1', comercio: 'Kiosco 9 de Julio', calle: 'Tejedor 1120', extra: '', dest: 'Marcos Iriarte', ventana: '', estado: 'pendiente_entrega', cobrar: 0, envio: 3700, retiro: '9 de Julio 3320', retiroNota: '', hora: '12:40', x: '52%', y: '84%' },
+  { id: 9, codigo: 'EDR-90LMN4', comercio: 'Tienda Nube MDQ', calle: 'Independencia 3700', extra: '', dest: 'Cecilia Ortiz', ventana: '', estado: 'programado', cobrar: 0, envio: 3700, retiro: 'Depósito Güemes 2871', retiroNota: '', x: '86%', y: '30%' }
+];
+
+const ESTADO_LABEL = {
+  pendiente_retiro: 'PENDIENTE DE RETIRO',
+  retirado: 'RETIRADO',
+  en_camino: 'EN CAMINO',
+  entregado: 'ENTREGADO',
+  pendiente_entrega: 'NO ENTREGADO',
+  programado: 'PROGRAMADO'
+};
+
+const money = (n) => '$ ' + Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+
+class Component extends DCLogic {
+  state = {
+    screen: 'login', envios: DATA.map((s) => ({ ...s })), selId: null, kind: null,
+    nombre: '', dni: '', comentario: '', motivo: '', fotos: 0, error: '',
+    toast: '', offline: false, cola: [], verCerrados: false, periodo: 'Hoy',
+    push: true, usuario: '', clave: '', codigoManual: '', modoOrden: false, arrastrando: null
+  };
+
+  /** Reordena la hoja de ruta: mueve `id` a la posición del `destino`. */
+  /**
+   * Reordena la hoja de ruta. `base` es el orden desde el cual se calcula:
+   * en el arrastre se pasa el snapshot tomado al empezar, así aplicar el mismo
+   * movimiento dos veces da exactamente el mismo resultado (el handler de drop
+   * se dispara más de una vez y antes eso corría la tarjeta de más).
+   */
+  mover(id, destino, base) {
+    const activos = ['pendiente_retiro', 'retirado', 'en_camino'];
+    const envios = this.state.envios;
+    const ids = (base || envios.filter((e) => activos.includes(e.estado)).map((e) => e.id)).slice();
+    const desde = ids.indexOf(id);
+    const hasta = typeof destino === 'number' ? destino : ids.indexOf(destino);
+    if (desde < 0 || hasta < 0 || desde === hasta || hasta >= ids.length) {
+      this.setState({ arrastrando: null });
+      return;
+    }
+    ids.splice(hasta, 0, ids.splice(desde, 1)[0]);
+    const orden = ids.map((x) => envios.find((e) => e.id === x));
+    let k = 0;
+    this.setState({
+      envios: envios.map((e) => (activos.includes(e.estado) ? orden[k++] : e)),
+      arrastrando: null
+    });
+  }
+
+  componentDidMount() { this.pintarIconos(); }
+  componentDidUpdate() { this.pintarIconos(); }
+
+  pintarIconos() {
+    if (window.lucide) window.lucide.createIcons();
+    else setTimeout(() => window.lucide && window.lucide.createIcons(), 300);
+  }
+
+  avisar(texto) {
+    clearTimeout(this._t);
+    this.setState({ toast: texto });
+    this._t = setTimeout(() => this.setState({ toast: '' }), 3800);
+  }
+
+  ir = (screen) => this.setState({ screen, error: '' });
+
+  cambiarEstado(id, estado) {
+    this.setState((s) => ({ envios: s.envios.map((e) => (e.id === id ? { ...e, estado } : e)) }));
+  }
+
+  confirmar = () => {
+    const sel = this.state.envios.find((e) => e.id === this.state.selId);
+    const entregado = this.state.kind === 'entregado';
+    const pideDatos = entregado && !sel.flex;
+    if (this.state.fotos === 0) return this.setState({ error: entregado ? 'Falta la foto del comprobante.' : 'Falta la foto de la puerta.' });
+    if (pideDatos && !this.state.nombre.trim()) return this.setState({ error: 'Poné el nombre de quien recibe.' });
+    if (pideDatos && !this.state.dni.trim()) return this.setState({ error: 'Poné el DNI de quien recibe.' });
+    if (!entregado && !this.state.motivo) return this.setState({ error: 'Elegí el motivo.' });
+
+    const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    this.setState((s) => ({
+      envios: s.envios.map((e) => (e.id === s.selId ? { ...e, estado: entregado ? 'entregado' : 'pendiente_entrega', hora } : e)),
+      cola: s.offline ? [...s.cola, { codigo: sel.codigo, calle: sel.calle, hora }] : s.cola,
+      screen: 'ruta', kind: null, selId: null, nombre: '', dni: '', comentario: '', motivo: '', fotos: 0, error: ''
+    }));
+    this.avisar(this.state.offline
+      ? 'Guardado sin señal. Se envía cuando vuelva.'
+      : (entregado ? 'Entrega registrada. Buen laburo.' : 'Quedó como no entregado.'));
+  };
+
+  renderVals() {
+    const st = this.state;
+    const p = this.props;
+    const noche = p.modoNoche ?? false;
+    const acento = noche ? '#f0cf1f' : '#ffec01';
+    const escala = (p.textoGrande ?? false) ? '17px' : '16px';
+    const activos = ['pendiente_retiro', 'retirado', 'en_camino'];
+    const pend = st.envios.filter((e) => activos.includes(e.estado));
+    const cerr = st.envios.filter((e) => e.estado === 'entregado' || e.estado === 'pendiente_entrega');
+    const prox = (p.ocultarProgramados ?? false) ? [] : st.envios.filter((e) => e.estado === 'programado');
+    const sel = st.envios.find((e) => e.id === st.selId) || st.envios[0];
+    const entregado = st.kind === 'entregado';
+    const cobrado = cerr.filter((e) => e.estado === 'entregado').reduce((a, e) => a + (e.cobrar || 0), 0);
+    const valorEnvios = cerr.filter((e) => e.estado === 'entregado').reduce((a, e) => a + (e.envio || 0), 0);
+    const comision = Math.round(valorEnvios * 0.7);
+    const tab = (n) => (st.screen === n ? acento : '#7f9de8');
+
+    return {
+      escala, acento,
+      esLogin: st.screen === 'login', enApp: st.screen !== 'login',
+      esRuta: st.screen === 'ruta', esDetalle: st.screen === 'detalle', esCerrar: st.screen === 'cerrar',
+      esEscaner: st.screen === 'escaner', esMapa: st.screen === 'mapa', esCaja: st.screen === 'caja',
+      esPerfil: st.screen === 'perfil', esCola: st.screen === 'cola',
+
+      usuario: st.usuario, clave: st.clave,
+      setUsuario: (e) => this.setState({ usuario: e.target.value }),
+      setClave: (e) => this.setState({ clave: e.target.value }),
+      entrar: () => this.ir('ruta'),
+      salir: () => this.setState({ screen: 'login', usuario: '', clave: '' }),
+
+      goRuta: () => this.ir('ruta'), goMapa: () => this.ir('mapa'), goCaja: () => this.ir('caja'),
+      goPerfil: () => this.ir('perfil'), goCola: () => this.ir('cola'), goEscaner: () => this.ir('escaner'),
+      colorRuta: tab('ruta'), colorMapa: tab('mapa'), colorCaja: tab('caja'), colorPerfil: tab('perfil'),
+
+      offline: st.offline,
+      toggleSenal: () => this.setState((s) => ({ offline: !s.offline })),
+      senalLabel: st.offline ? 'SIN SEÑAL' : 'CON SEÑAL',
+      senalIcono: st.offline ? 'wifi-off' : 'wifi',
+      senalFondo: st.offline ? 'rgba(255,236,1,.15)' : 'rgba(255,255,255,.06)',
+      senalColor: st.offline ? acento : '#e6eefe',
+
+      hechos: cerr.length, total: st.envios.length - prox.length,
+      progreso: Math.round((cerr.length / Math.max(1, st.envios.length - prox.length)) * 100) + '%',
+      pendientesCount: pend.length, proximosCount: prox.length, cerradosCount: cerr.length,
+      verProximos: prox.length > 0,
+      resumenCerrados: cerr.filter((e) => e.estado === 'entregado').length + ' entregados · ' + cerr.filter((e) => e.estado === 'pendiente_entrega').length + ' sin entregar',
+      verCerrados: st.verCerrados,
+      toggleCerrados: () => this.setState((s) => ({ verCerrados: !s.verCerrados })),
+      chevronCerrados: st.verCerrados ? 'chevron-up' : 'chevron-down',
+      aCobrarFmt: money(pend.reduce((a, e) => a + (e.cobrar || 0), 0)),
+
+      cola: st.cola.length, hayCola: st.cola.length > 0,
+      colaItems: st.cola.map((c, i) => ({ ...c, key: i })),
+      reintentar: () => { this.setState({ cola: [], screen: 'ruta' }); this.avisar('Se enviaron las entregas guardadas.'); },
+
+      modoOrden: st.modoOrden, verLista: !st.modoOrden,
+      toggleOrden: () => this.setState((s) => ({ modoOrden: !s.modoOrden })),
+      ordenLabel: st.modoOrden ? 'LISTO' : 'REORDENAR',
+      ordenIcono: st.modoOrden ? 'check' : 'arrow-up-down',
+      ordenFondo: st.modoOrden ? acento : 'transparent',
+      ordenColor: st.modoOrden ? '#0636a5' : acento,
+      ordenBorde: acento,
+
+      pendientes: pend.map((s, idx) => ({
+        codigo: s.codigo, comercio: s.comercio, calle: s.calle, extra: s.extra, tieneExtra: Boolean(s.extra),
+        puesto: String(idx + 1),
+        cobroBreve: s.cobrar > 0 ? ' · cobrar ' + money(s.cobrar) : '',
+        ordenBorde: st.arrastrando === s.id ? acento : 'rgba(255,255,255,.12)',
+        ordenOpacidad: st.arrastrando === s.id ? '.5' : '1',
+        dragStart: (e) => {
+          // Snapshot del orden al empezar: es la base del cálculo en el drop.
+          this._drag = { id: s.id, base: pend.map((x) => x.id) };
+          if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(s.id)); }
+          this.setState({ arrastrando: s.id });
+        },
+        dragOver: (e) => e.preventDefault(),
+        soltar: (e) => {
+          e.preventDefault();
+          const d = this._drag;
+          if (!d || d.id === s.id) { this.setState({ arrastrando: null }); return; }
+          this.mover(d.id, s.id, d.base);
+        },
+        dragEnd: () => { this._drag = null; this.setState({ arrastrando: null }); },
+        subir: () => this.mover(s.id, idx - 1),
+        bajar: () => this.mover(s.id, idx + 1),
+        dest: s.ventana ? s.dest + ' · ' + s.ventana : s.dest,
+        estadoLabel: ESTADO_LABEL[s.estado], esFlex: Boolean(s.flex),
+        cobra: s.cobrar > 0, cobrarFmt: money(s.cobrar),
+        cobroLabel: s.cuando === 'retiro' ? 'COBRAR AL RETIRAR' : 'COBRAR EN LA PUERTA',
+        tieneRetiro: s.estado === 'pendiente_retiro', retiro: s.retiro,
+        accionLabel: s.estado === 'pendiente_retiro' ? 'YA LO RETIRÉ' : s.estado === 'retirado' ? 'SALGO EN CAMINO' : 'CERRAR ENTREGA',
+        accionIcono: s.estado === 'pendiente_retiro' ? 'package-check' : s.estado === 'retirado' ? 'bike' : 'check',
+        abrir: () => this.setState({ selId: s.id, screen: 'detalle' }),
+        accion: () => {
+          if (s.estado === 'pendiente_retiro') { this.cambiarEstado(s.id, 'retirado'); this.avisar('Marcado como retirado.'); }
+          else if (s.estado === 'retirado') { this.cambiarEstado(s.id, 'en_camino'); this.avisar('En camino. Ya te ven en el seguimiento.'); }
+          else this.setState({ selId: s.id, kind: 'entregado', screen: 'cerrar', error: '', fotos: 0 });
+        }
+      })),
+
+      cerrados: cerr.map((s) => ({
+        calle: s.calle, hora: s.hora || '—',
+        detalle: s.dest + ' · ' + ESTADO_LABEL[s.estado],
+        icono: s.estado === 'entregado' ? 'check-circle-2' : 'x-circle',
+        color: s.estado === 'entregado' ? '#34d399' : '#f87171',
+        abrir: () => this.setState({ selId: s.id, screen: 'detalle' })
+      })),
+
+      proximos: prox.map((s) => ({ calle: s.calle, dest: s.dest, cuando: 'SE REPARTE MAÑANA' })),
+
+      selCodigo: sel.codigo, selComercio: sel.comercio, selCalle: sel.calle,
+      selExtra: sel.extra || sel.dest, selDest: sel.dest, selVentana: sel.ventana || 'Sin ventana',
+      selEstado: ESTADO_LABEL[sel.estado], selRetiro: sel.retiro, selRetiroNota: sel.retiroNota || 'Sin indicaciones',
+      selCobra: sel.cobrar > 0, selCobrarFmt: money(sel.cobrar),
+      selCobroLabel: sel.cuando === 'retiro' ? 'COBRAR AL RETIRAR' : 'COBRAR EN LA PUERTA',
+      selDesglose: sel.cobrar > 0 && sel.envio ? 'envío ' + money(sel.envio) + ' + mercadería ' + money(sel.cobrar - sel.envio) : 'monto exacto, no des vuelto de más',
+
+      abrirEntregado: () => this.setState({ kind: 'entregado', screen: 'cerrar', error: '', fotos: 0 }),
+      abrirNoEntregado: () => this.setState({ kind: 'no_entregado', screen: 'cerrar', error: '', fotos: 0 }),
+      volverDetalle: () => this.ir('detalle'),
+      tituloCierre: entregado ? (sel.flex ? 'Flex: foto y listo' : 'Cerrar la entrega') : 'No se pudo entregar',
+      fotoNota: entregado ? (sel.flex ? 'DEL PAQUETE CON LA FACHADA' : 'DEL COMPROBANTE') : 'DE LA PUERTA',
+      cobrarPrimero: entregado && sel.cobrar > 0,
+      pideDatos: entregado && !sel.flex, pideMotivo: !entregado,
+      tieneFoto1: st.fotos >= 1, tieneFoto2: st.fotos >= 2, puedeFoto: st.fotos < 2,
+      sacarFoto: () => this.setState((s) => ({ fotos: Math.min(2, s.fotos + 1), error: '' })),
+      quitarFoto: () => this.setState((s) => ({ fotos: Math.max(0, s.fotos - 1) })),
+      nombre: st.nombre, dni: st.dni, comentario: st.comentario,
+      setNombre: (e) => this.setState({ nombre: e.target.value, error: '' }),
+      setDni: (e) => this.setState({ dni: e.target.value, error: '' }),
+      setComentario: (e) => this.setState({ comentario: e.target.value }),
+      comentarioPh: entregado ? 'Recibió el encargado del edificio' : 'Toqué timbre tres veces, nadie contestó',
+      sugerencias: (entregado ? ['Recibió el encargado', 'Dejado en portería', 'Recibió un vecino'] : ['Nadie contestó', 'No vive más ahí', 'No quiso recibirlo']).map((label) => ({ label, elegir: () => this.setState({ comentario: label }) })),
+      motivos: MOTIVOS.map((label) => ({
+        label,
+        borde: st.motivo === label ? acento : 'rgba(255,255,255,.2)',
+        fondo: st.motivo === label ? acento : 'transparent',
+        color: st.motivo === label ? '#0636a5' : '#e6eefe',
+        elegir: () => this.setState({ motivo: label, error: '' })
+      })),
+      error: st.error, hayError: Boolean(st.error),
+      labelConfirmar: entregado ? 'CONFIRMAR ENTREGA' : 'CONFIRMAR NO ENTREGADO',
+      confirmar: this.confirmar,
+
+      codigoManual: st.codigoManual,
+      setCodigoManual: (e) => this.setState({ codigoManual: e.target.value }),
+      simularLectura: () => {
+        const n = st.envios.length + 1;
+        const nuevo = { id: 100 + n, codigo: 'EDR-' + String(n * 7351).padStart(6, '0'), comercio: 'Escaneado en el depósito', calle: 'Brown 2450', extra: '', dest: 'Sabrina Quiroga', ventana: 'Tarde', estado: 'retirado', cobrar: 31000, cuando: 'puerta', envio: 4200, retiro: 'Depósito Güemes 2871', retiroNota: '', x: '40%', y: '34%' };
+        this.setState((s) => ({ envios: [nuevo, ...s.envios], screen: 'ruta', codigoManual: '' }));
+        this.avisar('Retirado: Brown 2450');
+      },
+
+      puntos: st.envios.filter((e) => e.estado !== 'programado').map((s) => ({
+        x: s.x, y: s.y,
+        color: s.estado === 'entregado' ? '#059669' : s.estado === 'pendiente_entrega' ? '#dc2626' : acento,
+        texto: s.estado === 'entregado' || s.estado === 'pendiente_entrega' ? '#fff' : '#0636a5',
+        abrir: () => this.setState({ selId: s.id, screen: 'detalle' })
+      })),
+
+      periodos: ['Hoy', 'Ayer', 'Semana'].map((label) => ({
+        label,
+        borde: st.periodo === label ? acento : 'rgba(255,255,255,.2)',
+        fondo: st.periodo === label ? acento : 'transparent',
+        color: st.periodo === label ? '#0636a5' : '#b7cbff',
+        elegir: () => this.setState({ periodo: label })
+      })),
+      periodoLabel: st.periodo.toLowerCase(),
+      rendirFmt: money(cobrado), favorFmt: money(comision),
+      entregadosCount: cerr.filter((e) => e.estado === 'entregado').length,
+      fallidosCount: cerr.filter((e) => e.estado === 'pendiente_entrega').length,
+      estadoCaja: 'BORRADOR',
+      lineas: [
+        { label: 'Cobrado en la puerta', valor: money(cobrado) },
+        { label: 'Cobrado al retirar', valor: money(0) },
+        { label: 'Valor de los envíos hechos', valor: money(valorEnvios) },
+        { label: 'Comisión estimada (70%)', valor: money(comision) }
+      ],
+
+      push: st.push, pushFondo: st.push ? acento : 'rgba(255,255,255,.2)', pushX: st.push ? '28px' : '4px',
+      togglePush: () => this.setState((s) => ({ push: !s.push })),
+
+      toast: st.toast, hayToast: Boolean(st.toast)
+    };
+  }
+}
+</script>
+</body>
+</html>

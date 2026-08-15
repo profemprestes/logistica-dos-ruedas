@@ -18,7 +18,7 @@ export default function DriverEntryPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-4 px-6 py-20 text-center">
       <div className="h-12 w-12 animate-spin rounded-full border-4 border-[var(--edr-border)] border-t-[var(--edr-yellow)]" />
       <p className="text-lg font-bold">Entrando…</p>
     </div>

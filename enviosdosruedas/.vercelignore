@@ -1,0 +1,5 @@
+# La app de Android no tiene nada que hacer en el servidor: son 100 MB de
+# proyecto nativo y assets que el sitio no usa. Se compila en esta máquina.
+android/
+android-www/
+assets/

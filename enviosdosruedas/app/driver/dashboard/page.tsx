@@ -41,6 +41,15 @@ import { flushPending } from '@/lib/driver/sync';
 import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
 import { aplicarOrden, moverEncima, moverUno } from '@/lib/driver/orden';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
+import {
+  conectarse,
+  desconectarse,
+  desdeCuando,
+  leerTurno,
+  turnoConocido,
+  type Turno,
+} from '@/lib/driver/turno';
+import { falloDelGpsNativo } from '@/lib/driver/nativo';
 
 /**
  * Todo lo que todavía tiene abierto, sin importar cómo llegó a su hoja de ruta.
@@ -101,6 +110,20 @@ export default function DriverDashboardPage() {
 
   const [driver, setDriver] = useState<{ id: string; name: string } | null>(null);
   const [route, setRoute] = useState<Shipment[]>([]);
+  /**
+   * Si arrancó la jornada. Sin esto no se ve la ruta ni se registra posición.
+   *
+   * `null` es "todavía no sé", y es distinto de "desconectado". Arrancaba en
+   * desconectado y eso le hacía afirmar algo falso durante el medio segundo que
+   * tarda la consulta: cada vez que se cambiaba de pantalla aparecía "No estás
+   * conectado" y después saltaba a la hoja de ruta.
+   *
+   * Se siembra con lo último que se supo, que sobrevive al cambio de pantalla
+   * (ver `turnoConocido`). La primera vez del día no hay nada y ahí sí se
+   * espera, mostrando que está cargando y no una suposición.
+   */
+  const [turno, setTurno] = useState<Turno | null>(() => turnoConocido());
+  const [turnoOcupado, setTurnoOcupado] = useState(false);
   /** Si la lista de cerrados de hoy está desplegada. */
   const [verCerrados, setVerCerrados] = useState(false);
   /** El orden que eligió el repartidor, por id. Vacío = el que vino. */
@@ -162,6 +185,67 @@ export default function DriverDashboardPage() {
         );
     });
   }, [router]);
+
+  /*
+   * --- la conexión de la jornada (paso 37) -------------------------------
+   *
+   * Se relee cada tanto y no una sola vez al abrir, porque la conexión SE VENCE
+   * SOLA a las dos horas sin actividad y de eso la app no se entera por su
+   * cuenta. Sin releer, el repartidor vería "conectado" mientras el servidor ya
+   * está descartando sus posiciones: la peor combinación posible, porque nadie
+   * de los dos lados sabría que está pasando.
+   */
+  useEffect(() => {
+    if (!driver) return;
+    let vivo = true;
+
+    const mirar = () => {
+      void leerTurno().then((t) => {
+        if (!vivo) return;
+        setTurno((antes) => {
+          // Si se venció solo, hay que decirlo. Apagarse en silencio deja al
+          // repartidor convencido de que estaba trabajando.
+          if (antes?.conectado && !t.conectado) {
+            toast('Se cerró tu jornada por inactividad. Volvé a conectarte si seguís.', 'warn');
+          }
+          return t;
+        });
+      });
+    };
+
+    mirar();
+    const timer = window.setInterval(mirar, 60_000);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [driver, toast]);
+
+  const alternarTurno = useCallback(async () => {
+    setTurnoOcupado(true);
+    try {
+      if (turno?.conectado) {
+        if (await desconectarse()) {
+          setTurno({ conectado: false, desde: null });
+          toast('Listo, te desconectaste. Dejamos de registrar tu ubicación.', 'ok');
+        } else {
+          toast('No se pudo desconectar. Fijate si tenés señal.', 'error');
+        }
+        return;
+      }
+
+      const nuevo = await conectarse();
+      if (nuevo) {
+        setTurno(nuevo);
+        toast('Conectado. Ya podés ver tu hoja de ruta.', 'ok');
+      } else {
+        toast('No se pudo conectar. Fijate si tenés señal.', 'error');
+      }
+    } finally {
+      setTurnoOcupado(false);
+    }
+  }, [turno?.conectado, toast]);
 
   // --- hoja de ruta ------------------------------------------------------
   useEffect(() => {
@@ -270,16 +354,27 @@ export default function DriverDashboardPage() {
   }, [refreshPending]);
 
   /**
-   * Mientras le quede trabajo del día, avisar por dónde va.
+   * Mientras esté conectado, avisar por dónde va.
    *
-   * Antes era "sólo con algo en camino", y en el mapa casi nunca se veía a
-   * nadie: retira ocho paquetes, arranca, y hasta que no toca "salgo en
-   * camino" en alguno no se registraba nada. Ahora cuenta toda la jornada,
-   * igual que la regla del servidor (paso 25), que es la que decide de verdad.
+   * ANTES ERA "mientras le quede trabajo del día", y eso dejaba ciega a la
+   * oficina justo en el caso más útil: el repartidor libre, que es al que le
+   * querés dar el próximo retiro. Desde el paso 37 lo decide él con el botón, y
+   * la base aplica la misma regla al guardar.
    *
-   * La hoja de ruta se lee por referencia y no por dependencia a propósito: si
-   * el efecto se rearmara con cada cambio de la ruta, mandaría una posición de
-   * más cada vez que se toca un envío.
+   * El efecto se rearma cuando cambia la conexión: al desconectarse hay que
+   * cortar el seguimiento de verdad —que se apague el aviso fijo de Android— y
+   * no sólo dejar de mandar.
+   */
+  const conectadoRef = useRef(false);
+  useEffect(() => {
+    conectadoRef.current = turno?.conectado === true;
+  }, [turno?.conectado]);
+
+  /**
+   * La hoja de ruta por referencia, para el guardia del escáner.
+   *
+   * Se lee así y no como dependencia porque el escaneo tiene que ver la ruta
+   * de AHORA sin que su función se rearme con cada cambio de la lista.
    */
   const rutaRef = useRef(route);
   useEffect(() => {
@@ -287,11 +382,32 @@ export default function DriverDashboardPage() {
   }, [route]);
 
   useEffect(() => {
-    return seguirEnviando(
-      () =>
-        partirRuta(rutaRef.current).deHoy.filter((s) => !CERRADOS.includes(s.status)).length > 0,
-    );
-  }, []);
+    if (!turno?.conectado) return;
+    const cortar = seguirEnviando(() => conectadoRef.current);
+
+    /*
+     * Si el GPS de la app no arrancó, DECIRLO.
+     *
+     * Esto existe por una tarde entera perdida: el servicio no arrancaba, la
+     * app se veía impecable, no mandaba una sola posición y no había forma de
+     * saber por qué. Se probó el permiso, la batería del fabricante y el
+     * plugin, a ciegas, porque el error se descartaba en silencio.
+     *
+     * Se espera unos segundos porque arrancar incluye pedir permisos, y
+     * preguntar antes daría siempre un falso positivo.
+     */
+    const revisar = window.setTimeout(() => {
+      const fallo = falloDelGpsNativo();
+      if (fallo) {
+        toast(`No se pudo activar el GPS: ${fallo}. Avisá a la oficina.`, 'error');
+      }
+    }, 8_000);
+
+    return () => {
+      window.clearTimeout(revisar);
+      cortar();
+    };
+  }, [turno?.conectado, toast]);
 
   // --- escaneo -----------------------------------------------------------
   const handleDetected = useCallback(
@@ -425,6 +541,26 @@ export default function DriverDashboardPage() {
   const total = deHoy.length;
   const avance = total > 0 ? Math.round((hechos / total) * 100) : 0;
 
+  /*
+   * DESCONECTADO NO SE VE LA RUTA, y eso no es una traba: es lo que hace que
+   * olvidarse de conectarse no cueste nada. El repartidor abre, no ve sus
+   * envíos, toca el botón. Se corrige solo en el primer segundo, sin que nadie
+   * tenga que acordarse de nada ni llamarlo por teléfono.
+   */
+  // Todavía no se sabe: no se dibuja ni la ruta ni el cartel de desconectado.
+  // Afirmar cualquiera de las dos cosas sin saberla es peor que esperar.
+  if (turno === null) {
+    return (
+      <p className="px-3.5 py-10 text-center font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
+        CARGANDO…
+      </p>
+    );
+  }
+
+  if (!turno.conectado) {
+    return <Desconectado ocupado={turnoOcupado} onConectar={alternarTurno} />;
+  }
+
   return (
     <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
       {/* ---------- Encabezado ---------- */}
@@ -533,6 +669,24 @@ export default function DriverDashboardPage() {
             </span>
           </button>
         )}
+
+        {/* Terminar la jornada.
+            Va acá abajo y no arriba a propósito: se toca una vez por día, al
+            final, y no tiene que competir por el pulgar con los botones que se
+            usan veinte veces. Pero tiene que estar a la vista en esta pantalla:
+            escondido en Perfil, nadie se desconectaría nunca. */}
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2.5">
+          <span className="font-bebas text-sm tracking-[.06em] text-[var(--edr-verde-claro)]">
+            CONECTADO {desdeCuando(turno).toUpperCase()}
+          </span>
+          <button
+            onClick={alternarTurno}
+            disabled={turnoOcupado}
+            className="rounded-full border border-white/25 px-3.5 py-2 font-bebas text-sm tracking-[.06em] text-[var(--edr-muted)] transition active:scale-95 disabled:opacity-50"
+          >
+            {turnoOcupado ? 'ESPERÁ…' : 'DESCONECTARME'}
+          </button>
+        </div>
       </header>
 
       {/* ---------- Hoja de ruta ---------- */}
@@ -744,6 +898,46 @@ export default function DriverDashboardPage() {
           onSynced={refreshPending}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * La pantalla de antes de arrancar.
+ *
+ * Ocupa todo y tiene un solo botón a propósito. Es lo primero que ve el
+ * repartidor cada mañana y lo último que quiere es leer: un botón grande, del
+ * tamaño de un pulgar con guante, y nada más que decidir.
+ *
+ * El texto de abajo no es relleno. Es la única parte del sistema donde se le
+ * dice, en una línea y con sus palabras, qué se registra y hasta cuándo. Eso no
+ * puede vivir sólo en un archivo de SQL que él nunca va a leer.
+ */
+function Desconectado({ ocupado, onConectar }: { ocupado: boolean; onConectar: () => void }) {
+  return (
+    <div className="flex min-h-full flex-col items-center justify-center gap-6 px-6 py-10 text-center">
+      <div>
+        <h1 className="font-anton text-[28px] uppercase leading-none tracking-[-.02em] text-white">
+          No estás conectado
+        </h1>
+        <p className="mt-2 font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
+          CONECTATE PARA VER TU HOJA DE RUTA
+        </p>
+      </div>
+
+      <button
+        onClick={onConectar}
+        disabled={ocupado}
+        className="w-full max-w-xs rounded-2xl bg-[var(--edr-yellow)] px-6 py-6 font-anton text-2xl uppercase tracking-[-.01em] text-[var(--edr-blue)] transition active:scale-95 disabled:opacity-60"
+      >
+        {ocupado ? 'Conectando…' : 'Conectarme'}
+      </button>
+
+      <p className="max-w-xs text-sm leading-relaxed text-[var(--edr-muted)]">
+        Mientras estés conectado, la oficina ve dónde estás para poder darte los
+        retiros más cercanos. Se corta cuando te desconectás, y solo a las dos
+        horas sin actividad.
+      </p>
     </div>
   );
 }

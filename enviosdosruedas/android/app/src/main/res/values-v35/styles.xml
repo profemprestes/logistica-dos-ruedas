@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Que la app no se dibuje debajo de las barras del sistema.
+
+    EL PROBLEMA. Android 15 obliga a las apps a ocupar la pantalla de borde a
+    borde: el contenido pasa por abajo de la barra de estado y de la de
+    navegación. En el navegador esto no pasaba porque Chrome reservaba ese
+    espacio. Adentro del APK, la cabecera quedaba tapada arriba y la barra de
+    abajo —PERFIL, CAJA, SALIR— quedaba abajo del gesto de navegación, y el
+    repartidor no podía tocarla.
+
+    POR QUÉ SE ARREGLA ACÁ Y NO EN EL CSS. Porque ese CSS es el mismo que ve
+    quien entra desde Chrome o desde un iPhone. Agregarle márgenes de seguridad
+    para tapar un problema que sólo existe adentro del APK le movería la
+    pantalla a todos los demás. El problema es de la app, y se arregla en la app.
+
+    Esta carpeta es `values-v35`: sólo la lee Android 15 en adelante. En un
+    celular más viejo no cambia nada, porque ahí el problema no existe.
+
+    OJO PARA MÁS ADELANTE: esta salida de emergencia la puso Google para dar
+    tiempo, y va a dejar de funcionar cuando la app apunte a Android 16. Ese día
+    hay que reservar el espacio de verdad, con los márgenes de seguridad que el
+    sistema informa.
+-->
+<resources>
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

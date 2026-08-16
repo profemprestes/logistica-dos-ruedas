@@ -19,6 +19,8 @@ import { ToastProvider, useToast } from '@/components/driver/Toast';
 import { supabase } from '@/lib/supabaseClient';
 import { useOnline } from '@/lib/driver/useOnline';
 import { watchConnection } from '@/lib/driver/sync';
+import { escucharAvisosNativos } from '@/lib/driver/pushNativo';
+import { manejarAtrasNativo } from '@/lib/driver/nativo';
 
 /**
  * Envoltorio de toda la app del repartidor.
@@ -101,6 +103,18 @@ function Background() {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
       // Sin service worker la app sigue andando: pierde el arranque sin señal, nada más.
     });
+  }, []);
+
+  // Adentro de la app de Android, quién dibuja el aviso cuando llega uno. En un
+  // navegador no hace nada: ahí lo hace el service worker de arriba.
+  useEffect(() => {
+    void escucharAvisosNativos();
+  }, []);
+
+  // Y que el atrás de Android cierre el cuadro abierto en vez de la app. En un
+  // navegador tampoco hace nada: ahí el atrás ya funciona solo.
+  useEffect(() => {
+    void manejarAtrasNativo();
   }, []);
 
   useEffect(() => {

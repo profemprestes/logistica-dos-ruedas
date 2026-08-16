@@ -8,13 +8,21 @@
     "start": "next start",
     "lint": "eslint",
     "parser": "tsx --tsconfig tsconfig.json scripts/probar-parser.ts",
-    "panel": "tsx --tsconfig tsconfig.json scripts/probar-panel.ts"
+    "panel": "tsx --tsconfig tsconfig.json scripts/probar-panel.ts",
+    "aviso": "tsx --tsconfig tsconfig.json scripts/probar-aviso.ts"
   },
   "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.26",
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.6.8",
+    "@capacitor/local-notifications": "^7.0.7",
+    "@capacitor/push-notifications": "^7.0.7",
     "@react-pdf/renderer": "^4.6.0",
     "@supabase/supabase-js": "^2.112.2",
     "@types/leaflet": "^1.9.22",
     "@types/web-push": "^3.6.4",
+    "google-auth-library": "^11.0.2",
     "html5-qrcode": "^2.3.8",
     "idb": "^8.0.3",
     "leaflet": "^1.9.4",
@@ -26,6 +34,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -1,0 +1,5 @@
+# La app de Android se compila en la máquina, no en el servidor. Son decenas de
+# megas de proyecto nativo que el sitio no mira ni una vez.
+enviosdosruedas/android/
+enviosdosruedas/android-www/
+enviosdosruedas/assets/

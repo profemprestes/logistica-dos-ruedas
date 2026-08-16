@@ -151,6 +151,50 @@ export async function desactivarPushNativo(): Promise<EstadoPush | null> {
 }
 
 /**
+ * Vuelve a anotar el token en cada arranque, si el permiso ya está dado.
+ *
+ * REINSTALAR LA APP MATA LAS NOTIFICACIONES EN SILENCIO, y así fue como nos
+ * enteramos: se reinstaló el APK, Android le dio un token nuevo a esa
+ * instalación, el guardado quedó muerto, y al asignar un envío no llegó nada.
+ * Ni el repartidor ni la oficina tenían forma de saberlo — todo se veía bien,
+ * simplemente no sonaba.
+ *
+ * Lo mismo pasa sin reinstalar: Firebase rota los tokens por su cuenta cada
+ * tanto. O sea que no era un caso raro de una vez, era una bomba de tiempo.
+ *
+ * Anotarlo de nuevo en cada arranque lo resuelve para siempre y no cuesta
+ * nada: si el token es el mismo, la fila se pisa con ella misma.
+ *
+ * NO PIDE PERMISO. Si el repartidor nunca lo dio, o dijo que no, acá no pasa
+ * nada: eso se decide en Perfil, con un botón y a propósito.
+ */
+export async function refrescarTokenNativo(): Promise<void> {
+  if (!(await esAppNativa())) return;
+
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    const permiso = await PushNotifications.checkPermissions();
+    if (permiso.receive !== 'granted') return;
+
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
+
+    const token = await conseguirToken();
+    if (!token) return;
+
+    await supabase
+      .from('push_tokens')
+      .upsert(
+        { driver_id: data.user.id, token, device: comoSeLlamaEsteCelular() },
+        { onConflict: 'token' },
+      );
+  } catch {
+    // Que no se pueda refrescar no rompe nada de lo que el repartidor está
+    // por hacer. Se reintenta solo la próxima vez que abra la app.
+  }
+}
+
+/**
  * Qué pasa cuando llega un aviso. Se engancha una sola vez, al abrir la app.
  *
  * DOS CASOS DISTINTOS, y por eso hay dos escuchas:

@@ -19,7 +19,7 @@ import { ToastProvider, useToast } from '@/components/driver/Toast';
 import { supabase } from '@/lib/supabaseClient';
 import { useOnline } from '@/lib/driver/useOnline';
 import { watchConnection } from '@/lib/driver/sync';
-import { escucharAvisosNativos } from '@/lib/driver/pushNativo';
+import { escucharAvisosNativos, refrescarTokenNativo } from '@/lib/driver/pushNativo';
 import { manejarAtrasNativo } from '@/lib/driver/nativo';
 
 /**
@@ -109,6 +109,9 @@ function Background() {
   // navegador no hace nada: ahí lo hace el service worker de arriba.
   useEffect(() => {
     void escucharAvisosNativos();
+    // Y se vuelve a anotar el token: reinstalar la app le da uno nuevo y deja
+    // el guardado muerto, sin que nadie de los dos lados se entere.
+    void refrescarTokenNativo();
   }, []);
 
   // Y que el atrás de Android cierre el cuadro abierto en vez de la app. En un

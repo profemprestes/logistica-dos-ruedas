@@ -238,9 +238,12 @@ export default function ShipmentSheet({
         {/* Los pasos previos a entregar, en el orden en que pasan en la calle. */}
         {!programado && sinRetirar && (
           <>
+            {/* Naranja, igual que en la tarjeta de la hoja de ruta: el mismo
+                paso tiene que tener el mismo color en las dos pantallas. */}
             <button
               onClick={() => onEstado(shipment, 'retirado')}
-              className="flex min-h-[68px] w-full items-center justify-center gap-2.5 rounded-full bg-[var(--edr-yellow)] font-bebas text-[26px] tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95"
+              style={{ background: 'var(--edr-naranja)' }}
+              className="flex min-h-[68px] w-full items-center justify-center gap-2.5 rounded-full font-bebas text-[26px] tracking-[.06em] text-white transition active:scale-95"
             >
               <PackageCheck size={26} strokeWidth={2.5} />
               YA LO RETIRÉ

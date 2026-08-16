@@ -126,7 +126,19 @@ export async function checkGeolocation(): Promise<PermissionCheck> {
           resolve(OK);
         }
       },
-      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 60_000 },
+      /*
+       * TRES SEGUNDOS, NO QUINCE.
+       *
+       * Acá no estamos buscando la posición: estamos averiguando si el permiso
+       * está dado. Y un permiso denegado se sabe al instante — el navegador
+       * contesta PERMISSION_DENIED sin siquiera mirar el GPS.
+       *
+       * Los quince segundos sólo servían para esperar un satélite, y esa espera
+       * ya se trata como "está todo bien" unas líneas más abajo. O sea que la
+       * app se quedaba quince segundos en la pantalla de permisos para terminar
+       * concluyendo lo mismo que a los tres.
+       */
+      { enableHighAccuracy: false, timeout: 3_000, maximumAge: 60_000 },
     );
   });
 }

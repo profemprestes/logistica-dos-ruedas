@@ -7,11 +7,40 @@ import { checkCamera, checkGeolocation } from '@/lib/driver/permissions';
 type Phase = 'pidiendo' | 'ok' | 'bloqueado';
 
 /**
- * Marca de que los permisos ya estaban dados en esta sesión del navegador.
- * Sin esto, cada vez que la app se recarga el repartidor ve la pantalla de
- * "pidiendo permisos" un segundo entero, aunque ya los haya dado hace rato.
+ * Marca de que los permisos ya estaban dados.
+ *
+ * VA EN `localStorage` Y NO EN `sessionStorage`, y ese cambio es el que
+ * resuelve el "se queda cargando permisos que ya tiene" que se reportó desde la
+ * calle. `sessionStorage` se borra al cerrar la app: en Chrome casi nunca pasa
+ * —minimizar no cuenta— pero el repartidor cierra la app de Android todos los
+ * días, así que la marca no existía nunca y cada arranque se comía el chequeo
+ * largo entero.
+ *
+ * Confiar en algo guardado tiene un riesgo obvio: que el permiso se haya
+ * revocado después. Por eso entrar derecho no cancela la verificación: sigue
+ * corriendo por detrás y, si el permiso ya no está, el portón vuelve a
+ * aparecer. Lo peor que pasa es que el repartidor vea la app un segundo antes
+ * de que le avisemos, en vez de esperar quince segundos en cada apertura.
  */
 const YA_OK = 'edr-permisos-ok';
+
+/** Guardar no puede romper la app: en modo incógnito esto tira excepción. */
+function recordar(valor: boolean) {
+  try {
+    if (valor) localStorage.setItem(YA_OK, '1');
+    else localStorage.removeItem(YA_OK);
+  } catch {
+    // Sin donde guardarlo se pierde la mejora, no la función.
+  }
+}
+
+function seAcuerda(): boolean {
+  try {
+    return localStorage.getItem(YA_OK) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Pregunta por los permisos sin activar nada. Devuelve 'ok' sólo si los dos
@@ -72,7 +101,7 @@ export default function PermissionGate({ children }: { children: ReactNode }) {
 
     // Si ya los había dado, entra derecho y la verificación corre por detrás.
     // (Va en un microtask para no llamar a setState en el cuerpo del efecto.)
-    const yaEstaban = sessionStorage.getItem(YA_OK) === '1';
+    const yaEstaban = seAcuerda();
     if (yaEstaban) {
       Promise.resolve().then(() => {
         if (!cancelled) apply([]);
@@ -86,7 +115,7 @@ export default function PermissionGate({ children }: { children: ReactNode }) {
       .then((veredicto) => {
         if (cancelled) return null;
         if (veredicto === 'ok') {
-          sessionStorage.setItem(YA_OK, '1');
+          recordar(true);
           apply([]);
           return null;
         }
@@ -94,8 +123,7 @@ export default function PermissionGate({ children }: { children: ReactNode }) {
       })
       .then((found) => {
         if (cancelled || found === null) return;
-        if (found.length === 0) sessionStorage.setItem(YA_OK, '1');
-        else sessionStorage.removeItem(YA_OK);
+        recordar(found.length === 0);
         apply(found);
       });
 

@@ -52,16 +52,17 @@ export default function ShipmentCard({
    * de cerrar la entrega —el único que termina el envío y el único que no
    * tiene vuelta atrás— se tocaba con la misma liviandad que "salgo en camino".
    *
-   * Amarillo es "seguí", verde es "esto se termina acá". Lo pidió un
-   * repartidor, que es quien lo aprieta doscientas veces por semana.
+   * Naranja el retiro, amarillo el "salgo", verde el que cierra. Los tres
+   * pasos del envío en el orden en que pasan, y cada uno con su color. Lo pidió
+   * un repartidor, que es quien los aprieta doscientas veces por semana.
    */
   const accion = sinRetirar
     ? {
         label: 'YA LO RETIRÉ',
         Icono: PackageCheck,
         hacer: () => onEstado(shipment, 'retirado'),
-        fondo: 'var(--edr-yellow)',
-        texto: 'var(--edr-blue)',
+        fondo: 'var(--edr-naranja)',
+        texto: '#fff',
       }
     : shipment.status === 'retirado'
       ? {

@@ -409,10 +409,15 @@ export default function ResolveDeliveryModal({
       </div>
 
       <div className="border-t-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* El color del botón sigue al resultado que se está por confirmar:
+            verde si el paquete se entregó, rojo si no se pudo. Es la última
+            pantalla antes de cerrar el envío, así que el color es la última
+            oportunidad de que el repartidor note que está en la equivocada. */}
         <button
           onClick={submit}
           disabled={saving}
-          className="flex min-h-[68px] w-full items-center justify-center gap-2 rounded-full bg-[var(--edr-yellow)] font-bebas text-[26px] tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95 disabled:opacity-60"
+          style={{ background: entregado ? 'var(--edr-verde)' : 'var(--edr-rojo)' }}
+          className="flex min-h-[68px] w-full items-center justify-center gap-2 rounded-full font-bebas text-[26px] tracking-[.06em] text-white transition active:scale-95 disabled:opacity-60"
         >
           {saving ? 'GUARDANDO…' : entregado ? 'CONFIRMAR ENTREGA' : 'CONFIRMAR'}
         </button>

@@ -261,18 +261,33 @@ export default function ShipmentSheet({
           </button>
         )}
 
+        {/*
+          LOS DOS FINALES DE UN ENVÍO, cada uno con su color.
+          Antes los dos eran amarillos —uno lleno y otro con borde— y la única
+          diferencia era leer el texto. Estos dos botones son los que cierran el
+          envío y no tienen vuelta atrás desde el celular: tocar el que no era
+          se arregla desde el panel, con una llamada de por medio.
+
+          El tamaño no cambia y sigue mandando: ENTREGADO es el grande porque es
+          el que se toca casi siempre. El color ahora acompaña en vez de estorbar.
+        */}
         {!programado && !sinRetirar && (
           <>
+            {/* El verde va por estilo directo y no por clase: la clase de
+                Tailwind para este color no llegaba a generarse en desarrollo
+                —sí en la compilación final— y un botón que sólo se puede
+                verificar en producción no se puede dar por bueno. */}
             <button
               onClick={() => onResolve('entregado')}
-              className="flex min-h-[68px] w-full items-center justify-center gap-2.5 rounded-full bg-[var(--edr-yellow)] font-bebas text-[26px] tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95"
+              style={{ background: 'var(--edr-verde)' }}
+              className="flex min-h-[68px] w-full items-center justify-center gap-2.5 rounded-full font-bebas text-[26px] tracking-[.06em] text-white transition active:scale-95"
             >
               <Check size={28} strokeWidth={3} />
               ENTREGADO
             </button>
             <button
               onClick={() => onResolve('no_entregado')}
-              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-[var(--edr-yellow)] font-bebas text-lg tracking-[.06em] text-[var(--edr-yellow)] transition active:scale-95"
+              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-[var(--edr-rojo-claro)] font-bebas text-lg tracking-[.06em] text-[var(--edr-rojo-claro)] transition active:scale-95"
             >
               <AlertTriangle size={20} strokeWidth={2} />
               NO SE PUDO ENTREGAR

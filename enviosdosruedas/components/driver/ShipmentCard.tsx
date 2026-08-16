@@ -44,14 +44,39 @@ export default function ShipmentCard({
   const flex = Boolean(shipment.is_flex);
   const sinRetirar = shipment.status === 'pendiente_retiro' || shipment.status === 'creado';
 
+  /*
+   * CADA PASO CON SU COLOR, y el último distinto de los otros dos.
+   *
+   * Los tres botones eran amarillos. En la mano, andando, el repartidor no lee
+   * el texto: reconoce la forma y el color y aprieta. Con los tres iguales, el
+   * de cerrar la entrega —el único que termina el envío y el único que no
+   * tiene vuelta atrás— se tocaba con la misma liviandad que "salgo en camino".
+   *
+   * Amarillo es "seguí", verde es "esto se termina acá". Lo pidió un
+   * repartidor, que es quien lo aprieta doscientas veces por semana.
+   */
   const accion = sinRetirar
-    ? { label: 'YA LO RETIRÉ', Icono: PackageCheck, hacer: () => onEstado(shipment, 'retirado') }
+    ? {
+        label: 'YA LO RETIRÉ',
+        Icono: PackageCheck,
+        hacer: () => onEstado(shipment, 'retirado'),
+        fondo: 'var(--edr-yellow)',
+        texto: 'var(--edr-blue)',
+      }
     : shipment.status === 'retirado'
-      ? { label: 'SALGO EN CAMINO', Icono: Bike, hacer: () => onEstado(shipment, 'en_camino') }
+      ? {
+          label: 'SALGO EN CAMINO',
+          Icono: Bike,
+          hacer: () => onEstado(shipment, 'en_camino'),
+          fondo: 'var(--edr-yellow)',
+          texto: 'var(--edr-blue)',
+        }
       : {
           label: 'CERRAR ENTREGA',
           Icono: Check,
           hacer: () => (onCerrarEntrega ?? onOpen)(shipment),
+          fondo: 'var(--edr-verde)',
+          texto: '#fff',
         };
 
   const comoLlegar =
@@ -139,7 +164,8 @@ export default function ShipmentCard({
         <div className="flex gap-2">
           <button
             onClick={accion.hacer}
-            className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-full bg-[var(--edr-yellow)] px-4 font-bebas text-xl tracking-[.06em] text-[var(--edr-blue)] transition active:scale-95"
+            style={{ background: accion.fondo, color: accion.texto }}
+            className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-full px-4 font-bebas text-xl tracking-[.06em] transition active:scale-95"
           >
             <accion.Icono size={19} strokeWidth={2.5} />
             {accion.label}

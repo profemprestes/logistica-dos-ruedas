@@ -200,7 +200,7 @@ export default function DriverDashboardPage() {
     let vivo = true;
 
     const mirar = () => {
-      void leerTurno().then((t) => {
+      void leerTurno(driver.id).then((t) => {
         if (!vivo) return;
         setTurno((antes) => {
           // Si se venció solo, hay que decirlo. Apagarse en silencio deja al

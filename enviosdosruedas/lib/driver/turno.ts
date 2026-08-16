@@ -41,9 +41,41 @@ const DESCONECTADO: Turno = { conectado: false, desde: null };
  */
 let ultimoConocido: Turno | null = null;
 
+/**
+ * Y guardado en el celular, porque la memoria del módulo muere al cerrar la app.
+ *
+ * Es la misma lección que el portón de permisos: en Chrome minimizar no borra
+ * nada, pero el repartidor CIERRA la app de Android todas las noches. Sin esto,
+ * la primera apertura de cada día se queda en "cargando" esperando al servidor
+ * antes de mostrar la hoja de ruta.
+ *
+ * Es una suposición, no una verdad, y por eso no cancela la consulta: se
+ * muestra lo último que se supo mientras se pregunta, y si cambió se corrige
+ * en el mismo segundo.
+ */
+const GUARDADO = 'edr-turno';
+
+function guardar(t: Turno) {
+  ultimoConocido = t;
+  try {
+    localStorage.setItem(GUARDADO, t.conectado ? String(t.desde?.getTime() ?? Date.now()) : '');
+  } catch {
+    // Sin donde guardarlo se pierde la mejora, no la función.
+  }
+}
+
 /** Lo último que se supo, o null si todavía no se preguntó nunca. */
 export function turnoConocido(): Turno | null {
-  return ultimoConocido;
+  if (ultimoConocido) return ultimoConocido;
+
+  try {
+    const crudo = localStorage.getItem(GUARDADO);
+    if (crudo === null) return null;
+    if (crudo === '') return DESCONECTADO;
+    return { conectado: true, desde: new Date(Number(crudo)) };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -54,10 +86,21 @@ export function turnoConocido(): Turno | null {
  * seguiría viendo "conectado" mientras el servidor ya está descartando sus
  * posiciones — que es la peor combinación posible.
  */
-export async function leerTurno(): Promise<Turno> {
+export async function leerTurno(driverId?: string): Promise<Turno> {
   try {
-    const { data: sesion } = await supabase.auth.getUser();
-    const id = sesion.user?.id;
+    /*
+     * El id se recibe si el que llama ya lo tiene, y lo tiene casi siempre.
+     *
+     * `getUser()` parece inocente y no lo es: va hasta el servidor a validar el
+     * token. Puesto acá, la app hacía DOS viajes seguidos —quién sos, y después
+     * si estás conectado— antes de poder dibujar la hoja de ruta. `getSession()`
+     * lee lo que ya está en el celular y no viaja a ningún lado.
+     */
+    let id = driverId;
+    if (!id) {
+      const { data: sesion } = await supabase.auth.getSession();
+      id = sesion.session?.user?.id;
+    }
     if (!id) return DESCONECTADO;
 
     const [{ data: perfil }, { data: vale }] = await Promise.all([
@@ -67,11 +110,11 @@ export async function leerTurno(): Promise<Turno> {
 
     const desde = (perfil as { conectado_desde: string | null } | null)?.conectado_desde;
 
-    ultimoConocido = {
+    guardar({
       conectado: vale === true,
       desde: vale === true && desde ? new Date(desde) : null,
-    };
-    return ultimoConocido;
+    });
+    return ultimoConocido!;
   } catch {
     /*
      * Sin internet no se puede saber, y acá conviene NO cambiar nada.
@@ -94,8 +137,8 @@ export async function conectarse(): Promise<Turno | null> {
     return null;
   }
 
-  ultimoConocido = { conectado: true, desde: data ? new Date(data as string) : new Date() };
-  return ultimoConocido;
+  guardar({ conectado: true, desde: data ? new Date(data as string) : new Date() });
+  return ultimoConocido!;
 }
 
 /** Termina la jornada. A partir de acá no se guarda ninguna posición más. */
@@ -107,7 +150,7 @@ export async function desconectarse(): Promise<boolean> {
     return false;
   }
 
-  ultimoConocido = DESCONECTADO;
+  guardar(DESCONECTADO);
   return true;
 }
 

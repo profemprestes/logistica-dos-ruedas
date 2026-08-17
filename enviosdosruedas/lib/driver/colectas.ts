@@ -77,18 +77,25 @@ export async function marcarHecha(id: number): Promise<boolean> {
  * Lo que necesita es distinto y más simple — cuántos son y para qué lado van,
  * para saber si le sirven o si tiene que decir que no.
  *
- * Son los que están PREASIGNADOS a él y todavía sin retirar. Los que no tienen
- * dueño no se listan: cualquiera puede llevárselos y prometerle algo que capaz
- * ya no está.
+ * Vienen los suyos y los que no tienen dueño, marcados con `mio`. Los sin dueño
+ * los toma el que los escanea —así está hecho el escáner y así tiene que
+ * quedar— así que esconderlos lo obligaría a preguntar en el mostrador, que es
+ * justo lo que esto venía a evitar. Los preasignados a OTRO no vienen: ésos no
+ * puede llevárselos ni queriendo.
  *
  * VA POR RPC Y NO LEYENDO LA TABLA. Esto se intentó primero pidiendo los
  * envíos derecho, y la base contestaba vacío: los permisos no dejan ver un
  * envío que todavía no se escaneó. Está bien que sea así —lo que no escaneó no
  * es suyo— pero entonces el repartidor veía "4 paquetes" y ninguna lista, sin
- * error ni aviso, igual que si no hubiera nada. La función del paso 42 corre
+ * error ni aviso, igual que si no hubiera nada. La función del paso 43 corre
  * con permisos propios y devuelve la dirección de entrega y nada más.
  */
-export async function paquetesDeLaColecta(direccion: string): Promise<string[]> {
+export interface Paquete {
+  destino: string;
+  mio: boolean;
+}
+
+export async function paquetesDeLaColecta(direccion: string): Promise<Paquete[]> {
   const { data, error } = await supabase.rpc('paquetes_de_colecta', {
     p_direccion: direccion,
   });
@@ -98,7 +105,17 @@ export async function paquetesDeLaColecta(direccion: string): Promise<string[]> 
     return [];
   }
 
-  return ((data ?? []) as { destino: string }[]).map((f) => f.destino).filter(Boolean);
+  /*
+   * `mio` sin definir se toma como suyo.
+   *
+   * Es el rato entre que sale el código y se corre el paso 43: la función
+   * vieja devuelve sólo la dirección, sin decir de quién es, y ahí lo único
+   * que devolvía eran los de él. Sin esto la lista quedaría vacía en ese rato
+   * —que es el mismo agujero que estamos tapando— y encima sin dar señales.
+   */
+  return ((data ?? []) as Partial<Paquete>[])
+    .filter((p): p is Paquete & { mio?: boolean } => Boolean(p.destino))
+    .map((p) => ({ destino: p.destino, mio: p.mio !== false }));
 }
 
 /** El link para llegar. Con el punto si lo tiene; si no, con la dirección. */

@@ -20,6 +20,7 @@ import {
   misColectas,
   paquetesDeLaColecta,
   type Colecta,
+  type Paquete,
 } from '@/lib/driver/colectas';
 import { hoyLocal } from '@/lib/scheduled';
 
@@ -48,13 +49,13 @@ export default function Colectas() {
    * mientras maneja o antes de arrancar, y un toque de más para saber si vale
    * la pena ir es un toque que no va a dar.
    */
-  const [paquetes, setPaquetes] = useState<Map<string, string[]>>(new Map());
+  const [paquetes, setPaquetes] = useState<Map<string, Paquete[]>>(new Map());
 
   const traer = useCallback(() => {
     void misColectas().then(async (cs) => {
       setColectas(cs);
 
-      const mapa = new Map<string, string[]>();
+      const mapa = new Map<string, Paquete[]>();
       await Promise.all(
         cs.map(async (c) => {
           mapa.set(c.direccion, await paquetesDeLaColecta(c.direccion));
@@ -143,19 +144,44 @@ export default function Colectas() {
 
           {/* Los paquetes que lo esperan ahí. Sólo la dirección de entrega: no
               son suyos hasta que los escanee, y darle destinatario y plata de
-              envíos que capaz lleva otro sería prometerle algo que no es. */}
+              envíos que capaz lleva otro sería prometerle algo que no es.
+
+              En dos grupos, y separados a propósito. Los suyos se los tiene que
+              llevar. Los libres se los lleva el que llega primero, así que
+              mostrarlos mezclados le haría contar paquetes que capaz ya no
+              están — y esconderlos lo obligaría a preguntar en el mostrador,
+              que es lo que esto vino a evitar. */}
           {(paquetes.get(c.direccion)?.length ?? 0) > 0 && (
-            <div className="rounded-2xl bg-black/20 px-3 py-2.5">
-              <div className="font-bebas text-sm tracking-[.06em] text-[var(--edr-muted)]">
-                LO QUE TENÉS QUE RETIRAR
-              </div>
-              <ul className="mt-1 flex flex-col gap-0.5">
-                {paquetes.get(c.direccion)!.map((dir, i) => (
-                  <li key={`${dir}-${i}`} className="text-[15px] font-semibold text-white">
-                    {dir}
-                  </li>
-                ))}
-              </ul>
+            <div className="flex flex-col gap-2.5 rounded-2xl bg-black/20 px-3 py-2.5">
+              {[
+                { titulo: 'LO QUE TENÉS QUE RETIRAR', mios: true },
+                { titulo: 'SIN DUEÑO · EL QUE LLEGA PRIMERO', mios: false },
+              ].map((grupo) => {
+                const lista = paquetes.get(c.direccion)!.filter((p) => p.mio === grupo.mios);
+                if (lista.length === 0) return null;
+
+                return (
+                  <div key={grupo.titulo}>
+                    <div
+                      className="font-bebas text-sm tracking-[.06em]"
+                      style={{ color: grupo.mios ? 'var(--edr-yellow)' : 'var(--edr-muted)' }}
+                    >
+                      {grupo.titulo}
+                    </div>
+                    <ul className="mt-1 flex flex-col gap-0.5">
+                      {lista.map((p, i) => (
+                        <li
+                          key={`${p.destino}-${i}`}
+                          className="text-[15px] font-semibold"
+                          style={{ color: grupo.mios ? '#fff' : 'var(--edr-muted)' }}
+                        >
+                          {p.destino}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
           )}
 

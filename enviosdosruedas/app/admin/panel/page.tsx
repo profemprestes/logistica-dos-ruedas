@@ -9,12 +9,14 @@ import {
   CalendarClock,
   CheckCircle2,
   MapPin,
+  PackageCheck,
   UserCheck,
 } from 'lucide-react';
 import { useAdminGuard } from '@/lib/adminGuard';
 import { money, type Shipment } from '@/lib/format';
 import { useDatosDelDia, type Repartidor } from '@/components/admin/DatosDelDia';
 import BuscarPaquete from '@/components/admin/BuscarPaquete';
+import ColectasPendientes from '@/components/admin/ColectasPendientes';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import type { Atraso } from '@/lib/admin/atrasos';
 
@@ -51,6 +53,8 @@ export default function PanelDelDiaPage() {
   const { cargando, deHoy, atrasos, repartidores, aCobrar, entregados } = useDatosDelDia();
   /** El envío cuya prueba de entrega se está mirando, desde el buscador. */
   const [prueba, setPrueba] = useState<Shipment | null>(null);
+  /** Lo último que se hizo con las colectas, para confirmarlo en pantalla. */
+  const [aviso, setAviso] = useState('');
 
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-text-3)]">Cargando…</div>;
 
@@ -119,6 +123,37 @@ export default function PanelDelDiaPage() {
                 </div>
               ) : (
                 atrasos.map((a) => <FilaAtraso key={a.clave} a={a} />)
+              )}
+            </section>
+
+            {/* ---------- A quién mandaste a retirar ---------- */}
+            <section className={`${panel} px-4 py-[18px] sm:px-5`}>
+              <div className="mb-3.5 flex items-center gap-2.5">
+                <PackageCheck size={19} strokeWidth={2.2} className="text-[var(--edr-yellow)]" />
+                <span className={titulo}>Pasando a retirar</span>
+              </div>
+
+              {/*
+                Acá y no escondido adentro del cuadro de "Mandar a retirar".
+
+                La primera versión estuvo sólo ahí y no servía: para ver una
+                colecta había que abrir la pantalla de crear otra. Una colecta
+                sin hacer es estado del día igual que un envío atrasado, y el
+                día se mira acá.
+              */}
+              <ColectasPendientes
+                onAviso={setAviso}
+                vacio={
+                  <p className="text-[13.5px] text-[var(--edr-text-4)]">
+                    Nadie está yendo a retirar a ningún comercio.
+                  </p>
+                }
+              />
+
+              {aviso && (
+                <p className="mt-2.5 text-[13px] font-semibold text-[var(--edr-verde-claro)]">
+                  {aviso}
+                </p>
               )}
             </section>
 

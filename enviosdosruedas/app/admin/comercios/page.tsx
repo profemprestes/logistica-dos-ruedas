@@ -24,6 +24,14 @@ interface Comercio {
   name: string;
   phone: string | null;
   pickup_address: string | null;
+  /**
+   * Piso, depto o local.
+   *
+   * VA SEPARADO de la dirección y no pegado atrás, porque el buscador de
+   * direcciones no entiende "Belgrano 2875 5A" — eso no existe como dirección y
+   * la búsqueda falla entera. Mismo criterio que `address_extra` en los envíos.
+   */
+  pickup_extra: string | null;
   pickup_notes: string | null;
   lat: number | null;
   lng: number | null;
@@ -39,6 +47,7 @@ const VACIO: Omit<Comercio, 'id'> = {
   name: '',
   phone: null,
   pickup_address: null,
+  pickup_extra: null,
   pickup_notes: null,
   lat: null,
   lng: null,
@@ -190,6 +199,7 @@ export default function ComerciosPage() {
                   </div>
                   <div className="text-sm text-[var(--edr-muted)]">
                     {c.pickup_address || 'sin dirección de retiro'}
+                    {c.pickup_extra ? ` · ${c.pickup_extra}` : ''}
                     {c.pickup_notes ? ` · ${c.pickup_notes}` : ''}
                   </div>
                 </div>
@@ -235,6 +245,7 @@ function Editar({
     name: comercio.name,
     phone: comercio.phone ?? '',
     pickup_address: comercio.pickup_address ?? '',
+    pickup_extra: comercio.pickup_extra ?? '',
     pickup_notes: comercio.pickup_notes ?? '',
     lat: comercio.lat,
     lng: comercio.lng,
@@ -290,6 +301,7 @@ function Editar({
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       pickup_address: form.pickup_address.trim() || null,
+      pickup_extra: form.pickup_extra.trim() || null,
       pickup_notes: form.pickup_notes.trim() || null,
       lat: form.lat,
       lng: form.lng,
@@ -344,6 +356,20 @@ function Editar({
               onChange={(e) => set('pickup_address', e.target.value)}
               placeholder="Independencia 2684"
             />
+          </div>
+
+          <div>
+            <label className={labelCls}>Piso / depto / local</label>
+            <input
+              className={campo}
+              value={form.pickup_extra}
+              onChange={(e) => set('pickup_extra', e.target.value)}
+              placeholder="5A · piso 2 · local 3"
+            />
+            <p className="mt-1 text-[11px] text-[var(--edr-muted)]">
+              Va acá y no pegado a la dirección: el buscador no entiende
+              &quot;Belgrano 2875 5A&quot; y no encuentra el punto.
+            </p>
           </div>
 
           <div>

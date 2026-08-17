@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
+import { errorText } from '../lib/driver/errors';
 import type { Shipment } from '../lib/format';
 
 // ---------------------------------------------------------------- casos armados
@@ -266,6 +267,42 @@ for (const [texto, esperado] of [
 }
 
 caso('del teléfono se usa la cola', [colaDelTelefono('+54 9 223 513-5312')], ['35135312']);
+
+// --------------------------------------------- lo que lee el repartidor cuando
+//                                                el servidor le dice que no
+
+console.log('\n=== los rechazos que ve el repartidor ===\n');
+
+/*
+ * Casi todos los códigos se traducen a una frase fija y el detalle se descarta.
+ * PREASIGNADO_A_OTRO es la excepción: el nombre de quién es el paquete VIENE en
+ * el detalle, y sin él queda un "no podés" que no le dice al repartidor qué
+ * hacer con lo que tiene en la mano. Se prueba porque ahora hay que partir
+ * texto, y eso se rompe callado.
+ */
+caso(
+  'el rechazo por preasignado dice de quién es',
+  [errorText('PREASIGNADO_A_OTRO: Agustin Medina')],
+  ['Ese paquete no es tuyo: quedó reservado para Agustin Medina.'],
+);
+
+caso(
+  'y sin nombre no inventa nada',
+  [errorText('PREASIGNADO_A_OTRO')],
+  ['Ese paquete no es tuyo: quedó reservado para'],
+);
+
+caso(
+  'los demás códigos siguen ignorando el detalle',
+  [errorText('ENVIO_CERRADO: cualquier cosa')],
+  ['Ese envío ya está cerrado: no lo lleves.'],
+);
+
+caso(
+  'un mensaje que no es un código se muestra tal cual',
+  [errorText('se cayó la conexión')],
+  ['se cayó la conexión'],
+);
 
 // ------------------------------------------------- la respuesta que se copia
 

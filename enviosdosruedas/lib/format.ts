@@ -36,6 +36,16 @@ export interface Shipment {
   merchandise_amount: number;
   amount_to_collect: number;
   assigned_driver: string | null;
+  /**
+   * De quién va a ser el paquete cuando lo retiren, sin dárselo todavía.
+   *
+   * NO ES `assigned_driver`, y la diferencia es toda la gracia. Asignar mete el
+   * envío en la hoja de ruta; preasignar no lo muestra en ningún lado y sólo lo
+   * mira el escáner (paso 38). Sirve el día que dos repartidores van al mismo
+   * comercio: cada uno se lleva lo suyo, y si agarra el del otro el sistema lo
+   * frena y le dice de quién es.
+   */
+  preasignado_a: string | null;
   scheduled_date: string;
   created_at: string;
   /**

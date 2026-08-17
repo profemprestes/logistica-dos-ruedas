@@ -197,6 +197,7 @@ export default function AdminPage() {
   /** Los envíos tildados para asignarlos de una. */
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [asignandoLote, setAsignandoLote] = useState(false);
+  const [preasignando, setPreasignando] = useState(false);
   const [copiados, setCopiados] = useState(false);
   const [copiando, setCopiando] = useState(false);
   /** Cómo va la bajada de fotos: "12 de 30". Vacío cuando no está bajando. */
@@ -534,6 +535,44 @@ export default function AdminPage() {
    * retirado o en camino tiene que quedarse donde está. Mandarle el mismo
    * estado a todos lo haría retroceder.
    */
+  /**
+   * Preasignar: decir de quién va a ser el paquete, sin dárselo.
+   *
+   * NO ES ASIGNAR, y la diferencia es toda la gracia. Asignar mete el envío en
+   * la hoja de ruta del repartidor; preasignar no lo muestra en ningún lado y
+   * sólo lo mira el escáner (paso 38). El repartidor sigue llevándose lo que el
+   * comercio efectivamente le da, que es lo que hace bien el escaneo, pero si
+   * agarra el paquete del otro el sistema lo frena y le dice de quién es.
+   *
+   * Por eso tampoco manda notificación: no hay nada que el repartidor tenga que
+   * hacer al respecto. Se entera recién si escanea uno que no le tocaba.
+   */
+  async function preasignarSeleccion(driverId: string) {
+    const ids = [...seleccion];
+    if (!ids.length) return;
+
+    setPreasignando(true);
+    setError('');
+
+    const { error: e } = await supabase
+      .from('shipments')
+      .update({ preasignado_a: driverId || null })
+      .in('id', ids);
+
+    setPreasignando(false);
+
+    if (e) {
+      setError(e.message);
+      return;
+    }
+
+    // Se refleja en la tabla sin volver a pedir todo al servidor.
+    setShipments((prev) =>
+      prev.map((s) => (ids.includes(s.id) ? { ...s, preasignado_a: driverId || null } : s)),
+    );
+    setSeleccion(new Set());
+  }
+
   async function asignarSeleccion(driverId: string) {
     const ids = [...seleccion];
     if (!ids.length) return;
@@ -959,6 +998,33 @@ export default function AdminPage() {
             </select>
             {asignandoLote && <span className="text-xs text-[var(--edr-muted)]">Asignando…</span>}
 
+            {/* Preasignar es más flojo que asignar, y por eso está al lado y no
+                en el mismo menú: asignar mete el envío en la hoja de ruta,
+                preasignar sólo dice de quién va a ser cuando lo retiren. Se usa
+                el día que dos repartidores van al mismo comercio. */}
+            <select
+              defaultValue=""
+              disabled={preasignando}
+              onChange={(e) => {
+                const v = e.target.value;
+                e.target.value = '';
+                if (v) void preasignarSeleccion(v === 'libre' ? '' : v);
+              }}
+              title="De quién va a ser el paquete cuando lo escaneen, sin dárselo todavía"
+              className={`${campo} disabled:opacity-50`}
+            >
+              <option value="">Preasignar a…</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name}
+                </option>
+              ))}
+              <option value="libre">Sacarles el preasignado</option>
+            </select>
+            {preasignando && (
+              <span className="text-xs text-[var(--edr-muted)]">Preasignando…</span>
+            )}
+
             <button
               onClick={copiarSeguimientos}
               disabled={copiando}
@@ -1159,6 +1225,20 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
+
+                    {/* Preasignado, si lo está. Va acá abajo y no como columna
+                        propia porque es la excepción y no la regla: la mayoría
+                        de los envíos no se preasignan nunca. Una columna vacía
+                        en todas las filas sería peor que este renglón. */}
+                    {s.preasignado_a && s.preasignado_a !== s.assigned_driver && (
+                      <div
+                        title="Sólo este repartidor puede escanearlo. El resto lo va a ver rechazado."
+                        className="mt-1 text-[11px] font-semibold text-[var(--edr-acento)]"
+                      >
+                        sólo lo escanea{' '}
+                        {drivers.find((d) => d.id === s.preasignado_a)?.full_name ?? '—'}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <CashCell shipment={s} />

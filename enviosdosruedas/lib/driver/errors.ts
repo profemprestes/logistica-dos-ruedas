@@ -25,7 +25,18 @@ const TEXT: Record<string, string> = {
   YA_LO_TENES: 'Ese envío ya lo tenés: está en tu ruta.',
   ENVIO_NO_ENTREGADO:
     'Ese envío quedó como no entregado. Lo tiene que reprogramar la oficina antes de volver a llevarlo.',
+  // --- del paso 38, al escanear en un comercio donde va más de uno ---
+  PREASIGNADO_A_OTRO: 'Ese paquete no es tuyo: quedó reservado para',
 };
+
+/**
+ * Códigos donde el detalle que manda la base es parte del mensaje.
+ *
+ * Casi siempre el detalle es ruido técnico y se descarta. Acá no: saber que el
+ * paquete es de Agustín es lo que le dice al repartidor qué hacer con él. Sin
+ * el nombre queda un "no podés" que no explica nada y termina en una llamada.
+ */
+const CON_DETALLE = new Set(['PREASIGNADO_A_OTRO']);
 
 /**
  * Errores que NO tiene sentido reintentar: por más señal que aparezca, el
@@ -47,6 +58,8 @@ const PERMANENT = new Set([
   'ENVIO_NO_ENTREGADO',
   // No es un error: es que no hay nada que hacer. Reintentarlo daría lo mismo.
   'YA_LO_TENES',
+  // Reintentar no lo va a volver suyo. Se destraba desde el panel.
+  'PREASIGNADO_A_OTRO',
 ]);
 
 /** Códigos de Postgres que también son definitivos. */
@@ -61,7 +74,16 @@ function codeOf(message: string): string {
 }
 
 export function errorText(message: string): string {
-  return TEXT[codeOf(message)] ?? message;
+  const code = codeOf(message);
+  const base = TEXT[code];
+  if (!base) return message;
+
+  if (CON_DETALLE.has(code)) {
+    const detalle = message.slice(code.length + 1).trim();
+    if (detalle) return `${base} ${detalle}.`;
+  }
+
+  return base;
 }
 
 export function isPermanentError(message: string, pgCode?: string): boolean {

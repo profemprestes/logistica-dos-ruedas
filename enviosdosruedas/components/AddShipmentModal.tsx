@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
 import VerificarPunto from '@/components/admin/VerificarPunto';
+import ElegirComercio from '@/components/admin/ElegirComercio';
 import { notificarRepartidor } from '@/lib/notify';
 
 type Mode = 'manual' | 'pegar';
@@ -115,7 +116,11 @@ const fechaEn = (dias: number) => {
 /** Formulario en blanco. Es función para que la fecha sea la de hoy, no la del día que se abrió la pestaña. */
 const emptyForm = () => ({
   client_name_raw: '',
+  /** El comercio elegido de la lista, si se eligió uno. Null = carga manual. */
+  client_id: null as number | null,
   pickup_address: '',
+  /** Piso o depto: va aparte porque el buscador de direcciones no lo entiende. */
+  pickup_extra: '',
   pickup_notes: '',
   recipient_name: '',
   recipient_phone: '',
@@ -164,7 +169,12 @@ function Field({
 function formFromShipment(s: Shipment): FormState {
   return {
     client_name_raw: s.client_name_raw ?? '',
+    client_id: s.client_id ?? null,
     pickup_address: s.pickup_address ?? '',
+    // El envío guarda la dirección entera; el piso vive en el comercio. Al
+    // editar uno viejo el campo arranca vacío y eso está bien: lo que ya se
+    // guardó no se toca solo.
+    pickup_extra: '',
     pickup_notes: s.pickup_notes ?? '',
     recipient_name: s.recipient_name,
     recipient_phone: s.recipient_phone ?? '',
@@ -265,8 +275,21 @@ function ShipmentForm({
     }
     setSaving(true);
     setError('');
+    /*
+     * El piso se junta con la dirección al guardar, y no es un descuido.
+     *
+     * El envío tiene UN campo para el retiro, y lo que el repartidor necesita
+     * leer en la tarjeta es "Belgrano 2875 5A" completo. Separarlos importa en
+     * el comercio, donde la dirección se usa para BUSCAR EL PUNTO y el "5A" la
+     * rompe. Acá ya no se busca nada: el punto sale del comercio, por client_id.
+     */
+    const { pickup_extra, ...delFormulario } = form;
+
     const payload = {
-      ...form,
+      ...delFormulario,
+      pickup_address: [form.pickup_address.trim(), pickup_extra.trim()]
+        .filter(Boolean)
+        .join(' '),
       ...camposDeAsignacion(asignarA),
       shipping_fee: Number(form.shipping_fee) || 0,
       merchandise_amount: Number(form.merchandise_amount) || 0,
@@ -440,12 +463,38 @@ function ShipmentForm({
           {mode === 'manual' && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Comercio / remitente" className="sm:col-span-2">
-                <input className={field} value={form.client_name_raw} onChange={(e) => set('client_name_raw', e.target.value)} />
+                <input
+                  className={field}
+                  value={form.client_name_raw}
+                  onChange={(e) => {
+                    set('client_name_raw', e.target.value);
+                    // Cambiar el nombre a mano suelta el comercio elegido: si
+                    // no, el envío quedaría enganchado a uno que ya no dice.
+                    if (form.client_id) set('client_id', null);
+                  }}
+                />
+                {/* Escribir "toy" trae Toy Piola con su dirección, su piso y
+                    sus notas. No obliga: los retiros eventuales se siguen
+                    escribiendo a mano. */}
+                <ElegirComercio
+                  valor={form.client_name_raw}
+                  onElegir={(c) => {
+                    set('client_id', c.id);
+                    set('client_name_raw', c.name);
+                    set('pickup_address', c.pickup_address ?? '');
+                    set('pickup_extra', c.pickup_extra ?? '');
+                    set('pickup_notes', c.pickup_notes ?? '');
+                  }}
+                  onLimpiar={() => set('client_id', null)}
+                />
               </Field>
               <Field label="Dirección de retiro">
                 <input className={field} value={form.pickup_address} onChange={(e) => set('pickup_address', e.target.value)} />
               </Field>
-              <Field label="Notas de retiro">
+              <Field label="Piso / depto / local">
+                <input className={field} value={form.pickup_extra} onChange={(e) => set('pickup_extra', e.target.value)} />
+              </Field>
+              <Field label="Notas de retiro" className="sm:col-span-2">
                 <input className={field} value={form.pickup_notes} onChange={(e) => set('pickup_notes', e.target.value)} />
               </Field>
 

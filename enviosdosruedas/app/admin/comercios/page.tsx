@@ -294,6 +294,53 @@ function Editar({
     onGuardado();
   }
 
+  /**
+   * Borrar el comercio de la lista.
+   *
+   * LOS ENVÍOS VIEJOS NO SE VAN CON ÉL. El vínculo se corta —queda en null— pero
+   * el nombre y la dirección de retiro están escritos en cada envío como texto,
+   * así que el historial se sigue leyendo igual. Eso ya estaba previsto en el
+   * paso 40 y por eso borrar acá es seguro.
+   *
+   * Se avisa cuántos envíos lo apuntan antes de preguntar. "¿Borrar TOY PIOLA?"
+   * y "¿Borrar TOY PIOLA, que está en 47 envíos?" son dos preguntas distintas, y
+   * la segunda es la que hay que contestar.
+   *
+   * OJO: el comercio se vuelve a crear solo si alguien escribe ese nombre al
+   * cargar un envío. Para uno eventual —que se cargó una vez y no vuelve— esto
+   * alcanza; para dejar de verlo sin borrarlo está el "Activo".
+   */
+  async function borrar() {
+    const id = (comercio as Comercio).id;
+
+    const { count } = await supabase
+      .from('shipments')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', id);
+
+    const cuantos = count ?? 0;
+    const aviso =
+      cuantos > 0
+        ? `¿Borrar ${form.name}?\n\nEstá en ${cuantos} envío(s). Esos envíos NO se borran y siguen mostrando "${form.name}" y su dirección: lo único que se pierde es el punto guardado para el mapa.`
+        : `¿Borrar ${form.name}? No hay ningún envío que lo use.`;
+
+    if (!confirm(aviso)) return;
+
+    setGuardando(true);
+    setError('');
+
+    const { error: e } = await supabase.from('clients').delete().eq('id', id);
+
+    setGuardando(false);
+
+    if (e) {
+      setError(e.message);
+      return;
+    }
+
+    onGuardado();
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
       <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-4 sm:rounded-2xl">
@@ -405,6 +452,19 @@ function Editar({
           >
             {guardando ? 'Guardando…' : 'Guardar'}
           </button>
+
+          {/* Borrar va abajo, sin color y chico: es lo que menos se hace de
+              esta pantalla, y un botón rojo grande al lado de "Guardar" se
+              termina tocando por error. */}
+          {!esNuevo && (
+            <button
+              onClick={borrar}
+              disabled={guardando}
+              className="mx-auto text-xs font-bold text-[var(--edr-muted)] underline underline-offset-4 disabled:opacity-60"
+            >
+              Borrar este comercio
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -80,29 +80,25 @@ export async function marcarHecha(id: number): Promise<boolean> {
  * Son los que están PREASIGNADOS a él y todavía sin retirar. Los que no tienen
  * dueño no se listan: cualquiera puede llevárselos y prometerle algo que capaz
  * ya no está.
+ *
+ * VA POR RPC Y NO LEYENDO LA TABLA. Esto se intentó primero pidiendo los
+ * envíos derecho, y la base contestaba vacío: los permisos no dejan ver un
+ * envío que todavía no se escaneó. Está bien que sea así —lo que no escaneó no
+ * es suyo— pero entonces el repartidor veía "4 paquetes" y ninguna lista, sin
+ * error ni aviso, igual que si no hubiera nada. La función del paso 42 corre
+ * con permisos propios y devuelve la dirección de entrega y nada más.
  */
 export async function paquetesDeLaColecta(direccion: string): Promise<string[]> {
-  try {
-    const { data: sesion } = await supabase.auth.getSession();
-    const id = sesion.session?.user?.id;
-    if (!id) return [];
+  const { data, error } = await supabase.rpc('paquetes_de_colecta', {
+    p_direccion: direccion,
+  });
 
-    const { data } = await supabase
-      .from('shipments')
-      .select('address_street, pickup_address')
-      .eq('preasignado_a', id)
-      .is('assigned_driver', null)
-      .in('status', ['creado', 'pendiente_retiro'])
-      .limit(30);
-
-    const buscada = direccion.trim().toLowerCase();
-
-    return (data ?? [])
-      .filter((s) => (s.pickup_address ?? '').trim().toLowerCase() === buscada)
-      .map((s) => s.address_street as string);
-  } catch {
+  if (error) {
+    console.warn('[colectas] no se pudo saber qué hay que retirar', error.message);
     return [];
   }
+
+  return ((data ?? []) as { destino: string }[]).map((f) => f.destino).filter(Boolean);
 }
 
 /** El link para llegar. Con el punto si lo tiene; si no, con la dirección. */

@@ -557,6 +557,10 @@ export default function AdminPage() {
     const ids = [...seleccion];
     if (!ids.length) return;
 
+    // Quién los tenía y de dónde se retiran, ANTES de tocarlos: después de la
+    // actualización esa información ya no está en la tabla.
+    const elegidosAntes = shipments.filter((s) => ids.includes(s.id));
+
     setPreasignando(true);
     setError('');
 
@@ -579,7 +583,23 @@ export default function AdminPage() {
     setSeleccion(new Set());
 
     if (!driverId) {
-      setAviso(`Se les sacó el preasignado a ${ids.length} envío(s).`);
+      /*
+       * Sacar el preasignado también apaga la colecta que quedó vacía.
+       *
+       * Preasignar la crea, así que lo simétrico es que quitarlo la cierre. Si
+       * no, queda un cartel en el celular mandándolo a un comercio donde ya no
+       * hay nada suyo, y el repartidor va, no encuentra nada, y deja de creerle
+       * a la pantalla.
+       *
+       * Sólo si NO le queda nada preasignado ahí: si le sacaste dos de cinco,
+       * la colecta sigue valiendo.
+       */
+      const cerradas = await cerrarColectasVacias(elegidosAntes);
+      setAviso(
+        cerradas.length > 0
+          ? `Se les sacó el preasignado a ${ids.length} envío(s), y se cerró la colecta de ${cerradas.join(' y ')} porque quedó sin paquetes.`
+          : `Se les sacó el preasignado a ${ids.length} envío(s).`,
+      );
       return;
     }
 
@@ -625,6 +645,55 @@ export default function AdminPage() {
         ? `Preasignados ${ids.length} envío(s) a ${nombre}, y le avisamos que pase por ${creadas.join(' y ')}.`
         : `Preasignados ${ids.length} envío(s) a ${nombre}. No le mandé colecta nueva: ya tenía una pendiente para ese lugar.`,
     );
+  }
+
+  /**
+   * Cierra las colectas que se quedaron sin paquetes.
+   *
+   * Devuelve los comercios cerrados, para poder decirlo en pantalla. Se marcan
+   * hechas y no se borran: la colecta pasó, alguien la mandó, y el historial de
+   * lo que se pidió no se reescribe.
+   */
+  async function cerrarColectasVacias(anteriores: Shipment[]): Promise<string[]> {
+    const cerradas: string[] = [];
+
+    // Por repartidor y por dirección: una tanda puede tocar a dos personas.
+    const grupos = new Map<string, { driver: string; direccion: string; nombre: string }>();
+    for (const s of anteriores) {
+      const dir = (s.pickup_address ?? '').trim();
+      if (!s.preasignado_a || !dir) continue;
+      grupos.set(`${s.preasignado_a}|${dir.toLowerCase()}`, {
+        driver: s.preasignado_a,
+        direccion: dir,
+        nombre: (s.client_name_raw ?? '').trim() || dir,
+      });
+    }
+
+    for (const g of grupos.values()) {
+      // ¿Le queda algo preasignado ahí? Se pregunta a la base y no a la tabla
+      // de la pantalla: puede haber envíos de otro día que no están a la vista.
+      const { count } = await supabase
+        .from('shipments')
+        .select('id', { count: 'exact', head: true })
+        .eq('preasignado_a', g.driver)
+        .ilike('pickup_address', g.direccion)
+        .is('assigned_driver', null)
+        .in('status', ['creado', 'pendiente_retiro']);
+
+      if ((count ?? 0) > 0) continue;
+
+      const { data: cerrada } = await supabase
+        .from('colectas')
+        .update({ hecha_at: new Date().toISOString() })
+        .eq('driver_id', g.driver)
+        .ilike('direccion', g.direccion)
+        .is('hecha_at', null)
+        .select('id');
+
+      if (cerrada?.length) cerradas.push(g.nombre);
+    }
+
+    return cerradas;
   }
 
   /**

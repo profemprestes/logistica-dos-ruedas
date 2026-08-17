@@ -240,7 +240,14 @@ export default function MapaRepartidorPage() {
           Mapa del día
         </h1>
         <p className="mt-1 font-bebas text-base tracking-[.06em] text-[var(--edr-muted)]">
-          {cargando ? 'CARGANDO…' : `${conPunto.length} DE ${deHoy.length} EN EL MAPA`}
+          {cargando
+            ? 'CARGANDO…'
+            : deHoy.length === 0 && puntosColecta.length > 0
+              ? // Sin envíos pero con colecta: contar "0 DE 0" sería mentirle,
+                // porque en el mapa SÍ hay algo y es justamente a donde tiene
+                // que ir.
+                `${puntosColecta.length} LUGAR(ES) PARA RETIRAR`
+              : `${conPunto.length} DE ${deHoy.length} EN EL MAPA`}
         </p>
       </header>
 
@@ -257,7 +264,15 @@ export default function MapaRepartidorPage() {
           </p>
         )}
 
-        {!cargando && conPunto.length === 0 ? (
+        {/*
+          El mapa se dibuja si hay ALGO que dibujar, y una colecta es algo.
+
+          Antes miraba sólo los envíos, así que el repartidor que todavía no
+          escaneó nada —que es el que más lo necesita, porque no sabe para
+          dónde arrancar— se encontraba con el cartel de "no tenés envíos" y el
+          comercio al que tenía que ir no aparecía en ningún lado.
+        */}
+        {!cargando && conPunto.length === 0 && puntosColecta.length === 0 ? (
           <div className="flex h-56 items-center justify-center rounded-lg border-2 border-dashed border-[var(--edr-border)] px-6 text-center text-sm font-bold text-[var(--edr-muted)]">
             {deHoy.length === 0
               ? 'No tenés envíos para hoy.'

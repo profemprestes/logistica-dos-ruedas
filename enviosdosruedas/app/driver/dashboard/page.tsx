@@ -564,23 +564,23 @@ export default function DriverDashboardPage() {
 
   return (
     <>
-      {/* A dónde tiene que ir a retirar, antes que nada. El retiro pasa ANTES
-          que el reparto, así que va arriba de la hoja de ruta. Si no tiene
-          ninguna, no dibuja nada. */}
-      <Colectas />
+      {/*
+        LA BARRA DE LA JORNADA, arriba de todo y siempre en el mismo lugar.
 
-      <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
-      {/* ---------- Encabezado ---------- */}
-      <header className="flex flex-col gap-2.5">
-        {/* La jornada, arriba de todo.
-            Estaba abajo del encabezado con el argumento de que se toca una vez
-            por día. Pero es lo que dice si el sistema lo está viendo o no, y
-            eso se mira mucho más seguido que lo que se toca — sobre todo
-            después de que la conexión se vence sola a las dos horas. */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-bebas text-sm tracking-[.06em] text-[var(--edr-verde-claro)]">
-            CONECTADO {desdeCuando(turno).toUpperCase()}
-          </span>
+        Estas dos cosas no son parte de la hoja de ruta ni de las colectas: son
+        de la app entera. Puestas adentro del encabezado de la ruta se movían de
+        lugar según si había colectas o no, y un botón que cambia de posición
+        según el día es un botón que hay que buscar cada vez.
+
+        `actualizar` no recarga la página a propósito: una recarga volvería a
+        disparar el pedido de permisos de cámara y GPS.
+      */}
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3.5 py-2.5">
+        <span className="font-bebas text-sm tracking-[.06em] text-[var(--edr-verde-claro)]">
+          CONECTADO {desdeCuando(turno).toUpperCase()}
+        </span>
+
+        <div className="flex items-center gap-2">
           <button
             onClick={alternarTurno}
             disabled={turnoOcupado}
@@ -588,7 +588,28 @@ export default function DriverDashboardPage() {
           >
             {turnoOcupado ? 'ESPERÁ…' : 'DESCONECTARME'}
           </button>
+
+          <button
+            onClick={() => {
+              recargar();
+              refreshPending();
+            }}
+            aria-label="Actualizar"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-[var(--edr-muted)] transition active:scale-95"
+          >
+            <RefreshCw size={18} strokeWidth={2} />
+          </button>
         </div>
+      </div>
+
+      {/* A dónde tiene que ir a retirar. El retiro pasa ANTES que el reparto,
+          así que va arriba de la hoja de ruta. Si no tiene ninguna, no dibuja
+          nada. */}
+      <Colectas />
+
+      <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
+      {/* ---------- Encabezado ---------- */}
+      <header className="flex flex-col gap-2.5">
 
         <div className="flex items-baseline justify-between gap-2.5">
           <h1 className="font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
@@ -627,18 +648,6 @@ export default function DriverDashboardPage() {
               {modoOrden ? 'LISTO' : 'REORDENAR'}
             </button>
           )}
-          {/* Actualiza los datos SIN recargar la página: una recarga volvería a
-              disparar el pedido de permisos de cámara y GPS. */}
-          <button
-            onClick={() => {
-              recargar();
-              refreshPending();
-            }}
-            aria-label="Actualizar"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-[var(--edr-muted)] transition active:scale-95"
-          >
-            <RefreshCw size={18} strokeWidth={2} />
-          </button>
         </div>
 
         {totalCash > 0 && (

@@ -468,14 +468,14 @@ export default function MapaAdminPage() {
       const s = u.envio;
       const marca = marcaDeEstado(s.status);
 
-      // En azul oscuro, y con la flecha para arriba, los que todavía están en
+      // En azul oscuro, con una R de retiro, los que todavía están en
       // el comercio. Es "acá hay que ir a buscar", no "acá hay que entregar".
       if (u.enElComercio) {
         return {
           id: s.id,
           lat: u.lat as number,
           lng: u.lng as number,
-          etiqueta: '↑',
+          etiqueta: 'R',
           color: AZUL_RETIRO,
           colorTexto: '#fff',
           titulo: `Retirar en ${s.pickup_address ?? u.comercio ?? ''}`,

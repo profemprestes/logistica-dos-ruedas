@@ -16,6 +16,7 @@
 import { useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { hoyLocal } from '@/lib/scheduled';
+import { notificarRepartidor } from '@/lib/notify';
 import type { Shipment } from '@/lib/format';
 
 interface Driver {
@@ -139,6 +140,22 @@ export default function MandarColecta({
       setError(e.message);
       return;
     }
+
+    /*
+     * El aviso al celular, que faltaba.
+     *
+     * Sin esto la colecta quedaba esperando a que el repartidor abriera la app
+     * por su cuenta — y si la abrió hace diez minutos, no la abre de nuevo
+     * hasta que termina lo que está haciendo. Justamente lo que esto vino a
+     * evitar es tener que escribirle por WhatsApp "mirá la app".
+     */
+    void notificarRepartidor({
+      driverId,
+      title: 'Pasá a retirar',
+      body: [comercio.trim() || direccion.trim(), nota.trim()].filter(Boolean).join(' · '),
+      url: '/driver/dashboard',
+      tag: 'colecta',
+    });
 
     onHecha(
       `Le avisamos a ${drivers.find((d) => d.id === driverId)?.full_name ?? 'el repartidor'} que pase por ${

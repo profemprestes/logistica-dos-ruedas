@@ -572,6 +572,24 @@ export default function DriverDashboardPage() {
       <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
       {/* ---------- Encabezado ---------- */}
       <header className="flex flex-col gap-2.5">
+        {/* La jornada, arriba de todo.
+            Estaba abajo del encabezado con el argumento de que se toca una vez
+            por día. Pero es lo que dice si el sistema lo está viendo o no, y
+            eso se mira mucho más seguido que lo que se toca — sobre todo
+            después de que la conexión se vence sola a las dos horas. */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-bebas text-sm tracking-[.06em] text-[var(--edr-verde-claro)]">
+            CONECTADO {desdeCuando(turno).toUpperCase()}
+          </span>
+          <button
+            onClick={alternarTurno}
+            disabled={turnoOcupado}
+            className="rounded-full border border-white/25 px-3.5 py-2 font-bebas text-sm tracking-[.06em] text-[var(--edr-muted)] transition active:scale-95 disabled:opacity-50"
+          >
+            {turnoOcupado ? 'ESPERÁ…' : 'DESCONECTARME'}
+          </button>
+        </div>
+
         <div className="flex items-baseline justify-between gap-2.5">
           <h1 className="font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
             Hoja de ruta
@@ -677,23 +695,6 @@ export default function DriverDashboardPage() {
           </button>
         )}
 
-        {/* Terminar la jornada.
-            Va acá abajo y no arriba a propósito: se toca una vez por día, al
-            final, y no tiene que competir por el pulgar con los botones que se
-            usan veinte veces. Pero tiene que estar a la vista en esta pantalla:
-            escondido en Perfil, nadie se desconectaría nunca. */}
-        <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2.5">
-          <span className="font-bebas text-sm tracking-[.06em] text-[var(--edr-verde-claro)]">
-            CONECTADO {desdeCuando(turno).toUpperCase()}
-          </span>
-          <button
-            onClick={alternarTurno}
-            disabled={turnoOcupado}
-            className="rounded-full border border-white/25 px-3.5 py-2 font-bebas text-sm tracking-[.06em] text-[var(--edr-muted)] transition active:scale-95 disabled:opacity-50"
-          >
-            {turnoOcupado ? 'ESPERÁ…' : 'DESCONECTARME'}
-          </button>
-        </div>
       </header>
 
       {/* ---------- Hoja de ruta ---------- */}

@@ -14,7 +14,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigation, PackageCheck, Store } from 'lucide-react';
 import { useToast } from '@/components/driver/Toast';
-import { comoLlegar, marcarHecha, misColectas, type Colecta } from '@/lib/driver/colectas';
+import {
+  comoLlegar,
+  marcarHecha,
+  misColectas,
+  paquetesDeLaColecta,
+  type Colecta,
+} from '@/lib/driver/colectas';
 import { hoyLocal } from '@/lib/scheduled';
 
 export default function Colectas() {
@@ -22,8 +28,27 @@ export default function Colectas() {
   const [colectas, setColectas] = useState<Colecta[]>([]);
   const [ocupada, setOcupada] = useState<number | null>(null);
 
+  /**
+   * Qué paquetes hay en cada comercio, por dirección.
+   *
+   * Se piden junto con las colectas y no al tocar: el repartidor mira esto
+   * mientras maneja o antes de arrancar, y un toque de más para saber si vale
+   * la pena ir es un toque que no va a dar.
+   */
+  const [paquetes, setPaquetes] = useState<Map<string, string[]>>(new Map());
+
   const traer = useCallback(() => {
-    void misColectas().then(setColectas);
+    void misColectas().then(async (cs) => {
+      setColectas(cs);
+
+      const mapa = new Map<string, string[]>();
+      await Promise.all(
+        cs.map(async (c) => {
+          mapa.set(c.direccion, await paquetesDeLaColecta(c.direccion));
+        }),
+      );
+      setPaquetes(mapa);
+    });
   }, []);
 
   useEffect(() => {
@@ -92,6 +117,24 @@ export default function Colectas() {
               </span>
             )}
           </div>
+
+          {/* Los paquetes que lo esperan ahí. Sólo la dirección de entrega: no
+              son suyos hasta que los escanee, y darle destinatario y plata de
+              envíos que capaz lleva otro sería prometerle algo que no es. */}
+          {(paquetes.get(c.direccion)?.length ?? 0) > 0 && (
+            <div className="rounded-2xl bg-black/20 px-3 py-2.5">
+              <div className="font-bebas text-sm tracking-[.06em] text-[var(--edr-muted)]">
+                LO QUE TENÉS QUE RETIRAR
+              </div>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {paquetes.get(c.direccion)!.map((dir, i) => (
+                  <li key={`${dir}-${i}`} className="text-[15px] font-semibold text-white">
+                    {dir}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button

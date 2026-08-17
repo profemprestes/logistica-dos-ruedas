@@ -68,6 +68,43 @@ export async function marcarHecha(id: number): Promise<boolean> {
   return true;
 }
 
+/**
+ * Qué paquetes lo esperan en ese comercio.
+ *
+ * SÓLO LA DIRECCIÓN DE ENTREGA, nada más. El repartidor todavía no los
+ * escaneó, así que no son suyos: mostrarle destinatario, plata a cobrar y
+ * franja horaria sería darle datos de envíos que capaz termina llevando otro.
+ * Lo que necesita es distinto y más simple — cuántos son y para qué lado van,
+ * para saber si le sirven o si tiene que decir que no.
+ *
+ * Son los que están PREASIGNADOS a él y todavía sin retirar. Los que no tienen
+ * dueño no se listan: cualquiera puede llevárselos y prometerle algo que capaz
+ * ya no está.
+ */
+export async function paquetesDeLaColecta(direccion: string): Promise<string[]> {
+  try {
+    const { data: sesion } = await supabase.auth.getSession();
+    const id = sesion.session?.user?.id;
+    if (!id) return [];
+
+    const { data } = await supabase
+      .from('shipments')
+      .select('address_street, pickup_address')
+      .eq('preasignado_a', id)
+      .is('assigned_driver', null)
+      .in('status', ['creado', 'pendiente_retiro'])
+      .limit(30);
+
+    const buscada = direccion.trim().toLowerCase();
+
+    return (data ?? [])
+      .filter((s) => (s.pickup_address ?? '').trim().toLowerCase() === buscada)
+      .map((s) => s.address_street as string);
+  } catch {
+    return [];
+  }
+}
+
 /** El link para llegar. Con el punto si lo tiene; si no, con la dirección. */
 export function comoLlegar(c: Colecta): string {
   const destino =

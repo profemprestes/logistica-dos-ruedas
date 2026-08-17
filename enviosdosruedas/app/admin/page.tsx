@@ -612,12 +612,18 @@ export default function AdminPage() {
     const nombre = drivers.find((d) => d.id === driverId)?.full_name ?? 'el repartidor';
     const creadas = await crearColectas(driverId, [...porComercio.values()]);
 
+    /*
+     * Cuando no se creó ninguna hay que decir POR QUÉ.
+     *
+     * Casi siempre es porque ya tenía una pendiente para ese mismo lugar, y eso
+     * está bien —preasignar de a tandas es lo normal— pero un "listo" a secas
+     * se lee como que la colecta no salió, y termina en mandarla a mano dos
+     * veces.
+     */
     setAviso(
-      creadas.length === 0
-        ? `Preasignados ${ids.length} envío(s) a ${nombre}.`
-        : `Preasignados ${ids.length} envío(s) a ${nombre}, y le avisamos que pase por ` +
-          creadas.join(' y ') +
-          '.',
+      creadas.length > 0
+        ? `Preasignados ${ids.length} envío(s) a ${nombre}, y le avisamos que pase por ${creadas.join(' y ')}.`
+        : `Preasignados ${ids.length} envío(s) a ${nombre}. No le mandé colecta nueva: ya tenía una pendiente para ese lugar.`,
     );
   }
 

@@ -162,27 +162,52 @@ export default function MapaRepartidorPage() {
   const conPunto = useMemo(() => ubicados.filter((u) => u.lat != null), [ubicados]);
   const sinPunto = deHoy.length - conPunto.length;
 
-  const puntos: PuntoMapa[] = useMemo(
-    () =>
-      conPunto.map((u) => {
+  const puntos: PuntoMapa[] = useMemo(() => {
+    /*
+     * UN SOLO PUNTO POR COMERCIO, con la R.
+     *
+     * Cuatro paquetes del mismo lugar son cuatro marcas encimadas en la misma
+     * coordenada: se ve una sola, tapa a las otras tres, y al tocarla se abre
+     * la de arriba como si fuera la única. Un punto que dice "acá hay 4" es lo
+     * que el repartidor necesita para decidir por dónde arrancar.
+     */
+    const porComercio = new Map<string, { u: (typeof conPunto)[number]; cuantos: number }>();
+    const entregas: PuntoMapa[] = [];
+
+    for (const u of conPunto) {
+      if (!u.enElComercio) {
         const marca = marcaDeEstado(u.envio.status);
-        return {
+        entregas.push({
           id: u.envio.id,
           lat: u.lat as number,
           lng: u.lng as number,
-          etiqueta: u.enElComercio ? '↑' : marca.simbolo,
-          color: u.enElComercio ? AZUL_RETIRO : marca.color,
-          colorTexto: u.enElComercio ? '#fff' : marca.colorTexto,
-          titulo: u.enElComercio
-            ? `Retirar en ${u.envio.pickup_address ?? u.comercio ?? ''}`
-            : u.envio.address_street,
-          detalle: u.enElComercio
-            ? `${u.comercio ?? 'Comercio'} · ${u.envio.recipient_name}`
-            : `${u.envio.recipient_name} · ${STATUS_LABEL[u.envio.status]}`,
-        };
-      }),
-    [conPunto],
-  );
+          etiqueta: marca.simbolo,
+          color: marca.color,
+          colorTexto: marca.colorTexto,
+          titulo: u.envio.address_street,
+          detalle: `${u.envio.recipient_name} · ${STATUS_LABEL[u.envio.status]}`,
+        });
+        continue;
+      }
+
+      const clave = `${u.lat},${u.lng}`;
+      const previo = porComercio.get(clave);
+      porComercio.set(clave, { u: previo?.u ?? u, cuantos: (previo?.cuantos ?? 0) + 1 });
+    }
+
+    const retiros: PuntoMapa[] = [...porComercio.values()].map(({ u, cuantos }) => ({
+      id: u.envio.id,
+      lat: u.lat as number,
+      lng: u.lng as number,
+      etiqueta: 'R',
+      color: AZUL_RETIRO,
+      colorTexto: '#fff',
+      titulo: `Retirar en ${u.envio.pickup_address ?? u.comercio ?? ''}`,
+      detalle: `${u.comercio ?? 'Comercio'} · ${cuantos} paquete${cuantos > 1 ? 's' : ''}`,
+    }));
+
+    return [...entregas, ...retiros];
+  }, [conPunto]);
 
   /*
    * Las colectas se dibujan con id NEGATIVO.
@@ -199,7 +224,7 @@ export default function MapaRepartidorPage() {
           id: -c.id,
           lat: Number(c.lat),
           lng: Number(c.lng),
-          etiqueta: '↑',
+          etiqueta: 'R',
           color: AZUL_RETIRO,
           colorTexto: '#fff',
           titulo: `Colecta · ${c.direccion}`,

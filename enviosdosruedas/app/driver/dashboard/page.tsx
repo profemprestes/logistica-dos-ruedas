@@ -50,6 +50,7 @@ import {
   type Turno,
 } from '@/lib/driver/turno';
 import { falloDelGpsNativo } from '@/lib/driver/nativo';
+import Colectas from '@/components/driver/Colectas';
 
 /**
  * Todo lo que todavía tiene abierto, sin importar cómo llegó a su hoja de ruta.
@@ -562,7 +563,13 @@ export default function DriverDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
+    <>
+      {/* A dónde tiene que ir a retirar, antes que nada. El retiro pasa ANTES
+          que el reparto, así que va arriba de la hoja de ruta. Si no tiene
+          ninguna, no dibuja nada. */}
+      <Colectas />
+
+      <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
       {/* ---------- Encabezado ---------- */}
       <header className="flex flex-col gap-2.5">
         <div className="flex items-baseline justify-between gap-2.5">
@@ -898,7 +905,8 @@ export default function DriverDashboardPage() {
           onSynced={refreshPending}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

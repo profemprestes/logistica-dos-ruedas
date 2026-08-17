@@ -11,6 +11,7 @@ import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import ShipmentMobileCard from '@/components/admin/ShipmentMobileCard';
 import CerrarEnvio, { type Cierre } from '@/components/admin/CerrarEnvio';
 import ReprogramarEnvio from '@/components/admin/ReprogramarEnvio';
+import MandarColecta from '@/components/admin/MandarColecta';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
 import { trackUrl } from '@/lib/trackUrl';
 import { armarZip } from '@/lib/zip';
@@ -198,6 +199,8 @@ export default function AdminPage() {
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [asignandoLote, setAsignandoLote] = useState(false);
   const [preasignando, setPreasignando] = useState(false);
+  /** El cuadro de "mandar a retirar" (paso 39). */
+  const [mandando, setMandando] = useState(false);
   const [copiados, setCopiados] = useState(false);
   const [copiando, setCopiando] = useState(false);
   /** Cómo va la bajada de fotos: "12 de 30". Vacío cuando no está bajando. */
@@ -787,6 +790,18 @@ export default function AdminPage() {
             + Nuevo envío
           </button>
 
+          {/* Mandar a retirar no es cargar un envío, y por eso es otro botón.
+              Se usa cuando hay paquetes esperando en un comercio y hay que
+              decirle a alguien que pase — con las etiquetas ya cargadas o sin
+              cargar todavía, que es lo que esto permite y un envío no. */}
+          <button
+            onClick={() => setMandando(true)}
+            title="Decirle a un repartidor que pase a retirar por un comercio"
+            className="w-full rounded border border-[var(--edr-yellow)] px-4 py-3 text-base font-black text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)] sm:w-auto sm:py-2 sm:text-sm"
+          >
+            📦 Mandar a retirar
+          </button>
+
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1322,6 +1337,15 @@ export default function AdminPage() {
       />
 
       <ProofOfDeliveryModal shipment={proof} onClose={() => setProof(null)} />
+
+      {mandando && (
+        <MandarColecta
+          drivers={drivers}
+          envios={shipments}
+          onCerrar={() => setMandando(false)}
+          onHecha={() => setError('')}
+        />
+      )}
 
       {reprogramando && (
         <ReprogramarEnvio

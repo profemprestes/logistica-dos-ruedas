@@ -77,11 +77,13 @@ export async function marcarHecha(id: number): Promise<boolean> {
  * Lo que necesita es distinto y más simple — cuántos son y para qué lado van,
  * para saber si le sirven o si tiene que decir que no.
  *
- * Vienen los suyos y los que no tienen dueño, marcados con `mio`. Los sin dueño
- * los toma el que los escanea —así está hecho el escáner y así tiene que
- * quedar— así que esconderlos lo obligaría a preguntar en el mostrador, que es
- * justo lo que esto venía a evitar. Los preasignados a OTRO no vienen: ésos no
- * puede llevárselos ni queriendo.
+ * SÓLO LOS PREASIGNADOS A ÉL y todavía sin retirar. Los que no tienen dueño no
+ * se listan: un paquete sin preasignar es uno que en la oficina todavía no se
+ * repartió — el local puede tenerlo listo y pasarlo en el momento, y ahí se
+ * consulta y se asigna a quien corresponde. Mostrárselo lo invitaría a
+ * llevárselo antes de que eso pase, y el escáner no lo frenaría: un envío sin
+ * dueño lo toma cualquiera. Esto se probó al revés en el paso 43 y se volvió
+ * atrás en el 44.
  *
  * VA POR RPC Y NO LEYENDO LA TABLA. Esto se intentó primero pidiendo los
  * envíos derecho, y la base contestaba vacío: los permisos no dejan ver un

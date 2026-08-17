@@ -146,42 +146,25 @@ export default function Colectas() {
               son suyos hasta que los escanee, y darle destinatario y plata de
               envíos que capaz lleva otro sería prometerle algo que no es.
 
-              En dos grupos, y separados a propósito. Los suyos se los tiene que
-              llevar. Los libres se los lleva el que llega primero, así que
-              mostrarlos mezclados le haría contar paquetes que capaz ya no
-              están — y esconderlos lo obligaría a preguntar en el mostrador,
-              que es lo que esto vino a evitar. */}
+              SÓLO LOS PREASIGNADOS A ÉL. Los que no tienen dueño no se listan,
+              y no es por prudencia: un paquete sin preasignar es uno que en la
+              oficina todavía no se repartió. El local puede tenerlo listo y
+              pasarlo en el momento, y ahí se consulta y se asigna a quien
+              corresponde. Mostrárselo lo invita a llevárselo antes de que eso
+              pase — y el escáner no lo frenaría, porque un envío sin dueño lo
+              toma cualquiera. Lo libre queda libre. */}
           {(paquetes.get(c.direccion)?.length ?? 0) > 0 && (
-            <div className="flex flex-col gap-2.5 rounded-2xl bg-black/20 px-3 py-2.5">
-              {[
-                { titulo: 'LO QUE TENÉS QUE RETIRAR', mios: true },
-                { titulo: 'SIN DUEÑO · EL QUE LLEGA PRIMERO', mios: false },
-              ].map((grupo) => {
-                const lista = paquetes.get(c.direccion)!.filter((p) => p.mio === grupo.mios);
-                if (lista.length === 0) return null;
-
-                return (
-                  <div key={grupo.titulo}>
-                    <div
-                      className="font-bebas text-sm tracking-[.06em]"
-                      style={{ color: grupo.mios ? 'var(--edr-yellow)' : 'var(--edr-muted)' }}
-                    >
-                      {grupo.titulo}
-                    </div>
-                    <ul className="mt-1 flex flex-col gap-0.5">
-                      {lista.map((p, i) => (
-                        <li
-                          key={`${p.destino}-${i}`}
-                          className="text-[15px] font-semibold"
-                          style={{ color: grupo.mios ? '#fff' : 'var(--edr-muted)' }}
-                        >
-                          {p.destino}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
+            <div className="rounded-2xl bg-black/20 px-3 py-2.5">
+              <div className="font-bebas text-sm tracking-[.06em] text-[var(--edr-yellow)]">
+                LO QUE TENÉS QUE RETIRAR
+              </div>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {paquetes.get(c.direccion)!.map((p, i) => (
+                  <li key={`${p.destino}-${i}`} className="text-[15px] font-semibold text-white">
+                    {p.destino}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

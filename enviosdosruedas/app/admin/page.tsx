@@ -306,13 +306,36 @@ export default function AdminPage() {
     else void load();
   }
 
+  /**
+   * Sacarle el repartidor a un envío que ya tenía encima lo devuelve a "creado".
+   *
+   * Si no, queda "retirado" sin nadie asignado, y eso no existe: retirado
+   * quiere decir que alguien lo levantó. Un envío así no le aparece a ningún
+   * repartidor en la hoja de ruta NI en la colecta — queda invisible para
+   * todos, y nadie se entera hasta que el comercio llama preguntando.
+   *
+   * Sólo los tres estados en los que el paquete está en la mano del
+   * repartidor. Un entregado o un cancelado no se tocan: ahí el estado cuenta
+   * algo que pasó, y volverlo atrás sería borrar una entrega.
+   */
+  function estadoAlSacarleElRepartidor(s: Shipment): ShipmentStatus {
+    return s.status === 'pendiente_retiro' || s.status === 'retirado' || s.status === 'en_camino'
+      ? 'creado'
+      : s.status;
+  }
+
   async function assignDriver(s: Shipment, driverId: string) {
     const { error: dbError } = await supabase
       .from('shipments')
       .update({
         assigned_driver: driverId || null,
         assigned_at: driverId ? new Date().toISOString() : null,
-        status: driverId && s.status === 'creado' ? 'pendiente_retiro' : s.status,
+        status: driverId
+          ? s.status === 'creado'
+            ? 'pendiente_retiro'
+            : s.status
+          : estadoAlSacarleElRepartidor(s),
+        ...(driverId ? {} : { picked_up_at: null }),
       })
       .eq('id', s.id);
 
@@ -792,6 +815,25 @@ export default function AdminPage() {
       setAsignandoLote(false);
       setError(e1.message);
       return;
+    }
+
+    /*
+     * Sacarles el repartidor devuelve a "creado" a los que ya estaban en su
+     * mano. Va en una segunda vuelta y no en la de arriba porque cada envío
+     * puede estar en un estado distinto, y mandarles el mismo a todos haría
+     * retroceder a uno que ya se entregó.
+     */
+    if (!driverId) {
+      const volverAtras = shipments
+        .filter((s) => ids.includes(s.id) && estadoAlSacarleElRepartidor(s) !== s.status)
+        .map((s) => s.id);
+
+      if (volverAtras.length) {
+        await supabase
+          .from('shipments')
+          .update({ status: 'creado', picked_up_at: null })
+          .in('id', volverAtras);
+      }
     }
 
     if (driverId) {

@@ -23,6 +23,19 @@ import {
 } from '@/lib/driver/colectas';
 import { hoyLocal } from '@/lib/scheduled';
 
+/**
+ * Si la nota es el conteo que escribe el sistema solo ("4 paquetes") y no algo
+ * que escribió una persona ("pasar después de las 14").
+ *
+ * A propósito es exacta: cualquier cosa de más que el número y la palabra la
+ * deja pasar. Equivocarse para este lado sólo repite un número; para el otro le
+ * borraría al repartidor una indicación que alguien se tomó el trabajo de
+ * escribirle.
+ */
+function esConteoAutomatico(nota: string): boolean {
+  return /^\d+\s+paquetes?$/i.test(nota.trim());
+}
+
 export default function Colectas() {
   const toast = useToast();
   const [colectas, setColectas] = useState<Colecta[]>([]);
@@ -106,7 +119,17 @@ export default function Colectas() {
               {c.direccion}
             </span>
 
-            {c.nota && <span className="text-[15px] font-semibold text-white">{c.nota}</span>}
+            {/* La nota, salvo el "N paquetes" que se escribe solo al preasignar
+                cuando abajo ya está la lista de verdad.
+
+                Ese número queda congelado del momento en que se creó la
+                colecta: si uno de los cuatro se escaneó, la nota sigue diciendo
+                cuatro y la lista muestra tres. Dos números distintos para lo
+                mismo en la misma tarjeta, y el repartidor buscando un paquete
+                que no está. Lo que él escribe a mano no se toca nunca. */}
+            {c.nota && !(esConteoAutomatico(c.nota) && (paquetes.get(c.direccion)?.length ?? 0) > 0) && (
+              <span className="text-[15px] font-semibold text-white">{c.nota}</span>
+            )}
 
             {/* La fecha sólo si no es de hoy. Una colecta de ayer sin hacer
                 sigue siendo un comercio con paquetes esperando, y esconderla

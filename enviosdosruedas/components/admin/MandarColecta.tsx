@@ -13,7 +13,7 @@
  * —seis comercios explican la mayoría de los envíos— así que en la práctica se
  * elige de una lista aunque por dentro sea texto.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { hoyLocal } from '@/lib/scheduled';
 import { notificarRepartidor } from '@/lib/notify';
@@ -33,6 +33,16 @@ const labelCls =
 interface Conocido {
   direccion: string;
   comercio: string;
+}
+
+/** Una colecta mandada que todavía nadie retiró. */
+interface Pendiente {
+  id: number;
+  direccion: string;
+  comercio: string | null;
+  nota: string | null;
+  fecha: string;
+  repartidor: { full_name: string } | null;
 }
 
 export default function MandarColecta({
@@ -59,6 +69,68 @@ export default function MandarColecta({
   const [nota, setNota] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+
+  /*
+   * Las que ya mandaste y siguen esperando.
+   *
+   * Van acá arriba y no en otra pantalla porque son la misma decisión: antes
+   * de mandar a alguien conviene ver si ya hay una para ese comercio, y si te
+   * equivocaste de repartidor el lugar donde te das cuenta es este.
+   *
+   * `version` fuerza a releer después de cancelar una. Sin eso habría que
+   * cerrar y abrir el cuadro para ver el resultado de lo que acabás de hacer.
+   */
+  const [pendientes, setPendientes] = useState<Pendiente[]>([]);
+  const [version, setVersion] = useState(0);
+  const [cancelando, setCancelando] = useState<number | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+
+    async function traer() {
+      const { data } = await supabase
+        .from('colectas')
+        .select('id, direccion, comercio, nota, fecha, repartidor:driver_id(full_name)')
+        .is('hecha_at', null)
+        .order('fecha', { ascending: true })
+        .limit(20);
+
+      if (vivo) setPendientes((data ?? []) as unknown as Pendiente[]);
+    }
+
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [version]);
+
+  /**
+   * Cancelar una colecta la borra.
+   *
+   * Se borra en vez de marcarse: una colecta es una instrucción, no un hecho.
+   * "Andá a buscar a Independencia" que se cancela no dejó nada atrás que
+   * valga la pena guardar, y una lista llena de instrucciones tachadas es una
+   * lista que se deja de leer.
+   *
+   * En el celular del repartidor desaparece sola dentro del minuto: la
+   * pantalla se refresca sin que él toque nada.
+   */
+  async function cancelar(c: Pendiente) {
+    const quien = c.repartidor?.full_name ?? 'el repartidor';
+    if (!confirm(`¿Cancelar la colecta de ${c.comercio || c.direccion} para ${quien}?`)) return;
+
+    setCancelando(c.id);
+    const { error: e } = await supabase.from('colectas').delete().eq('id', c.id);
+    setCancelando(null);
+
+    if (e) {
+      setError(e.message);
+      return;
+    }
+
+    setVersion((v) => v + 1);
+    onHecha(`Se canceló la colecta de ${c.comercio || c.direccion} para ${quien}.`);
+  }
 
   /**
    * Los comercios que aparecen en los envíos cargados, de más usado a menos.
@@ -167,7 +239,9 @@ export default function MandarColecta({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
-      <div className="w-full max-w-lg rounded-t-2xl border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-4 sm:rounded-2xl">
+      {/* Con varias colectas esperando el cuadro crece: que scrollee él y no
+          la página de atrás, o el botón de mandar queda abajo del teléfono. */}
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-4 sm:rounded-2xl">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-black">Mandar a retirar</h2>
@@ -179,6 +253,44 @@ export default function MandarColecta({
             ×
           </button>
         </div>
+
+        {/* Lo que ya está mandado, antes del formulario: primero se mira si ya
+            hay una para ese comercio y recién después se manda otra. */}
+        {pendientes.length > 0 && (
+          <div className="mb-4">
+            <div className={labelCls}>Esperando que las retiren</div>
+            <ul className="flex flex-col gap-1.5">
+              {pendientes.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center gap-2 rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold">
+                      {c.comercio ? `${c.comercio} · ` : ''}
+                      {c.direccion}
+                    </div>
+                    <div className="truncate text-xs text-[var(--edr-muted)]">
+                      {c.repartidor?.full_name ?? 'sin repartidor'}
+                      {c.nota ? ` · ${c.nota}` : ''}
+                      {c.fecha !== hoyLocal()
+                        ? ` · quedó del ${c.fecha.split('-').reverse().slice(0, 2).join('/')}`
+                        : ''}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => cancelar(c)}
+                    disabled={cancelando === c.id}
+                    className="shrink-0 rounded-full border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold text-[var(--edr-muted)] disabled:opacity-50"
+                  >
+                    {cancelando === c.id ? 'Esperá…' : 'Cancelar'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="flex flex-col gap-3">
           <div>

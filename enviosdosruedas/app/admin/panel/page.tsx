@@ -127,7 +127,15 @@ export default function PanelDelDiaPage() {
               <div className="mb-3.5 flex items-center gap-2.5">
                 <Bike size={19} strokeWidth={2.2} className="text-[var(--edr-yellow)]" />
                 <span className={titulo}>
-                  {repartidores.length === 1 ? 'El de hoy' : `Los ${repartidores.length}, ahora`}
+                  {/* El cero tiene que decir el cero. Antes caía en "Los 0,
+                      ahora", que no significa nada y encima suena a error del
+                      sistema justo cuando lo que pasa es que todavía no
+                      arrancó el día. */}
+                  {repartidores.length === 0
+                    ? 'Nadie con envíos todavía'
+                    : repartidores.length === 1
+                      ? 'El de hoy'
+                      : `Los ${repartidores.length}, ahora`}
                 </span>
                 <Link
                   href="/admin/mapa"

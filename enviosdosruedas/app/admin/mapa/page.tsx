@@ -143,7 +143,9 @@ export default function MapaAdminPage() {
     // vaciarlos primero hace parpadear el mapa en cada cambio de filtro.
     let q = supabase
       .from('shipments')
-      .select('*, driver:assigned_driver(full_name)')
+      // El comercio trae el punto de RETIRO, que el envío no tiene: guarda una
+      // sola coordenada y es la de la entrega.
+      .select('*, driver:assigned_driver(full_name), comercio:client_id(name, lat, lng)')
       .gte('scheduled_date', desde <= hasta ? desde : hasta)
       .lte('scheduled_date', desde <= hasta ? hasta : desde);
 
@@ -375,10 +377,47 @@ export default function MapaAdminPage() {
     [envios, soloPendientes, CERRADOS],
   );
 
-  const conPunto = useMemo(
-    () => visibles.filter((s) => s.lat != null && s.lng != null),
+  /**
+   * Azul oscuro: acá hay que ir a RETIRAR, no a entregar.
+   *
+   * Un envío tiene dos lugares y el mapa dibujaba siempre el segundo, también
+   * para los paquetes que todavía están en el comercio. Desde la oficina eso se
+   * lee como "ese envío está en camino a esa casa" cuando en realidad ni salió.
+   */
+  const AZUL_RETIRO = '#1e3a8a';
+
+  type Ubicado = {
+    envio: Shipment;
+    lat: number | null;
+    lng: number | null;
+    enElComercio: boolean;
+    comercio: string | null;
+  };
+
+  const ubicados: Ubicado[] = useMemo(
+    () =>
+      visibles.map((s) => {
+        const sinRetirar = s.status === 'creado' || s.status === 'pendiente_retiro';
+        const c = (s as Shipment & {
+          comercio?: { name: string; lat: number | null; lng: number | null } | null;
+        }).comercio;
+
+        if (sinRetirar && c?.lat != null && c.lng != null) {
+          return { envio: s, lat: Number(c.lat), lng: Number(c.lng), enElComercio: true, comercio: c.name };
+        }
+
+        return {
+          envio: s,
+          lat: s.lat != null ? Number(s.lat) : null,
+          lng: s.lng != null ? Number(s.lng) : null,
+          enElComercio: false,
+          comercio: c?.name ?? null,
+        };
+      }),
     [visibles],
   );
+
+  const conPunto = useMemo(() => ubicados.filter((u) => u.lat != null), [ubicados]);
 
   const sinPunto = visibles.length - conPunto.length;
 
@@ -425,12 +464,29 @@ export default function MapaAdminPage() {
   };
 
   const puntos: PuntoMapa[] = useMemo(() => {
-    const envios: PuntoMapa[] = conPunto.map((s) => {
+    const envios: PuntoMapa[] = conPunto.map((u) => {
+      const s = u.envio;
       const marca = marcaDeEstado(s.status);
+
+      // En azul oscuro, y con la flecha para arriba, los que todavía están en
+      // el comercio. Es "acá hay que ir a buscar", no "acá hay que entregar".
+      if (u.enElComercio) {
+        return {
+          id: s.id,
+          lat: u.lat as number,
+          lng: u.lng as number,
+          etiqueta: '↑',
+          color: AZUL_RETIRO,
+          colorTexto: '#fff',
+          titulo: `Retirar en ${s.pickup_address ?? u.comercio ?? ''}`,
+          detalle: `${u.comercio ?? ''} · va a ${s.address_street}`,
+        };
+      }
+
       return {
         id: s.id,
-        lat: Number(s.lat),
-        lng: Number(s.lng),
+        lat: u.lat as number,
+        lng: u.lng as number,
         etiqueta: marca.simbolo,
         color: marca.color,
         colorTexto: marca.colorTexto,
@@ -463,8 +519,8 @@ export default function MapaAdminPage() {
    */
   const porGrupo = useMemo(() => {
     const cuenta = new Map<string, { color: string; simbolo: string; n: number }>();
-    for (const s of conPunto) {
-      const m = marcaDeEstado(s.status);
+    for (const u of conPunto) {
+      const m = marcaDeEstado(u.envio.status);
       const previo = cuenta.get(m.grupo);
       cuenta.set(m.grupo, {
         color: m.color,

@@ -17,7 +17,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import { MapPin, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
+import VerificarPunto from '@/components/admin/VerificarPunto';
 
 interface Comercio {
   id: number;
@@ -252,44 +253,10 @@ function Editar({
     active: comercio.active,
   });
   const [guardando, setGuardando] = useState(false);
-  const [buscandoPunto, setBuscandoPunto] = useState(false);
   const [error, setError] = useState('');
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
-
-  /** Busca el punto de la dirección escrita, sin guardar todavía. */
-  async function ubicar() {
-    if (!form.pickup_address.trim()) return setError('Escribí la dirección primero.');
-
-    setBuscandoPunto(true);
-    setError('');
-
-    try {
-      const { data: sesion } = await supabase.auth.getSession();
-      const r = await fetch('/api/geocode', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sesion.session?.access_token ?? ''}`,
-        },
-        body: JSON.stringify({ consulta: form.pickup_address.trim(), ciudad: 'Mar del Plata' }),
-      });
-
-      const { punto } = (await r.json()) as { punto?: { lat: number; lng: number } | null };
-
-      if (!punto) {
-        setError('No se encontró esa dirección. Podés pegar un link de Google Maps.');
-      } else {
-        set('lat', punto.lat);
-        set('lng', punto.lng);
-      }
-    } catch {
-      setError('No se pudo buscar el punto.');
-    } finally {
-      setBuscandoPunto(false);
-    }
-  }
 
   async function guardar() {
     if (!form.name.trim()) return setError('Falta el nombre.');
@@ -391,35 +358,26 @@ function Editar({
             />
           </div>
 
-          {/* El punto. Sin esto el mapa no lo puede dibujar y el repartidor no
-              tiene cómo llegar más que escribiendo la dirección a mano. */}
-          <div className="rounded border border-[var(--edr-border)] p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className={labelCls + ' mb-0'}>Punto en el mapa</span>
-              <button
-                onClick={ubicar}
-                disabled={buscandoPunto}
-                className="rounded border border-[var(--edr-yellow)] px-3 py-1 text-xs font-bold text-[var(--edr-acento)] disabled:opacity-50"
-              >
-                {buscandoPunto ? 'Buscando…' : '📍 Buscar por la dirección'}
-              </button>
-            </div>
+          {/*
+            El punto, con el mismo verificador que se usa al cargar un envío.
 
-            {form.lat != null && form.lng != null ? (
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${form.lat},${form.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-sm text-[var(--edr-text-link)] underline"
-              >
-                <MapPin size={14} />
-                {form.lat.toFixed(5)}, {form.lng.toFixed(5)} · ver en el mapa
-              </a>
-            ) : (
-              <p className="text-sm text-[var(--edr-naranja-claro)]">
-                Sin ubicar. El mapa no lo va a mostrar.
-              </p>
-            )}
+            No alcanza con buscar la dirección y guardar lo que salga: acá el
+            punto se mira. Un comercio mal ubicado manda al repartidor a otra
+            cuadra todos los días, y a diferencia de un envío suelto ese error
+            se repite en cada retiro hasta que alguien lo note.
+          */}
+          <div>
+            <label className={labelCls}>Dónde queda</label>
+            <VerificarPunto
+              direccion={form.pickup_address}
+              ciudad="Mar del Plata"
+              lat={form.lat}
+              lng={form.lng}
+              onPunto={(punto) => {
+                set('lat', punto?.lat ?? null);
+                set('lng', punto?.lng ?? null);
+              }}
+            />
           </div>
 
           <label className="flex items-center gap-2 text-sm">

@@ -6,6 +6,7 @@ import { Navigation } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { readCachedRoute } from '@/lib/driver/db';
 import { getFix, type Fix } from '@/lib/driver/geo';
+import { misColectas, type Colecta } from '@/lib/driver/colectas';
 import { useOnline } from '@/lib/driver/useOnline';
 import { partirRuta } from '@/lib/scheduled';
 import { marcaDeEstado, STATUS_LABEL, type Shipment } from '@/lib/format';
@@ -33,12 +34,36 @@ const ACTIVOS = ['creado', 'pendiente_retiro', 'retirado', 'en_camino'];
  * puntos aparecen aunque no haya señal. Las baldosas del mapa no: esas vienen
  * de internet y sin señal quedan en blanco. Por eso el aviso de arriba.
  */
+/** Un punto del mapa junto con de qué envío salió y por qué está ahí. */
+interface PuntoElegido {
+  envio: Shipment;
+  lat: number | null;
+  lng: number | null;
+  enElComercio: boolean;
+  comercio: string | null;
+}
+
 export default function MapaRepartidorPage() {
   const online = useOnline();
   const [envios, setEnvios] = useState<Shipment[]>([]);
   const [cargando, setCargando] = useState(true);
   const [yo, setYo] = useState<Fix | null>(null);
-  const [elegido, setElegido] = useState<Shipment | null>(null);
+  /**
+   * El punto que se tocó, no el envío.
+   *
+   * Guarda también SI ese punto es el comercio o el destino, que es lo que
+   * decide qué mostrar y hacia dónde llevar el "cómo llegar". Con sólo el envío
+   * no alcanza: el mismo envío se dibuja en un lugar u otro según si ya lo
+   * retiró.
+   */
+  const [elegido, setElegido] = useState<PuntoElegido | null>(null);
+  /**
+   * Las colectas pendientes, que son lugares a los que ir SIN envío de por
+   * medio. Van al mismo mapa a propósito: el repartidor mira un solo mapa para
+   * decidir por dónde arrancar, y una colecta que vive en otra pantalla es una
+   * parada que no entra en esa cuenta.
+   */
+  const [colectas, setColectas] = useState<Colecta[]>([]);
 
   useEffect(() => {
     let vivo = true;
@@ -50,7 +75,10 @@ export default function MapaRepartidorPage() {
       if (id) {
         const { data: filas } = await supabase
           .from('shipments')
-          .select('*')
+          // El comercio viene con el envío: ahí está el punto de RETIRO, que el
+          // envío no tiene. Sin esto el mapa dibuja un paquete sin retirar en la
+          // casa del cliente y el "cómo llegar" manda para allá.
+          .select('*, comercio:client_id(name, lat, lng)')
           .eq('assigned_driver', id)
           // El intento fallido que ya se reprogramó no va: el que hay que
           // llegar es el envío nuevo, y dos puntos en la misma puerta confunden.
@@ -73,6 +101,10 @@ export default function MapaRepartidorPage() {
       }
     })();
 
+    void misColectas().then((cs) => {
+      if (vivo) setColectas(cs);
+    });
+
     getFix().then((f) => {
       if (vivo) setYo(f);
     });
@@ -86,28 +118,94 @@ export default function MapaRepartidorPage() {
   // ensucian el recorrido de la jornada.
   const deHoy = useMemo(() => partirRuta(envios).deHoy, [envios]);
 
-  const conPunto = useMemo(
-    () => deHoy.filter((s) => s.lat != null && s.lng != null),
+  /*
+   * DÓNDE VA CADA PUNTO, y esto es el arreglo de un error de fondo.
+   *
+   * Un envío tiene DOS lugares: de dónde se retira y a dónde se entrega. El
+   * mapa dibujaba siempre el segundo, incluso para los paquetes que todavía
+   * están en el comercio — así que el repartidor cruzaba la ciudad hasta un
+   * domicilio a entregar algo que no tenía en la moto.
+   *
+   * Ahora, mientras no lo retiró, el punto es el del comercio y se pinta en
+   * azul oscuro. Cuando lo retira salta solo a la dirección de entrega, con el
+   * color de su estado.
+   */
+  const AZUL_RETIRO = '#1e3a8a';
+
+  const ubicados = useMemo(
+    () =>
+      deHoy.map((s) => {
+        const sinRetirar = s.status === 'creado' || s.status === 'pendiente_retiro';
+        const comercio = (s as Shipment & { comercio?: { name: string; lat: number | null; lng: number | null } | null }).comercio;
+
+        if (sinRetirar && comercio?.lat != null && comercio.lng != null) {
+          return {
+            envio: s,
+            lat: Number(comercio.lat),
+            lng: Number(comercio.lng),
+            enElComercio: true,
+            comercio: comercio.name,
+          };
+        }
+
+        return {
+          envio: s,
+          lat: s.lat != null ? Number(s.lat) : null,
+          lng: s.lng != null ? Number(s.lng) : null,
+          enElComercio: false,
+          comercio: comercio?.name ?? null,
+        };
+      }),
     [deHoy],
   );
+
+  const conPunto = useMemo(() => ubicados.filter((u) => u.lat != null), [ubicados]);
   const sinPunto = deHoy.length - conPunto.length;
 
   const puntos: PuntoMapa[] = useMemo(
     () =>
-      conPunto.map((s) => {
-        const marca = marcaDeEstado(s.status);
+      conPunto.map((u) => {
+        const marca = marcaDeEstado(u.envio.status);
         return {
-          id: s.id,
-          lat: Number(s.lat),
-          lng: Number(s.lng),
-          etiqueta: marca.simbolo,
-          color: marca.color,
-          colorTexto: marca.colorTexto,
-          titulo: s.address_street,
-          detalle: `${s.recipient_name} · ${STATUS_LABEL[s.status]}`,
+          id: u.envio.id,
+          lat: u.lat as number,
+          lng: u.lng as number,
+          etiqueta: u.enElComercio ? '↑' : marca.simbolo,
+          color: u.enElComercio ? AZUL_RETIRO : marca.color,
+          colorTexto: u.enElComercio ? '#fff' : marca.colorTexto,
+          titulo: u.enElComercio
+            ? `Retirar en ${u.envio.pickup_address ?? u.comercio ?? ''}`
+            : u.envio.address_street,
+          detalle: u.enElComercio
+            ? `${u.comercio ?? 'Comercio'} · ${u.envio.recipient_name}`
+            : `${u.envio.recipient_name} · ${STATUS_LABEL[u.envio.status]}`,
         };
       }),
     [conPunto],
+  );
+
+  /*
+   * Las colectas se dibujan con id NEGATIVO.
+   *
+   * Los ids de los envíos son positivos, así que tocar una colecta no puede
+   * abrir por error la ficha de un envío cualquiera. Es el mismo truco que usa
+   * el mapa del panel para las motos.
+   */
+  const puntosColecta: PuntoMapa[] = useMemo(
+    () =>
+      colectas
+        .filter((c) => c.lat != null && c.lng != null)
+        .map((c) => ({
+          id: -c.id,
+          lat: Number(c.lat),
+          lng: Number(c.lng),
+          etiqueta: '↑',
+          color: AZUL_RETIRO,
+          colorTexto: '#fff',
+          titulo: `Colecta · ${c.direccion}`,
+          detalle: [c.comercio, c.nota].filter(Boolean).join(' · '),
+        })),
+    [colectas],
   );
 
   return (
@@ -142,10 +240,12 @@ export default function MapaRepartidorPage() {
           </div>
         ) : (
           <MapaEnvios
-            puntos={puntos}
+            puntos={[...puntos, ...puntosColecta]}
             miUbicacion={yo}
             alto="h-[65vh]"
-            onTocar={(id) => setElegido(deHoy.find((s) => s.id === id) ?? null)}
+            onTocar={(id) =>
+              setElegido(id < 0 ? null : (ubicados.find((u) => u.envio.id === id) ?? null))
+            }
           />
         )}
 
@@ -153,13 +253,34 @@ export default function MapaRepartidorPage() {
           <div className="rounded-xl border-4 border-[var(--edr-yellow)] bg-[var(--edr-surface)] px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-xl font-black leading-tight">{elegido.address_street}</div>
-                {elegido.address_extra && (
-                  <div className="text-base font-bold">{elegido.address_extra}</div>
+                {/* Lo primero que se lee tiene que ser a dónde ir AHORA. Para un
+                    paquete sin retirar eso es el comercio, no la casa del
+                    cliente — que es adonde hay que ir después. */}
+                {elegido.enElComercio ? (
+                  <>
+                    <div className="font-bebas text-base tracking-[.08em] text-[var(--edr-acento)]">
+                      RETIRAR EN
+                    </div>
+                    <div className="text-xl font-black leading-tight">
+                      {elegido.envio.pickup_address ?? elegido.comercio}
+                    </div>
+                    <div className="text-sm text-[var(--edr-muted)]">
+                      {elegido.comercio} · después va a {elegido.envio.address_street}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xl font-black leading-tight">
+                      {elegido.envio.address_street}
+                    </div>
+                    {elegido.envio.address_extra && (
+                      <div className="text-base font-bold">{elegido.envio.address_extra}</div>
+                    )}
+                    <div className="text-sm text-[var(--edr-muted)]">
+                      {elegido.envio.recipient_name} · {STATUS_LABEL[elegido.envio.status]}
+                    </div>
+                  </>
                 )}
-                <div className="text-sm text-[var(--edr-muted)]">
-                  {elegido.recipient_name} · {STATUS_LABEL[elegido.status]}
-                </div>
               </div>
               <button
                 onClick={() => setElegido(null)}
@@ -177,7 +298,7 @@ export default function MapaRepartidorPage() {
               className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-[var(--edr-blue)] px-4 py-3 text-center text-base font-black text-white"
             >
               <Navigation size={20} strokeWidth={2} />
-              Cómo llegar a destino
+              {elegido.enElComercio ? 'Cómo llegar al comercio' : 'Cómo llegar a destino'}
             </a>
           </div>
         )}

@@ -44,7 +44,8 @@ export default function MandarColecta({
   /** Los envíos que ya están en pantalla: de ahí salen los comercios conocidos. */
   envios: Shipment[];
   onCerrar: () => void;
-  onHecha: () => void;
+  /** Qué decir en pantalla cuando se creó. */
+  onHecha: (aviso: string) => void;
 }) {
   /*
    * Con un solo repartidor queda elegido de entrada: hacerlo elegir entre uno
@@ -139,7 +140,11 @@ export default function MandarColecta({
       return;
     }
 
-    onHecha();
+    onHecha(
+      `Le avisamos a ${drivers.find((d) => d.id === driverId)?.full_name ?? 'el repartidor'} que pase por ${
+        comercio.trim() || direccion.trim()
+      }.`,
+    );
     onCerrar();
   }
 

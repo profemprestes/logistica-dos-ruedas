@@ -199,6 +199,9 @@ export default function AdminPage() {
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [asignandoLote, setAsignandoLote] = useState(false);
   const [preasignando, setPreasignando] = useState(false);
+  /** Confirmación de lo último que se hizo. Sin esto, tocar y que no pase nada
+   *  visible se lee como que falló. */
+  const [aviso, setAviso] = useState('');
   /** El cuadro de "mandar a retirar" (paso 39). */
   const [mandando, setMandando] = useState(false);
   const [copiados, setCopiados] = useState(false);
@@ -574,6 +577,125 @@ export default function AdminPage() {
       prev.map((s) => (ids.includes(s.id) ? { ...s, preasignado_a: driverId || null } : s)),
     );
     setSeleccion(new Set());
+
+    if (!driverId) {
+      setAviso(`Se les sacó el preasignado a ${ids.length} envío(s).`);
+      return;
+    }
+
+    /*
+     * PREASIGNAR YA ES DECIR "ANDÁ A BUSCAR ESTO", así que la colecta sale sola.
+     *
+     * Hacerlas por separado era pedir dos veces lo mismo: primero marcar de
+     * quién son los paquetes, después escribir a dónde tiene que ir a
+     * buscarlos. Y olvidarse del segundo paso deja al repartidor con paquetes
+     * asignados que no sabe dónde retirar.
+     *
+     * Una por comercio: si la selección mezcla dos comercios, son dos lugares
+     * distintos a los que ir.
+     */
+    const elegidos = shipments.filter((s) => ids.includes(s.id));
+    const porComercio = new Map<string, { direccion: string; comercio: string; cuantos: number }>();
+
+    for (const s of elegidos) {
+      const dir = (s.pickup_address ?? '').trim();
+      if (!dir) continue;
+      const clave = dir.toLowerCase();
+      const previo = porComercio.get(clave);
+      porComercio.set(clave, {
+        direccion: dir,
+        comercio: previo?.comercio || (s.client_name_raw ?? '').trim(),
+        cuantos: (previo?.cuantos ?? 0) + 1,
+      });
+    }
+
+    const nombre = drivers.find((d) => d.id === driverId)?.full_name ?? 'el repartidor';
+    const creadas = await crearColectas(driverId, [...porComercio.values()]);
+
+    setAviso(
+      creadas.length === 0
+        ? `Preasignados ${ids.length} envío(s) a ${nombre}.`
+        : `Preasignados ${ids.length} envío(s) a ${nombre}, y le avisamos que pase por ` +
+          creadas.join(' y ') +
+          '.',
+    );
+  }
+
+  /**
+   * Crea las colectas que falten y le avisa al repartidor.
+   *
+   * NO REPITE: si ya tiene una pendiente para ese mismo lugar hoy, no crea otra.
+   * Preasignar de a tandas es lo normal —van llegando etiquetas por WhatsApp— y
+   * sin esto la app del repartidor se llenaría de cinco veces el mismo comercio.
+   */
+  async function crearColectas(
+    driverId: string,
+    lugares: { direccion: string; comercio: string; cuantos: number }[],
+  ): Promise<string[]> {
+    if (!lugares.length) return [];
+
+    const hoy = hoyLocal();
+
+    const { data: yaTiene } = await supabase
+      .from('colectas')
+      .select('direccion')
+      .eq('driver_id', driverId)
+      .eq('fecha', hoy)
+      .is('hecha_at', null);
+
+    const pendientes = new Set(
+      ((yaTiene ?? []) as { direccion: string }[]).map((c) => c.direccion.trim().toLowerCase()),
+    );
+
+    const nuevas = lugares.filter((l) => !pendientes.has(l.direccion.toLowerCase()));
+    if (!nuevas.length) return [];
+
+    const { data: sesion } = await supabase.auth.getSession();
+
+    /*
+     * El punto sale del comercio, que ya lo tiene buscado y verificado. Si el
+     * envío no está enganchado a ninguno, la colecta se crea sin punto: sirve
+     * igual, con el "cómo llegar" armado desde la dirección escrita.
+     */
+    const { data: comercios } = await supabase
+      .from('clients')
+      .select('pickup_address, lat, lng')
+      .not('lat', 'is', null);
+
+    const punto = new Map<string, { lat: number; lng: number }>();
+    for (const c of (comercios ?? []) as { pickup_address: string; lat: number; lng: number }[]) {
+      if (c.pickup_address) punto.set(c.pickup_address.trim().toLowerCase(), { lat: c.lat, lng: c.lng });
+    }
+
+    const { error: e } = await supabase.from('colectas').insert(
+      nuevas.map((l) => ({
+        driver_id: driverId,
+        direccion: l.direccion,
+        comercio: l.comercio || null,
+        nota: `${l.cuantos} paquete${l.cuantos > 1 ? 's' : ''}`,
+        lat: punto.get(l.direccion.toLowerCase())?.lat ?? null,
+        lng: punto.get(l.direccion.toLowerCase())?.lng ?? null,
+        fecha: hoy,
+        creada_por: sesion.session?.user?.id ?? null,
+      })),
+    );
+
+    if (e) {
+      setError(`Los envíos quedaron preasignados, pero no se pudo crear la colecta: ${e.message}`);
+      return [];
+    }
+
+    // Un aviso por tanda, con el mismo criterio que la asignación: al que está
+    // manejando no se le mandan cinco notificaciones seguidas.
+    void notificarRepartidor({
+      driverId,
+      title: nuevas.length === 1 ? 'Pasá a retirar' : `Pasá a retirar en ${nuevas.length} lugares`,
+      body: nuevas.map((l) => `${l.comercio || l.direccion} · ${l.cuantos}`).join(' · '),
+      url: '/driver/dashboard',
+      tag: 'colecta',
+    });
+
+    return nuevas.map((l) => l.comercio || l.direccion);
   }
 
   async function asignarSeleccion(driverId: string) {
@@ -983,6 +1105,25 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* La confirmación de lo último que se hizo.
+            Preasignar y mandar a retirar no cambian nada visible en la tabla
+            —el preasignado es un renglón chico, la colecta ni aparece acá— así
+            que sin esto tocar el botón y que no pase nada se lee como que
+            falló. Se cierra a mano: si desapareciera sola, el que estaba
+            mirando otra cosa se la pierde. */}
+        {aviso && (
+          <div className="mb-4 flex items-start justify-between gap-3 rounded border-2 border-[var(--edr-verde)] bg-[var(--edr-surface-2)] px-3 py-2 text-sm">
+            <span className="font-semibold text-[var(--edr-verde-claro)]">{aviso}</span>
+            <button
+              onClick={() => setAviso('')}
+              aria-label="Cerrar"
+              className="shrink-0 px-1 text-lg leading-none text-[var(--edr-muted)]"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Teléfono: una tarjeta por envío. La tabla de abajo tiene siete
             columnas y en un celular obliga a arrastrar de costado para llegar
             a los botones, que es justo lo que se necesita desde la calle. */}
@@ -1343,7 +1484,10 @@ export default function AdminPage() {
           drivers={drivers}
           envios={shipments}
           onCerrar={() => setMandando(false)}
-          onHecha={() => setError('')}
+          onHecha={(a) => {
+            setError('');
+            setAviso(a);
+          }}
         />
       )}
 

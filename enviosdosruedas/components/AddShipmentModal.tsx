@@ -6,6 +6,7 @@ import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
 import VerificarPunto from '@/components/admin/VerificarPunto';
 import ElegirComercio from '@/components/admin/ElegirComercio';
+import { asegurarComercio } from '@/lib/admin/comercios';
 import { notificarRepartidor } from '@/lib/notify';
 
 type Mode = 'manual' | 'pegar';
@@ -285,8 +286,26 @@ function ShipmentForm({
      */
     const { pickup_extra, ...delFormulario } = form;
 
+    /*
+     * Si escribió un comercio que no estaba en la lista, se crea acá con su
+     * punto. Es lo que hace que la lista se llene sola trabajando, en vez de
+     * tener que ir a cargarla antes.
+     *
+     * No se hace cuando ya eligió uno de la lista: ese ya tiene su punto
+     * verificado, y volver a buscarlo podría pisarlo con uno peor.
+     */
+    const clientId =
+      form.client_id ??
+      (await asegurarComercio({
+        nombre: form.client_name_raw,
+        direccion: form.pickup_address,
+        extra: pickup_extra,
+        notas: form.pickup_notes,
+      }));
+
     const payload = {
       ...delFormulario,
+      client_id: clientId,
       pickup_address: [form.pickup_address.trim(), pickup_extra.trim()]
         .filter(Boolean)
         .join(' '),

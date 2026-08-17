@@ -9,7 +9,8 @@
     "lint": "eslint",
     "parser": "tsx --tsconfig tsconfig.json scripts/probar-parser.ts",
     "panel": "tsx --tsconfig tsconfig.json scripts/probar-panel.ts",
-    "aviso": "tsx --tsconfig tsconfig.json scripts/probar-aviso.ts"
+    "aviso": "tsx --tsconfig tsconfig.json scripts/probar-aviso.ts",
+    "comercios": "tsx --tsconfig tsconfig.json scripts/cargar-comercios.ts"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",

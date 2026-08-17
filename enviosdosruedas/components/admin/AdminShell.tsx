@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Store,
   Users,
   Wallet,
   Warehouse,
@@ -54,6 +55,9 @@ const ITEMS: Item[] = [
   { href: '/admin', label: 'Envíos', Icono: Package, corto: 'ENVÍOS' },
   { href: '/admin/mapa', label: 'Mapa en vivo', Icono: MapIcon, corto: 'MAPA' },
   { href: '/admin/drivers', label: 'Repartidores', Icono: Users },
+  // Va al lado de Repartidores: las dos son las listas de con quién se
+  // trabaja, una del lado de adentro y otra del de afuera.
+  { href: '/admin/comercios', label: 'Comercios', Icono: Store },
   { href: '/admin/billing', label: 'Cierre de caja', Icono: Wallet, corto: 'CAJA' },
   { href: '/admin/resumenes', label: 'Resúmenes', Icono: MessageCircle },
   { href: '/admin/stats', label: 'Estadísticas', Icono: BarChart3 },

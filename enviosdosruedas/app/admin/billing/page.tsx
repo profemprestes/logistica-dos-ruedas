@@ -107,7 +107,18 @@ export default function BillingPage() {
     setNotes(saved?.notes ?? '');
     // Arranca con lo que calculó el sistema; el admin lo pisa si rindió otra cosa.
     const calc = summarizeLogs(rows);
-    setActual(String(saved?.actual_amount ?? calc.cashTotal));
+    /*
+     * EL RENDIDO ARRANCA EN CERO, NO EN LO COBRADO.
+     *
+     * Arrancaba con el efectivo del día, o sea dando por hecho que el
+     * repartidor entregó todo — y entonces el saldo nacía diciendo que no debía
+     * nada. Justo al revés de lo que pasa: lo normal es que la plata la tenga
+     * él hasta que la rinde, y rendir es un hecho que ocurre, no algo que se
+     * supone. Se llena a mano cuando la entrega, que es cuando se sabe.
+     *
+     * Un día ya cerrado conserva lo que se guardó: esto es sólo el arranque.
+     */
+    setActual(String(saved?.actual_amount ?? 0));
     /*
      * Lo que le toca al repartidor arranca CALCULADO, no vacío.
      *
@@ -547,7 +558,9 @@ export default function BillingPage() {
                   onClick={() => {
                     setCobrado(String(cashTotal));
                     setEnvios(String(shippingTotal));
-                    setActual(String(cashTotal));
+                    // Rehacer las cuentas del sistema no puede inventar una
+                    // rendición que no pasó: vuelve a cero, como al abrir.
+                    setActual('0');
                     setEarnings(String(driverEarnings));
                   }}
                   className="rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"

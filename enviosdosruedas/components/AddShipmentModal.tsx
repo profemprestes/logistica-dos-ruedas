@@ -6,7 +6,7 @@ import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
 import VerificarPunto from '@/components/admin/VerificarPunto';
 import ElegirComercio from '@/components/admin/ElegirComercio';
-import { asegurarComercio } from '@/lib/admin/comercios';
+import { asegurarComercio, problemaDelComercio } from '@/lib/admin/comercios';
 import { notificarRepartidor } from '@/lib/notify';
 
 type Mode = 'manual' | 'pegar';
@@ -119,6 +119,9 @@ const emptyForm = () => ({
   client_name_raw: '',
   /** El comercio elegido de la lista, si se eligió uno. Null = carga manual. */
   client_id: null as number | null,
+  // El punto del COMERCIO, no del envío. Se guarda en el comercio, no acá.
+  pickup_lat: null as number | null,
+  pickup_lng: null as number | null,
   pickup_address: '',
   /** Piso o depto: va aparte porque el buscador de direcciones no lo entiende. */
   pickup_extra: '',
@@ -171,6 +174,10 @@ function formFromShipment(s: Shipment): FormState {
   return {
     client_name_raw: s.client_name_raw ?? '',
     client_id: s.client_id ?? null,
+    // El punto de retiro vive en el comercio, no en el envío. Al editar arranca
+    // vacío y el mapita lo busca: no hay de dónde sacarlo desde acá.
+    pickup_lat: null,
+    pickup_lng: null,
     pickup_address: s.pickup_address ?? '',
     // El envío guarda la dirección entera; el piso vive en el comercio. Al
     // editar uno viejo el campo arranca vacío y eso está bien: lo que ya se
@@ -248,6 +255,8 @@ function ShipmentForm({
   const [fechaLote, setFechaLote] = useState(() => fechaEn(0));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  /** Se guardó el envío pero sin comercio enlazado: se avisa sin frenar nada. */
+  const [avisoComercio, setAvisoComercio] = useState('');
   /**
    * A quién se le asigna lo que se está cargando.
    *
@@ -284,7 +293,9 @@ function ShipmentForm({
      * el comercio, donde la dirección se usa para BUSCAR EL PUNTO y el "5A" la
      * rompe. Acá ya no se busca nada: el punto sale del comercio, por client_id.
      */
-    const { pickup_extra, ...delFormulario } = form;
+    // `pickup_lat/lng` son del comercio y no columnas del envío: si se colaran
+    // en el insert, PostgREST rechazaría el guardado entero.
+    const { pickup_extra, pickup_lat, pickup_lng, ...delFormulario } = form;
 
     /*
      * Si escribió un comercio que no estaba en la lista, se crea acá con su
@@ -301,6 +312,8 @@ function ShipmentForm({
         direccion: form.pickup_address,
         extra: pickup_extra,
         notas: form.pickup_notes,
+        // Si lo verificaste en el mapa, ese punto y no el que salga de buscar.
+        punto: pickup_lat != null && pickup_lng != null ? { lat: pickup_lat, lng: pickup_lng } : null,
       }));
 
     const payload = {
@@ -337,6 +350,25 @@ function ShipmentForm({
 
     setSaving(false);
     if (dbError) return setError(dbError.message);
+
+    /*
+     * SI QUEDÓ SIN COMERCIO, DECIRLO.
+     *
+     * El envío se guardó igual, y eso no se discute: perderlo por no poder
+     * enlazar un comercio sería cambiar un problema chico por uno grande. Pero
+     * sin el enlace el repartidor NO VE EL PUNTO DE RETIRO en el mapa — le
+     * queda la dirección escrita en la tarjeta y nada más.
+     *
+     * Hasta hoy esto no se notaba en ningún lado. El 18/08/2026 salieron cinco
+     * envíos así, de comercios que ya estaban cargados y con punto.
+     */
+    if (!clientId) {
+      const porque = problemaDelComercio();
+      setAvisoComercio(
+        `El envío se guardó, pero no quedó enlazado a un comercio${porque ? `: ${porque}` : ''}. ` +
+          'El repartidor no va a ver el punto de retiro en el mapa.',
+      );
+    }
 
     if (!puntoManual && cambioDireccion) {
       void ubicarEnElMapa((guardado ?? []).map((s) => s.id));
@@ -503,12 +535,36 @@ function ShipmentForm({
                     set('pickup_address', c.pickup_address ?? '');
                     set('pickup_extra', c.pickup_extra ?? '');
                     set('pickup_notes', c.pickup_notes ?? '');
+                    // Y su punto, para verlo en el mapa sin volver a buscarlo.
+                    set('pickup_lat', c.lat ?? null);
+                    set('pickup_lng', c.lng ?? null);
                   }}
                   onLimpiar={() => set('client_id', null)}
                 />
               </Field>
               <Field label="Dirección de retiro">
                 <input className={field} value={form.pickup_address} onChange={(e) => set('pickup_address', e.target.value)} />
+                {/* El mismo control que la dirección de entrega, y por la misma
+                    razón: el repartidor va a ese punto. Si cae en otra cuadra
+                    se pierde un viaje, y eso se ve acá en dos segundos o no se
+                    ve nunca.
+
+                    El punto es del COMERCIO, no del envío: se guarda en la
+                    ficha del comercio y sirve para todos los envíos que vengan
+                    de ahí. Por eso, si el comercio ya tenía uno verificado, se
+                    muestra ése y no se vuelve a buscar. */}
+                <div className="mt-1.5">
+                  <VerificarPunto
+                    direccion={form.pickup_address}
+                    ciudad={form.city}
+                    lat={form.pickup_lat}
+                    lng={form.pickup_lng}
+                    onPunto={(p) => {
+                      set('pickup_lat', p?.lat ?? null);
+                      set('pickup_lng', p?.lng ?? null);
+                    }}
+                  />
+                </div>
               </Field>
               <Field label="Piso / depto / local">
                 <input className={field} value={form.pickup_extra} onChange={(e) => set('pickup_extra', e.target.value)} />
@@ -955,6 +1011,15 @@ function ShipmentForm({
           {error && (
             <div className="mt-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
               {error}
+            </div>
+          )}
+
+          {/* No es un error: el envío se guardó. Es un aviso de que le falta
+              algo que se nota recién en la calle, cuando el repartidor abre el
+              mapa y el punto de retiro no está. */}
+          {avisoComercio && (
+            <div className="mt-4 rounded border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-900">
+              {avisoComercio}
             </div>
           )}
         </div>

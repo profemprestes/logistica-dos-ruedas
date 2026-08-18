@@ -20,6 +20,25 @@
 import { supabase } from '@/lib/supabaseClient';
 
 /**
+ * Por qué no se pudo enlazar el último envío. `null` si salió bien.
+ *
+ * ESTO EXISTE PORQUE FALLABA EN SILENCIO. El 18/08/2026 aparecieron cinco
+ * envíos del día sin comercio enlazado —WELIVERY, WAYFARER, AMA Y POLA, todos
+ * comercios que ya estaban cargados y con punto— y desde el panel se veían
+ * perfectos: el nombre escrito, la dirección escrita, todo bien. Lo único que
+ * faltaba era el enlace, y sin él el repartidor no ve el punto de retiro en el
+ * mapa y va a la dirección leyéndola de la tarjeta.
+ *
+ * Cada `return null` de acá abajo era una hipótesis que no se podía comprobar.
+ * Ahora cada uno dice cuál fue.
+ */
+let ultimoProblema: string | null = null;
+
+export function problemaDelComercio(): string | null {
+  return ultimoProblema;
+}
+
+/**
  * Devuelve el id del comercio para ese nombre, creándolo si hace falta.
  * `null` si no se pudo — y ahí el envío se guarda sin comercio.
  */
@@ -28,14 +47,22 @@ export async function asegurarComercio(opciones: {
   direccion: string;
   extra?: string;
   notas?: string;
+  /** El punto verificado a mano en el mapa, si lo hubo. */
+  punto?: { lat: number; lng: number } | null;
 }): Promise<number | null> {
+  ultimoProblema = null;
   const nombre = opciones.nombre.trim();
   const direccion = opciones.direccion.trim();
 
   // Sin nombre no hay comercio que buscar ni crear. Sin dirección tampoco vale
   // la pena: un comercio sin dónde retirar no sirve para nada de lo que esto
   // existe.
-  if (!nombre || !direccion) return null;
+  if (!nombre || !direccion) {
+    ultimoProblema = !nombre
+      ? 'no se escribió el nombre del comercio'
+      : 'no se escribió la dirección de retiro';
+    return null;
+  }
 
   try {
     /*
@@ -45,13 +72,37 @@ export async function asegurarComercio(opciones: {
      * tiene que serlo: si acá se buscara distinto, escribir "toy piola" crearía
      * uno nuevo que la base después rechazaría por repetido.
      */
-    const { data: existente } = await supabase
+    const { data: existente, error: eBuscar } = await supabase
       .from('clients')
-      .select('id')
+      .select('id, lat')
       .ilike('name', nombre)
       .maybeSingle();
 
-    if (existente) return (existente as { id: number }).id;
+    if (eBuscar) {
+      ultimoProblema = `no se pudo buscar el comercio: ${eBuscar.message}`;
+      return null;
+    }
+
+    if (existente) {
+      const id = (existente as { id: number; lat: number | null }).id;
+
+      /*
+       * Si el comercio ya estaba pero SIN punto, y vos lo verificaste en el
+       * mapa al cargar el envío, se lo guardamos.
+       *
+       * Sólo cuando no tenía. Uno ya verificado no se pisa: el de la ficha se
+       * revisó mirando el mapa, y el de acá puede ser el de un envío cargado a
+       * las apuradas.
+       */
+      if (opciones.punto && (existente as { lat: number | null }).lat == null) {
+        await supabase
+          .from('clients')
+          .update({ lat: opciones.punto.lat, lng: opciones.punto.lng })
+          .eq('id', id);
+      }
+
+      return id;
+    }
 
     // Es nuevo: se le busca el punto antes de crearlo.
     const { data: sesion } = await supabase.auth.getSession();
@@ -73,8 +124,17 @@ export async function asegurarComercio(opciones: {
       return punto ?? null;
     };
 
+    /*
+     * El punto que verificaste a mano gana sobre el buscador, y ni siquiera se
+     * consulta. Vos viste dónde cae en el mapa; Nominatim adivina.
+     */
+    if (opciones.punto) {
+      lat = opciones.punto.lat;
+      lng = opciones.punto.lng;
+    }
+
     try {
-      let punto = await buscar(direccion);
+      let punto = opciones.punto ? null : await buscar(direccion);
 
       /*
        * Si no la encontró, se reintenta cortando en el número de puerta.
@@ -129,11 +189,15 @@ export async function asegurarComercio(opciones: {
         .ilike('name', nombre)
         .maybeSingle();
 
-      return reintento ? (reintento as { id: number }).id : null;
+      if (reintento) return (reintento as { id: number }).id;
+
+      ultimoProblema = `no se pudo crear el comercio: ${error.message}`;
+      return null;
     }
 
     return creado.id;
-  } catch {
+  } catch (err) {
+    ultimoProblema = err instanceof Error ? err.message : 'falló sin decir por qué';
     return null;
   }
 }

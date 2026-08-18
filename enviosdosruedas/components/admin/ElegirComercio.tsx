@@ -23,6 +23,9 @@ export interface Comercio {
   pickup_address: string | null;
   pickup_extra: string | null;
   pickup_notes: string | null;
+  /** El punto guardado del comercio, para poder mostrarlo al cargar el envío. */
+  lat: number | null;
+  lng: number | null;
 }
 
 /** Sin tildes y en minúscula, para que "guemes" encuentre "Güemes". */
@@ -51,7 +54,7 @@ export default function ElegirComercio({
 
     supabase
       .from('clients')
-      .select('id, name, pickup_address, pickup_extra, pickup_notes')
+      .select('id, name, pickup_address, pickup_extra, pickup_notes, lat, lng')
       .eq('active', true)
       .order('name')
       .then(({ data }) => {

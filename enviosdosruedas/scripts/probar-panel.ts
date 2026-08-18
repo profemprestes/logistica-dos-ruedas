@@ -63,9 +63,23 @@ function caso(nombre: string, obtenido: string[], esperado: string[]) {
   }
 }
 
+/**
+ * Una hora de Mar del Plata, como Date.
+ *
+ * El +3 la lleva a UTC, que es como se guarda. Acepta medias horas —11.5 son
+ * las 11:30— porque las reglas que miran "cuánto falta" no se pueden probar
+ * sólo en horas enteras: el límite de una hora justo cae en el medio.
+ */
+function enHora(hora: number): Date {
+  const h = Math.floor(hora) + 3;
+  const min = Math.round((hora - Math.floor(hora)) * 60);
+  return new Date(
+    `${HOY}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00Z`,
+  );
+}
+
 function tipos(envios: Shipment[], hora: number, enCamino: [number, number][] = []) {
-  // El +3 lleva la hora de Mar del Plata a UTC, que es como se guarda.
-  const ahora = new Date(`${HOY}T${String(hora + 3).padStart(2, '0')}:00:00Z`);
+  const ahora = enHora(hora);
   return buscarAtrasos({
     envios,
     enCaminoDesde: new Map(enCamino),
@@ -229,7 +243,7 @@ caso(
 // Con la franja ya vencida el aviso cambia de color: deja de ser "apurate" y
 // pasa a ser "el compromiso ya se incumplió".
 function tono(envios: Shipment[], hora: number) {
-  const ahora = new Date(`${HOY}T${String(hora + 3).padStart(2, '0')}:00:00Z`);
+  const ahora = enHora(hora);
   return buscarAtrasos({ envios, enCaminoDesde: new Map(), ahora, hoy: HOY }).map((a) => a.tono);
 }
 
@@ -237,6 +251,28 @@ const franja10a12 = envio({ ...cargadoAyer, delivery_window: '10 a 12 hs' });
 caso('a las 9, con franja 10 a 12, todavía nada', tipos([franja10a12], 9), []);
 caso('a las 11 avisa en naranja', tono([franja10a12], 11), ['naranja']);
 caso('a las 15, con la franja vencida, avisa en rojo', tono([franja10a12], 15), ['rojo']);
+
+/*
+ * MENOS DE UNA HORA ES ALERTA, y la cuenta es estricta.
+ *
+ * A las 11 en punto faltan sesenta minutos justos y todavía es naranja: el
+ * repartidor recién está saliendo y llega tranquilo. A las 11:30 ya no, y ahí
+ * pasa a rojo sin esperar a que la franja se venza — avisar cuando el
+ * compromiso ya se incumplió es avisar tarde.
+ */
+caso('a las 11:30, con franja hasta las 12, ya es rojo', tono([franja10a12], 11.5), ['rojo']);
+
+/*
+ * Y EL QUE YA LO TIENE ENCIMA TAMBIÉN AVISA.
+ *
+ * Antes, un envío retirado no decía nada hasta que pasaba hora y media en
+ * camino. Pero uno retirado a las 11 con franja hasta las 13 es urgente a las
+ * 12:20, no a las 14: que esté en la moto no es que esté entregado.
+ */
+const enLaMoto = envio({ ...cargadoAyer, status: 'retirado', delivery_window: 'antes de 19 hs' });
+caso('retirado, a las 18 en punto todavía no', tipos([enLaMoto], 18), []);
+caso('retirado, a las 18:30 sí', tipos([enLaMoto], 18.5), ['demorado']);
+caso('retirado, a las 18:30 avisa en rojo', tono([enLaMoto], 18.5), ['rojo']);
 
 // ----------------------------------------------- cómo se entiende la búsqueda
 

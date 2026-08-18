@@ -1,4 +1,8 @@
 import { diaAR, horaAR, horaDelDiaAR, hoyAR, type Shipment } from '@/lib/format';
+import { faltaTexto, limiteDeLaFranja, textoFranja } from '@/lib/franja';
+
+// Se reexporta porque las pruebas y el panel ya la importaban desde acá.
+export { limiteDeLaFranja };
 
 /**
  * Qué se está atrasando, ahora.
@@ -55,31 +59,24 @@ export const CORTE_RETIRO_HS = 15;
 export const MARGEN_ANTES_DEL_CIERRE_HS = 2;
 
 /**
- * Hasta qué hora hay que entregar, según lo que diga la franja.
+ * A partir de acá deja de ser "apurate" y pasa a ser alerta.
  *
- * Las franjas las escribe la oficina a mano y salen de mil formas —"antes de
- * 19 hs", "ANTES 13HS", "11 a 12:30 hs", "14 A 17HS"— pero todas terminan
- * diciendo una hora límite, y siempre es la ÚLTIMA que aparece en el texto:
- * en "antes de 19" es el 19, y en un rango es el final del rango.
- *
- * Devuelve `null` cuando no hay ninguna hora escrita ("por la mañana", vacío).
- * Ahí manda el corte general, que es lo que se hacía siempre.
+ * Con dos horas todavía hay margen para acomodar el reparto; con menos de una,
+ * ya no: o sale ahora o no llega. Por eso cambia de color y de título, y no
+ * espera a que la franja se pase para ponerse en rojo — avisar cuando ya se
+ * incumplió es avisar tarde.
  */
-export function limiteDeLaFranja(texto: string | null | undefined): number | null {
-  if (!texto) return null;
+export const ALERTA_ANTES_DEL_CIERRE_HS = 1;
 
-  let limite: number | null = null;
-  for (const m of texto.matchAll(/(\d{1,2})(?::(\d{2}))?/g)) {
-    const h = Number(m[1]);
-    const min = Number(m[2] ?? 0);
-    // Una hora del día y nada más: así un "24/08" perdido en el texto o un
-    // número de puerta no se toman por un horario.
-    if (h > 23 || min > 59) continue;
-    limite = h + min / 60;
-  }
-
-  return limite;
-}
+/*
+ * La comparación es ESTRICTA: con exactamente una hora todavía no es alerta.
+ *
+ * No es una sutileza. "Falta menos de una hora" tiene que querer decir eso, y
+ * si a los sesenta minutos justos ya saltara en rojo, un envío con franja
+ * hasta las 12 estaría en alerta desde las 11 — que es cuando el repartidor
+ * recién está saliendo y todavía llega tranquilo. Un aviso que salta cuando no
+ * hay nada que hacer es un aviso que se aprende a ignorar.
+ */
 
 /**
  * Cuánto puede durar un "en camino".
@@ -119,13 +116,6 @@ function hace(ms: number): string {
   const h = Math.floor(min / 60);
   const resto = min % 60;
   return resto ? `${h} h ${resto} min` : `${h} h`;
-}
-
-/** La franja tal cual la escribió la oficina, en minúscula y sin sobrar. */
-function textoFranja(texto: string | null | undefined): string {
-  const t = (texto ?? '').trim();
-  // "ANTES 13HS" gritado en el medio de una frase se lee peor que "antes 13hs".
-  return t === t.toUpperCase() ? t.toLowerCase() : t;
 }
 
 function unEnvio(s: Shipment): string {
@@ -212,21 +202,70 @@ export function buscarAtrasos({
      * cambia de color: deja de ser algo que se está moviendo despacio.
      */
     const vencida = cierre !== null && horaAhora > cierre;
+
+    /*
+     * Menos de una hora ya no es "se está moviendo despacio": o sale ahora o
+     * no llega. Cambia de color antes de que la franja se pase, porque avisar
+     * cuando ya se incumplió es avisar tarde.
+     */
+    const alFilo =
+      !vencida && cierre !== null && cierre - horaAhora < ALERTA_ANTES_DEL_CIERRE_HS;
+
+    const falta = cierre !== null ? Math.round((cierre - horaAhora) * 60) : null;
     const quien = s.driver?.full_name ?? 'Asignado';
 
     avisos.push({
       clave: `sin-retirar-${s.id}`,
       tipo: 'sin_retirar',
-      titulo: vencida ? 'SIN RETIRAR · SE PASÓ LA FRANJA' : 'SIN RETIRAR',
+      titulo: vencida
+        ? 'SIN RETIRAR · SE PASÓ LA FRANJA'
+        : alFilo
+          ? `SIN RETIRAR · CIERRA ${faltaTexto(falta!).toUpperCase()}`
+          : 'SIN RETIRAR',
       detalle: unEnvio(s),
       desde: vencida
         ? `${quien} · había que entregarlo ${textoFranja(s.delivery_window)} y todavía está en el comercio`
         : cierre !== null
           ? `${quien} · hay que entregarlo ${textoFranja(s.delivery_window)}`
           : `${quien} · sin franja acordada · corte de retiro ${CORTE_RETIRO_HS} hs`,
-      tono: vencida ? 'rojo' : 'naranja',
+      tono: vencida || alFilo ? 'rojo' : 'naranja',
       accion: 'VER',
       href: `/admin?buscar=${encodeURIComponent(s.tracking_code)}`,
+    });
+  }
+
+  /*
+   * ---- 2b. Ya lo tiene encima, pero la franja cierra ya --------------------
+   *
+   * La regla de arriba mira los que SIGUEN EN EL COMERCIO. Estos ya los tiene
+   * el repartidor —retirados o en camino— y hasta ahora no avisaban nada hasta
+   * que pasaba una hora y media en camino. Pero un envío retirado a las 11 con
+   * franja hasta las 13 es urgente a las 12:20, no a las 14.
+   *
+   * Que esté en la moto no es que esté entregado. Lo único que cambia respecto
+   * de la otra regla es qué hay que hacer: acá no es salir a buscarlo, es
+   * llegar.
+   */
+  for (const s of deHoy) {
+    if (s.status !== 'retirado' && s.status !== 'en_camino') continue;
+
+    const cierre = limiteDeLaFranja(s.delivery_window);
+    if (cierre === null) continue;
+
+    const falta = Math.round((cierre - horaAhora) * 60);
+    if (falta >= ALERTA_ANTES_DEL_CIERRE_HS * 60) continue;
+
+    const quien = s.driver?.full_name ?? 'Repartidor';
+
+    avisos.push({
+      clave: `cierra-${s.id}`,
+      tipo: 'demorado',
+      titulo: falta < 0 ? 'SE PASÓ LA FRANJA' : `CIERRA ${faltaTexto(falta).toUpperCase()}`,
+      detalle: unEnvio(s),
+      desde: `${quien} · lo tiene encima · hay que entregarlo ${textoFranja(s.delivery_window)}`,
+      tono: 'rojo',
+      accion: 'VER MAPA',
+      href: '/admin/mapa',
     });
   }
 

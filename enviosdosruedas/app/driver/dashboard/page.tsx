@@ -51,6 +51,7 @@ import {
 } from '@/lib/driver/turno';
 import { falloDelGpsNativo } from '@/lib/driver/nativo';
 import EstadoUbicacion from '@/components/driver/EstadoUbicacion';
+import Apurate from '@/components/driver/Apurate';
 import Colectas from '@/components/driver/Colectas';
 
 /**
@@ -608,6 +609,11 @@ export default function DriverDashboardPage() {
           está viendo de verdad, que no es lo mismo y hasta hoy no se veía en
           ningún lado. */}
       <EstadoUbicacion conectado={Boolean(turno?.conectado)} />
+
+      {/* Arriba de todo lo demás, incluso de los retiros: si algo se vence en
+          menos de una hora, eso manda sobre el orden que tenía pensado. Sin
+          nada urgente no dibuja nada. */}
+      <Apurate envios={route} />
 
       {/* A dónde tiene que ir a retirar. El retiro pasa ANTES que el reparto,
           así que va arriba de la hoja de ruta. Si no tiene ninguna, no dibuja

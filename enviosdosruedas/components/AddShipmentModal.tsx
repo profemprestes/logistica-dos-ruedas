@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
@@ -257,6 +257,22 @@ function ShipmentForm({
   const [error, setError] = useState('');
   /** Se guardó el envío pero sin comercio enlazado: se avisa sin frenar nada. */
   const [avisoComercio, setAvisoComercio] = useState('');
+
+  /**
+   * El punto de retiro confirmado a mano, por comercio, al pegar una tanda.
+   *
+   * VA POR COMERCIO Y NO POR ENVÍO porque el punto ES del comercio: veinte
+   * etiquetas del mismo local se retiran en el mismo lugar, y pedir veinte
+   * veces el mismo pin sería hacerle perder el tiempo al que carga.
+   */
+  const [puntosRetiro, setPuntosRetiro] = useState<
+    Record<string, { lat: number; lng: number } | null>
+  >({});
+
+  /** Los comercios ya cargados, para mostrar el punto que YA tienen guardado. */
+  const [comerciosConocidos, setComerciosConocidos] = useState<
+    { id: number; name: string; lat: number | null; lng: number | null }[]
+  >([]);
   /**
    * A quién se le asigna lo que se está cargando.
    *
@@ -271,6 +287,69 @@ function ShipmentForm({
 
   const updateRow = (tempId: string, patch: Partial<ParsedRow>) =>
     setRows((rs) => rs.map((r) => (r.tempId === tempId ? { ...r, ...patch } : r)));
+
+  /** La clave con la que se agrupa un comercio: su nombre, sin adornos. */
+  const claveComercio = (nombre: string | null | undefined) =>
+    (nombre ?? '').trim().toLowerCase();
+
+  /**
+   * Los comercios distintos de la tanda pegada, uno por nombre.
+   *
+   * Un WhatsApp suele ser todo del mismo local, así que casi siempre es uno
+   * solo. Pero cuando vienen dos pegados, cada uno tiene su punto.
+   */
+  const retiros = useMemo(() => {
+    const m = new Map<string, { nombre: string; direccion: string; cuantos: number }>();
+
+    for (const r of rows) {
+      const clave = claveComercio(r.clientName);
+      if (!clave) continue;
+
+      const previo = m.get(clave);
+      m.set(clave, {
+        nombre: r.clientName,
+        // La primera dirección que aparece manda: si una línea vino sucia, la
+        // corrección se hace en la fila y desde ahí se propaga.
+        direccion: previo?.direccion || (r.pickupAddress ?? ''),
+        cuantos: (previo?.cuantos ?? 0) + 1,
+      });
+    }
+
+    return [...m.entries()];
+  }, [rows]);
+
+  /*
+   * Los comercios ya cargados, para poder mostrar el punto que YA tienen.
+   *
+   * Se piden una sola vez cuando hay filas en pantalla. Son quince y entran en
+   * una consulta: filtrar por nombre serían tantas consultas como comercios
+   * distintos, para ahorrar unos kilobytes.
+   */
+  useEffect(() => {
+    if (retiros.length === 0) return;
+    let vivo = true;
+
+    async function traer() {
+      const { data } = await supabase.from('clients').select('id, name, lat, lng');
+      if (vivo) setComerciosConocidos(data ?? []);
+    }
+
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [retiros.length]);
+
+  /** El punto a mostrar: el que confirmaste ahora, o el que ya tenía guardado. */
+  const puntoDeRetiro = (clave: string) => {
+    const confirmado = puntosRetiro[clave];
+    if (confirmado !== undefined) return confirmado;
+
+    const guardado = comerciosConocidos.find((c) => claveComercio(c.name) === clave);
+    return guardado && guardado.lat != null && guardado.lng != null
+      ? { lat: guardado.lat, lng: guardado.lng }
+      : null;
+  };
 
   /** Cambiar la fecha del lote mueve todo lo que ya está en pantalla. */
   const cambiarFechaLote = (fecha: string) => {
@@ -411,7 +490,7 @@ function ShipmentForm({
      */
     const comercios = new Map<string, number | null>();
     for (const r of toSave) {
-      const clave = (r.clientName ?? '').trim().toLowerCase();
+      const clave = claveComercio(r.clientName);
       if (!clave || comercios.has(clave)) continue;
 
       comercios.set(
@@ -420,6 +499,9 @@ function ShipmentForm({
           nombre: r.clientName,
           direccion: r.pickupAddress ?? '',
           notas: r.pickupNotes ?? '',
+          // El pin que confirmaste arriba, si lo confirmaste. Si el comercio ya
+          // tenía uno guardado, `asegurarComercio` no lo pisa.
+          punto: puntosRetiro[clave] ?? null,
         }),
       );
     }
@@ -427,7 +509,7 @@ function ShipmentForm({
     const sinEnlazar = [...comercios.entries()].filter(([, id]) => id === null).length;
 
     const payload = toSave.map((r) => ({
-      client_id: comercios.get((r.clientName ?? '').trim().toLowerCase()) ?? null,
+      client_id: comercios.get(claveComercio(r.clientName)) ?? null,
       client_name_raw: r.clientName,
       pickup_address: r.pickupAddress,
       pickup_notes: r.pickupNotes,
@@ -850,6 +932,49 @@ function ShipmentForm({
                     Revisá y corregí antes de guardar. Los FLEX se guardan igual: el
                     repartidor los ve en la hoja de ruta y los cierra en la app de Envíos Flex.
                   </p>
+
+                  {/*
+                    EL PUNTO DE RETIRO, UNO POR COMERCIO Y NO UNO POR ENVÍO.
+
+                    Es a dónde va a ir el repartidor a buscar los paquetes: si
+                    cae en otra cuadra se pierde un viaje entero, y eso se ve
+                    acá en dos segundos o no se ve nunca.
+
+                    Va agrupado porque el punto es del comercio: una tanda de
+                    veinte etiquetas del mismo local se retira en un solo lugar,
+                    y pedir veinte veces el mismo pin sería hacer perder el
+                    tiempo al que carga. Si el comercio ya tenía punto guardado,
+                    se muestra ése y no se toca.
+                  */}
+                  {retiros.map(([clave, retiro]) => (
+                    <div
+                      key={clave}
+                      className="rounded-lg border border-[var(--edr-yellow)]/50 bg-[var(--edr-surface-2)] p-4"
+                    >
+                      <div className="mb-1 flex flex-wrap items-baseline gap-2">
+                        <span className="text-sm font-black">
+                          Retiro en {retiro.nombre || 'el comercio'}
+                        </span>
+                        <span className="text-xs text-[var(--edr-muted)]">
+                          {retiro.direccion || 'sin dirección de retiro'} ·{' '}
+                          {retiro.cuantos} envío{retiro.cuantos > 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      <VerificarPunto
+                        direccion={retiro.direccion}
+                        ciudad="Mar del Plata"
+                        lat={puntoDeRetiro(clave)?.lat ?? null}
+                        lng={puntoDeRetiro(clave)?.lng ?? null}
+                        onPunto={(pu) =>
+                          setPuntosRetiro((prev) => ({
+                            ...prev,
+                            [clave]: pu ? { lat: pu.lat, lng: pu.lng } : null,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
 
                   {rows.map((r, i) => {
                     const cash = {

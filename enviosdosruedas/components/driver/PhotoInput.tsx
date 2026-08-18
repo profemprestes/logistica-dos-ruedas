@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Image as ImageIcon } from 'lucide-react';
 import CamaraModal from '@/components/driver/CamaraModal';
 import { compressPhoto } from '@/lib/driver/photo';
@@ -43,35 +43,41 @@ export default function PhotoInput({
 }) {
   const camaraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
-  const [previews, setPreviews] = useState<string[]>([]);
+  /**
+   * Las miniaturas SALEN DE LAS FOTOS, no se acumulan aparte.
+   *
+   * Antes se armaban una por una, sólo cuando el repartidor sacaba la foto ahí
+   * mismo. Una foto que llegaba de otro lado —recuperada del borrador después
+   * de que Android cerró la app— no generaba ninguna, así que la pantalla
+   * quedaba vacía aunque la foto estuviera guardada en el celular.
+   *
+   * El repartidor veía "sacar foto" otra vez y volvía a la puerta a sacarla.
+   * Probado el 18/08/2026: la foto estaba en el celular todo el tiempo y no se
+   * veía.
+   *
+   * Derivándolas de `photos` no hay dos verdades posibles: si hay foto, hay
+   * miniatura, venga de donde venga.
+   */
+  const previews = useMemo(() => photos.map((b) => URL.createObjectURL(b)), [photos]);
   const [camaraAbierta, setCamaraAbierta] = useState(false);
   const [busy, setBusy] = useState(false);
   const [aviso, setAviso] = useState('');
 
-  /**
-   * Espejo de `previews` para poder liberarlas al desmontar sin que el efecto
-   * dependa del estado (y se dispare en cada foto, revocando las que están a
-   * la vista). Un object URL que no se revoca ocupa memoria hasta cerrar la
-   * pestaña, que es justo lo que no sobra en el celular del repartidor.
+  /*
+   * Se liberan las de la vuelta anterior. Un object URL que no se revoca ocupa
+   * memoria hasta cerrar la pantalla, y en el celular del repartidor —con la
+   * cámara y el Maps abiertos— eso es justo lo que no sobra.
    */
-  const previewsRef = useRef<string[]>([]);
-
   useEffect(() => {
     return () => {
-      previewsRef.current.forEach(URL.revokeObjectURL);
+      previews.forEach(URL.revokeObjectURL);
     };
-  }, []);
+  }, [previews]);
 
-  function aplicar(nuevas: Blob[], urls: string[]) {
-    previewsRef.current = urls;
-    setPreviews(urls);
-    onPhotos(nuevas);
-  }
-
-  /** Suma una foto ya lista —venga de donde venga— y la muestra. */
+  /** Suma una foto ya lista, venga de donde venga. */
   function agregar(blob: Blob) {
     try {
-      aplicar([...photos, blob], [...previewsRef.current, URL.createObjectURL(blob)]);
+      onPhotos([...photos, blob]);
     } catch (e) {
       console.error('[foto] no se pudo usar la foto', e);
       setAviso('No se pudo tomar la foto. Cerrá alguna app que tengas abierta y probá de nuevo.');
@@ -105,12 +111,9 @@ export default function PhotoInput({
   }
 
   function quitar(i: number) {
-    const url = previewsRef.current[i];
-    if (url) URL.revokeObjectURL(url);
-    aplicar(
-      photos.filter((_, k) => k !== i),
-      previewsRef.current.filter((_, k) => k !== i),
-    );
+    // La miniatura se va sola: sale de `photos`, y el efecto de arriba libera
+    // la que quedó sin usar.
+    onPhotos(photos.filter((_, k) => k !== i));
   }
 
   const completo = photos.length >= max;

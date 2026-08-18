@@ -391,7 +391,43 @@ function ShipmentForm({
     if (toSave.length === 0) return setError('No hay envíos para guardar.');
     setSaving(true);
     setError('');
+
+    /*
+     * EL COMERCIO TAMBIÉN SE ENLAZA ACÁ, y faltaba.
+     *
+     * El enlace estaba sólo en el formulario manual, así que todo lo que entra
+     * pegando el WhatsApp nacía sin comercio. Se ve bien en el panel —el nombre
+     * y la dirección de retiro están escritos— pero el repartidor NO VE EL
+     * PUNTO DE RETIRO en el mapa, porque el punto vive en el comercio y el
+     * envío no lo apuntaba.
+     *
+     * Pasó el 18/08/2026 con cinco envíos de comercios que ya estaban
+     * cargados y con punto: WELIVERY, WAYFARER, AMA Y POLA. Y era la forma
+     * normal de cargar, no un caso raro.
+     *
+     * UNO POR NOMBRE DISTINTO, no uno por envío: veinte etiquetas del mismo
+     * comercio son una sola búsqueda. Con veinte se gastaría el cupo del
+     * buscador de direcciones para llegar al mismo lugar.
+     */
+    const comercios = new Map<string, number | null>();
+    for (const r of toSave) {
+      const clave = (r.clientName ?? '').trim().toLowerCase();
+      if (!clave || comercios.has(clave)) continue;
+
+      comercios.set(
+        clave,
+        await asegurarComercio({
+          nombre: r.clientName,
+          direccion: r.pickupAddress ?? '',
+          notas: r.pickupNotes ?? '',
+        }),
+      );
+    }
+
+    const sinEnlazar = [...comercios.entries()].filter(([, id]) => id === null).length;
+
     const payload = toSave.map((r) => ({
+      client_id: comercios.get((r.clientName ?? '').trim().toLowerCase()) ?? null,
       client_name_raw: r.clientName,
       pickup_address: r.pickupAddress,
       pickup_notes: r.pickupNotes,
@@ -425,6 +461,16 @@ function ShipmentForm({
 
     setSaving(false);
     if (dbError) return setError(dbError.message);
+
+    // Igual que en el formulario manual: si algún comercio no se pudo enlazar,
+    // decirlo. Los envíos quedaron guardados; lo que falta es el punto.
+    if (sinEnlazar > 0) {
+      const porque = problemaDelComercio();
+      setAvisoComercio(
+        `Se guardaron los envíos, pero ${sinEnlazar} comercio(s) no quedaron enlazados` +
+          `${porque ? `: ${porque}` : ''}. El repartidor no va a ver el punto de retiro de esos.`,
+      );
+    }
 
     void ubicarEnElMapa((guardados ?? []).map((s) => s.id));
     void avisarAsignacion(asignarA, toSave.length, toSave[0]?.addressStreet ?? '');

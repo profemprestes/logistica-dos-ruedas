@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { tramosDeHorario } from '../lib/franja';
+import { summarizeLogs, type DeliveryLog } from '../lib/settlement';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
@@ -365,6 +366,58 @@ casoNumero('escrito de corrido', tramosDeHorario('9 a 13 y 15:30 a 18').length, 
 casoNumero('uno solo sigue siendo uno', tramosDeHorario('9 a 18 hs').length, 1);
 casoNumero('"hasta las 13" es un cierre sin apertura', tramosDeHorario('hasta las 13')[0].hasta, 13);
 casoNumero('al revés se descarta', tramosDeHorario('18 a 9').length, 0);
+
+/*
+ * ------------------------------------------------- lo que se le paga al cadete
+ *
+ * Esto es plata y por eso se prueba. Dos tarifas que no se mezclan:
+ *
+ *   · envío normal → el 70%, porque el 30% es la comisión de la empresa;
+ *   · envío de Shippy → ENTERO, sin comisión. A la empresa Shippy le paga
+ *     aparte y ahí está la ganancia; descontarle el 30% al repartidor sería
+ *     cobrarle una comisión que ya está cobrada del otro lado.
+ *
+ * El cierre de caja y los resúmenes usan las MISMAS reglas: hasta hoy el cierre
+ * pedía el número a mano y podían decir cosas distintas de la misma plata.
+ */
+function entrega(comercio: string, envio: number, cobrado = 0): DeliveryLog {
+  return {
+    id: `l${comercio}${envio}${cobrado}`,
+    event: 'entregado',
+    amount_collected: cobrado,
+    happened_at: `${HOY}T15:00:00Z`,
+    failure_reason: null,
+    shipment: {
+      id: Math.round(Math.random() * 1e9),
+      tracking_code: 'EDR00000000MDQ',
+      recipient_name: 'Quien sea',
+      address_street: 'Falucho 1832',
+      amount_to_collect: cobrado,
+      payment_mode: 'cobrar_destinatario',
+      shipping_fee: envio,
+      client_name_raw: comercio,
+    },
+  };
+}
+
+const pago = (logs: DeliveryLog[]) => summarizeLogs(logs).driverEarnings;
+
+casoNumero('un envío normal de $10.000 paga $7.000', pago([entrega('TOY PIOLA', 10000)]), 7000);
+casoNumero('dos normales suman el 70% de los dos',
+  pago([entrega('TOY PIOLA', 10000), entrega('WELIVERY', 5000)]), 10500);
+
+casoNumero('uno de KILLARI de $3.000 paga los $3.000 enteros',
+  pago([entrega('KILLARI', 3000)]), 3000);
+casoNumero('uno de SHOPIGO sin valor cargado paga los $3.000 de la regla',
+  pago([entrega('SHOPIGO', 0)]), 3000);
+
+casoNumero('mezclados: $10.000 normal + Shippy = 7.000 + 3.000',
+  pago([entrega('TOY PIOLA', 10000), entrega('KILLARI', 3000)]), 10000);
+
+/* El saldo: lo que cobró, menos lo rendido, menos lo que le toca. */
+const dia = summarizeLogs([entrega('TOY PIOLA', 10000, 50000), entrega('KILLARI', 3000)]);
+casoNumero('cobró 50.000 y le tocan 10.000: rinde 40.000',
+  dia.cashTotal - 0 - dia.driverEarnings, 40000);
 
 // ----------------------------------------------- cómo se entiende la búsqueda
 

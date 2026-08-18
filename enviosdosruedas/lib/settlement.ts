@@ -7,6 +7,11 @@
  * tarde o temprano dan distinto y alguien discute plata con el otro.
  */
 import type { PaymentMode } from '@/lib/format';
+// Las reglas de plata viven en un solo lugar: si la comisión cambia, cambia
+// para el cierre de caja y para los resúmenes a la vez. Que dos pantallas del
+// mismo sistema digan cosas distintas sobre la misma plata es peor que
+// cualquier error de cuenta.
+import { REGLAS, esShippy } from '@/lib/resumen';
 
 export interface LogShipment {
   id: number;
@@ -66,6 +71,22 @@ export interface DaySummary {
   shippingTotal: number;
   /** Cuántos entregados todavía no tienen cargado el valor del envío. */
   shippingMissing: number;
+
+  /**
+   * Lo que hay que pagarle al repartidor por los envíos del día.
+   *
+   * Sale de las mismas `REGLAS` que usan los resúmenes, y eso es todo el
+   * punto: hasta hoy este número se escribía a mano en el cierre de caja
+   * mientras los resúmenes lo calculaban solos, así que dos pantallas del
+   * mismo sistema podían decir cosas distintas sobre la misma plata.
+   */
+  driverEarnings: number;
+  /** Los normales: el 70%, ya descontada la comisión. */
+  earningsNormales: number;
+  /** Los de Shippy: el envío entero, sin comisión. */
+  earningsShippy: number;
+  /** Cuántos de Shippy hubo, para poder revisar la cuenta de un vistazo. */
+  countShippy: number;
 }
 
 export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
@@ -94,6 +115,33 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   );
   const shippingMissing = delivered.filter((l) => !Number(l.shipment?.shipping_fee)).length;
 
+  /*
+   * LO QUE HAY QUE PAGARLE, con las mismas reglas que los resúmenes.
+   *
+   * Dos tarifas distintas y no se pueden mezclar:
+   *
+   *   · Un envío normal se paga al 70%: el 30% es la comisión de la empresa.
+   *   · Uno de Shippy se paga ENTERO, sin comisión. A la empresa Shippy le
+   *     paga aparte, y esa diferencia es la ganancia. Descontarle el 30% a
+   *     estos sería cobrarle al repartidor una comisión que ya está cobrada
+   *     del otro lado.
+   *
+   * Cuando un envío de Shippy viene sin valor cargado se usa el de la regla,
+   * que es lo que se acordó con ellos. Para los normales no se inventa nada:
+   * sin valor, ese envío suma cero y `shippingMissing` lo deja a la vista.
+   */
+  const deShippy = delivered.filter((l) => esShippy(l.shipment?.client_name_raw ?? ''));
+  const normales = delivered.filter((l) => !esShippy(l.shipment?.client_name_raw ?? ''));
+
+  const earningsShippy = deShippy.reduce(
+    (acc, l) => acc + (Number(l.shipment?.shipping_fee) || REGLAS.envioShippyPorDefecto),
+    0,
+  );
+
+  const earningsNormales =
+    normales.reduce((acc, l) => acc + Number(l.shipment?.shipping_fee ?? 0), 0) *
+    (1 - REGLAS.comision);
+
   return {
     delivered,
     failed,
@@ -103,6 +151,10 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
     cashTotal: cashFromDeliveries + cashFromPickups,
     shippingTotal,
     shippingMissing,
+    driverEarnings: Math.round(earningsNormales + earningsShippy),
+    earningsNormales: Math.round(earningsNormales),
+    earningsShippy,
+    countShippy: deShippy.length,
   };
 }
 

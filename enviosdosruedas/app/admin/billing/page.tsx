@@ -108,7 +108,19 @@ export default function BillingPage() {
     // Arranca con lo que calculó el sistema; el admin lo pisa si rindió otra cosa.
     const calc = summarizeLogs(rows);
     setActual(String(saved?.actual_amount ?? calc.cashTotal));
-    setEarnings(saved?.earnings !== null && saved?.earnings !== undefined ? String(saved.earnings) : '');
+    /*
+     * Lo que le toca al repartidor arranca CALCULADO, no vacío.
+     *
+     * Hasta hoy este renglón se escribía a mano mientras los resúmenes lo
+     * calculaban solos con las mismas reglas: dos pantallas del mismo sistema
+     * podían decir cosas distintas sobre la misma plata, y la que se usaba para
+     * pagar era la escrita a mano. Se sigue pudiendo pisar, como los otros.
+     */
+    setEarnings(
+      saved?.earnings !== null && saved?.earnings !== undefined
+        ? String(saved.earnings)
+        : String(calc.driverEarnings),
+    );
     // Estos dos salen de la cuenta del sistema, pero se pueden pisar a mano:
     // si el repartidor olvidó cargar algo, el cierre no puede quedar trabado.
     setCobrado(String(saved?.cash_total ?? calc.cashTotal));
@@ -136,7 +148,18 @@ export default function BillingPage() {
 
   /* ------------------------------------------------------------- cálculos */
   const summary = summarizeLogs(logs);
-  const { delivered, failed, cashFromPickups, cashTotal, shippingTotal, shippingMissing } =
+  const {
+    delivered,
+    failed,
+    cashFromPickups,
+    cashTotal,
+    shippingTotal,
+    shippingMissing,
+    driverEarnings,
+    earningsNormales,
+    earningsShippy,
+    countShippy,
+  } =
     summary;
   const driverName = drivers.find((d) => d.id === driverId)?.full_name ?? '';
 
@@ -423,6 +446,13 @@ export default function BillingPage() {
 
                 <Renglon
                   label="Envíos a cobrar (comisión descontada)"
+                  hint={
+                    gananciaNum !== driverEarnings
+                      ? `el sistema calculó ${money(driverEarnings)}`
+                      : countShippy > 0
+                        ? `${money(earningsNormales)} al 70% + ${money(earningsShippy)} de ${countShippy} Shippy (sin comisión)`
+                        : `${money(shippingTotal)} menos el 30% de comisión`
+                  }
                   input={
                     <input
                       type="number"
@@ -474,6 +504,7 @@ export default function BillingPage() {
                     setCobrado(String(cashTotal));
                     setEnvios(String(shippingTotal));
                     setActual(String(cashTotal));
+                    setEarnings(String(driverEarnings));
                   }}
                   className="rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
                 >

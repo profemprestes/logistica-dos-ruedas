@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { MessageCircle } from 'lucide-react';
 
 /**
@@ -56,7 +57,18 @@ export default function SiteFooter({ compacto = false }: { compacto?: boolean })
         www.logisticadosruedas.com
       </a>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-[var(--edr-muted)]">
+      {/* La política de privacidad va en el pie y no escondida: Google pide
+          poder leerla sin cuenta, y el repartidor tiene derecho a encontrarla
+          sin preguntarle a nadie. Es un Link y no un <a>: es una página de
+          este mismo sitio y no tiene por qué recargar todo para abrirla. */}
+      <Link
+        href="/privacidad"
+        className="mt-3 inline-block text-[11px] text-[var(--edr-muted)] underline underline-offset-2"
+      >
+        Política de privacidad
+      </Link>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-[var(--edr-muted)]">
         Diseñado por Envíos DosRuedas · Todos los derechos reservados © {anio}
         <br />
         Mensajería y logística de última milla · Mar del Plata, Argentina

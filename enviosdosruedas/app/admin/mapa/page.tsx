@@ -66,6 +66,8 @@ interface Repartidor {
   estado: EstadoRepartidor;
   /** Si está parado, desde hace cuánto. Es el dato que se mira para decidir. */
   quietoDesdeMin: number;
+  /** Si se acabaron las posiciones guardadas antes de encontrar cuándo llegó. */
+  quietoDesdeHaceMas: boolean;
 }
 
 /**
@@ -205,11 +207,18 @@ export default function MapaAdminPage() {
         supabase
           .from('driver_positions')
           .select('driver_id, lat, lng, taken_at, perfil:driver_id(full_name)')
-          // No alcanza con la última: para saber si se movió hay que comparar
-          // contra las de hace un rato. Con el latido de la app y tres o cuatro
-          // repartidores, 600 filas son más de media hora de historia.
+          /*
+           * No alcanza con la última: para saber si se movió hay que comparar
+           * contra las de hace un rato, y para decir HACE CUÁNTO que está
+           * parado hay que llegar hasta la posición en que llegó.
+           *
+           * 1200 son todas: la tabla se borra sola a las tres horas, y con el
+           * latido de 30 segundos y tres repartidores no puede haber más de
+           * unas mil. Con 600 la cuenta se cortaba a la mitad y un repartidor
+           * parado hace dos horas figuraba parado hace cuarenta minutos.
+           */
           .order('taken_at', { ascending: false })
-          .limit(600),
+          .limit(1200),
         supabase
           .from('delivery_logs')
           .select('driver_id, lat, lng, happened_at, perfil:driver_id(full_name)')
@@ -264,6 +273,7 @@ export default function MapaAdminPage() {
           // Se completan más abajo, cuando ya está toda la historia junta.
           estado: 'moviendose',
           quietoDesdeMin: 0,
+          quietoDesdeHaceMas: false,
         });
       };
 
@@ -347,9 +357,39 @@ export default function MapaAdminPage() {
 
         if (masLejos <= METROS_QUIETO) {
           r.estado = 'parado';
-          // Desde la más vieja de las que siguen cerca: es cuándo llegó ahí.
-          const desde = enLaVentana[enLaVentana.length - 1].ms;
+
+          /*
+           * CUÁNTO HACE QUE ESTÁ AHÍ SE MIRA EN TODA LA HISTORIA, no en la
+           * ventana.
+           *
+           * La ventana decide SI está parado. Usarla también para decir hace
+           * cuánto era contestar siempre lo mismo: el techo de la ventana. Con
+           * seis minutos, un repartidor parado hace dos horas figuraba "parado
+           * hace 6 min" — y quien mira el panel concluye que recién llegó y no
+           * hay nada que preguntar.
+           *
+           * Se camina hacia atrás desde la más nueva mientras sigan cerca. La
+           * primera que se aleja corta: ahí llegó.
+           */
+          let desde = enLaVentana[enLaVentana.length - 1].ms;
+          let seNosAcabo = true;
+
+          for (const p of suyas) {
+            if (metrosEntre(r, p) > METROS_QUIETO) {
+              seNosAcabo = false;
+              break;
+            }
+            desde = p.ms;
+          }
+
           r.quietoDesdeMin = Math.max(1, Math.round((Date.now() - desde) / 60_000));
+
+          /*
+           * Se acabaron las posiciones sin encontrar el momento en que llegó:
+           * o sea que hace MÁS que eso, y no sabemos cuánto. Pasa porque las
+           * posiciones se borran solas a las tres horas.
+           */
+          r.quietoDesdeHaceMas = seNosAcabo;
         } else {
           r.estado = 'moviendose';
         }
@@ -452,8 +492,13 @@ export default function MapaAdminPage() {
       };
     }
     if (r.estado === 'parado') {
+      // En horas cuando ya no se lee en minutos: "parado hace 137 min" obliga
+      // a hacer la cuenta justo cuando el número empieza a importar.
+      const m = r.quietoDesdeMin;
+      const cuanto = m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+
       return {
-        texto: `parado hace ${r.quietoDesdeMin} min`,
+        texto: `parado hace ${r.quietoDesdeHaceMas ? 'más de ' : ''}${cuanto}`,
         color: 'var(--edr-muted)',
       };
     }

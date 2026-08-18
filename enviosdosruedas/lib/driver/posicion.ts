@@ -34,6 +34,21 @@ let ultimoEnvio = 0;
 let ultimoPunto: { lat: number; lng: number } | null = null;
 
 /**
+ * Cuándo el SERVIDOR aceptó la última posición. 0 si todavía ninguna.
+ *
+ * Es distinto de `ultimoEnvio`, que marca cuándo se intentó. Esa diferencia es
+ * justo la que importa: sin señal, o con la conexión vencida, el intento pasa
+ * igual y el servidor no guarda nada. Mostrar el intento sería mostrarle al
+ * repartidor que está todo bien mientras la oficina no lo ve.
+ */
+let ultimoOk = 0;
+
+/** Hace cuántos segundos el servidor aceptó una posición. `null` si ninguna. */
+export function segundosDesdeLaUltima(): number | null {
+  return ultimoOk === 0 ? null : Math.round((Date.now() - ultimoOk) / 1000);
+}
+
+/**
  * Sube un punto ya tomado. Devuelve si el servidor lo aceptó.
  *
  * Está separado de `avisarPosicion` porque el seguimiento en vivo ya tiene la
@@ -53,6 +68,18 @@ export async function guardarPosicion(
    * para cubrir. El porqué largo está en `lib/driver/nativo.ts`. Desde un
    * navegador devuelve null y sigue todo como siempre.
    */
+  const tomada = await intentarGuardar(lat, lng, accuracy);
+  // La hora se anota acá y en un solo lugar, valga por el camino que valga: si
+  // se anotara en cada rama, el día que se agregue una tercera se va a olvidar.
+  if (tomada) ultimoOk = Date.now();
+  return tomada;
+}
+
+async function intentarGuardar(
+  lat: number,
+  lng: number,
+  accuracy?: number | null,
+): Promise<boolean> {
   const porNativo = await mandarPosicionNativa(lat, lng, accuracy ?? null);
   if (porNativo !== null) return porNativo;
 

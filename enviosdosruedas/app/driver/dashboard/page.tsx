@@ -50,6 +50,7 @@ import {
   type Turno,
 } from '@/lib/driver/turno';
 import { falloDelGpsNativo } from '@/lib/driver/nativo';
+import EstadoUbicacion from '@/components/driver/EstadoUbicacion';
 import Colectas from '@/components/driver/Colectas';
 
 /**
@@ -601,6 +602,12 @@ export default function DriverDashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Justo abajo de "conectado", porque contesta la pregunta que sigue.
+          Conectado dice que él avisó que salió; esto dice si la oficina lo
+          está viendo de verdad, que no es lo mismo y hasta hoy no se veía en
+          ningún lado. */}
+      <EstadoUbicacion conectado={Boolean(turno?.conectado)} />
 
       {/* A dónde tiene que ir a retirar. El retiro pasa ANTES que el reparto,
           así que va arriba de la hoja de ruta. Si no tiene ninguna, no dibuja

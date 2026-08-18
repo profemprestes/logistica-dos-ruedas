@@ -35,9 +35,42 @@ let nativo: boolean | null = null;
  */
 let ultimoFallo: string | null = null;
 
+/**
+ * Si el seguimiento de fondo arrancó de verdad.
+ *
+ * NO ES LO MISMO QUE "no hubo error". Puede no haber fallado nada porque nunca
+ * se intentó —en un navegador, o en un iPhone— y eso, para el repartidor, es
+ * igual de importante que un error: significa que si guarda el teléfono, deja
+ * de mandar.
+ */
+let vigilando = false;
+
 /** Qué pasó con el GPS nativo. `null` significa que anda, o que no aplica. */
 export function falloDelGpsNativo(): string | null {
   return ultimoFallo;
+}
+
+/**
+ * En qué está el seguimiento de fondo, para poder mostrarlo en pantalla.
+ *
+ * ESTO EXISTE POR UNA MAÑANA ENTERA PERDIDA. El 18/08/2026 el repartidor salió
+ * con la app instalada, los permisos dados y todo en orden, y estuvo 107
+ * minutos sin mandar una posición: mandaba con la app en pantalla y se callaba
+ * al guardar el teléfono. Desde afuera se veía idéntico a "no anda el GPS", y
+ * la única pista —el aviso de error— duraba tres segundos en un toast que nadie
+ * llegó a ver.
+ *
+ * Así que ahora el estado se mira, no se adivina. Y se mira desde el celular
+ * del repartidor, que es el único lugar donde la respuesta es real.
+ */
+export type EstadoGps =
+  | { modo: 'fondo' }
+  | { modo: 'pantalla' }
+  | { modo: 'roto'; motivo: string };
+
+export function estadoGpsNativo(): EstadoGps {
+  if (ultimoFallo) return { modo: 'roto', motivo: ultimoFallo };
+  return vigilando ? { modo: 'fondo' } : { modo: 'pantalla' };
 }
 
 /** ¿Estamos adentro del APK? */
@@ -190,6 +223,9 @@ export async function seguirEnviandoNativo(
          */
         if (error) {
           ultimoFallo = error.code ?? 'el GPS devolvió un error sin código';
+          // El servicio dejó de dar puntos: que la pantalla lo diga en vez de
+          // seguir mostrando "encendido" mientras no llega nada.
+          vigilando = false;
           return;
         }
         if (!posicion) return;
@@ -199,7 +235,10 @@ export async function seguirEnviandoNativo(
       },
     );
 
+    vigilando = true;
+
     return () => {
+      vigilando = false;
       void gps.removeWatcher({ id });
     };
   } catch (err) {

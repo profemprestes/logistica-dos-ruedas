@@ -156,9 +156,14 @@ export default function AdminPage() {
   const [searchAplicada, setSearchAplicada] = useState(() => alAbrir('buscar'));
   const [desde, setDesde] = useState(() => hoyLocal());
   const [hasta, setHasta] = useState(() => hoyLocal());
-  const [driverFilter, setDriverFilter] = useState(() =>
-    alAbrir('repartidor') === 'sin_asignar' ? 'sin_asignar' : '',
-  );
+  /*
+   * `?repartidor=` acepta "sin_asignar" o el id de uno.
+   *
+   * Lo segundo es lo que usa el Panel del día para mandar acá desde la tarjeta
+   * de un repartidor: se toca su nombre y la tabla ya viene filtrada por él, en
+   * vez de tener que buscarlo en el desplegable.
+   */
+  const [driverFilter, setDriverFilter] = useState(() => alAbrir('repartidor'));
   const [statusFilter, setStatusFilter] = useState<'todos' | ShipmentStatus>('todos');
   /** Los FLEX se cierran en la app de Mercado Libre: a veces hay que verlos solos. */
   const [soloFlex, setSoloFlex] = useState(false);

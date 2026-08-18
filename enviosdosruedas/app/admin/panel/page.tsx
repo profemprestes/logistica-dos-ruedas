@@ -13,7 +13,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useAdminGuard } from '@/lib/adminGuard';
-import { money, type Shipment } from '@/lib/format';
+import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
 import { useDatosDelDia, type Repartidor } from '@/components/admin/DatosDelDia';
 import BuscarPaquete from '@/components/admin/BuscarPaquete';
 import ColectasPendientes from '@/components/admin/ColectasPendientes';
@@ -55,6 +55,15 @@ export default function PanelDelDiaPage() {
   const [prueba, setPrueba] = useState<Shipment | null>(null);
   /** Lo último que se hizo con las colectas, para confirmarlo en pantalla. */
   const [aviso, setAviso] = useState('');
+
+  /**
+   * El repartidor cuya hoja de ruta se está mirando.
+   *
+   * Se abre tocando su tarjeta. Antes, para saber qué tenía en curso había que
+   * irse a la tabla de envíos y filtrar por él a mano — tres pantallas para una
+   * pregunta que se hace todo el tiempo: "¿qué le queda a este?".
+   */
+  const [verRuta, setVerRuta] = useState<Repartidor | null>(null);
 
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-text-3)]">Cargando…</div>;
 
@@ -190,7 +199,7 @@ export default function PanelDelDiaPage() {
               ) : (
                 <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
                   {repartidores.map((r) => (
-                    <TarjetaRepartidor key={r.id} r={r} />
+                    <TarjetaRepartidor key={r.id} r={r} onVer={() => setVerRuta(r)} />
                   ))}
                 </div>
               )}
@@ -215,6 +224,10 @@ export default function PanelDelDiaPage() {
       </div>
 
       <ProofOfDeliveryModal shipment={prueba} onClose={() => setPrueba(null)} />
+
+      {verRuta && (
+        <RutaDelRepartidor r={verRuta} envios={deHoy} onCerrar={() => setVerRuta(null)} />
+      )}
     </div>
   );
 }
@@ -248,7 +261,129 @@ function FilaAtraso({ a }: { a: Atraso }) {
   );
 }
 
-function TarjetaRepartidor({ r }: { r: Repartidor }) {
+/**
+ * Lo que ese repartidor tiene sin cerrar, ahora mismo.
+ *
+ * SALE DE LO QUE EL PANEL YA TIENE CARGADO, sin pedirle nada al servidor: los
+ * envíos del día ya están en pantalla para poder contar los números de arriba.
+ * Abrir esto no cuesta ni una consulta ni una espera.
+ *
+ * Sólo los que están sin cerrar. Los entregados ya se cuentan en la tarjeta
+ * ("7/9") y meterlos acá sería tapar los tres que importan con los seis que ya
+ * no.
+ */
+function RutaDelRepartidor({
+  r,
+  envios,
+  onCerrar,
+}: {
+  r: Repartidor;
+  envios: Shipment[];
+  onCerrar: () => void;
+}) {
+  const abiertos = envios
+    .filter((s) => s.assigned_driver === r.id)
+    .filter((s) => s.status !== 'entregado' && s.status !== 'cancelado');
+
+  // En camino primero, después retirados, después los que ni salieron: es el
+  // orden en que hay que preocuparse por ellos.
+  const peso: Record<string, number> = {
+    en_camino: 0,
+    retirado: 1,
+    pendiente_retiro: 2,
+    creado: 3,
+    pendiente_entrega: 4,
+  };
+  abiertos.sort((a, b) => (peso[a.status] ?? 9) - (peso[b.status] ?? 9));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={onCerrar}
+    >
+      {/* El clic de adentro no cierra: si no, tocar la lista para leerla la
+          hace desaparecer. */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`${panel} max-h-[85dvh] w-full max-w-lg overflow-y-auto p-4 sm:p-5`}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-anton text-[21px] uppercase leading-none tracking-[-.02em] text-[var(--edr-text)]">
+              {r.nombre}
+            </h2>
+            <p className="mt-1 text-[13px] text-[var(--edr-text-4)]">
+              {abiertos.length === 0
+                ? 'No le queda nada sin cerrar'
+                : `${abiertos.length} sin cerrar · ${r.entregados} entregado${r.entregados === 1 ? '' : 's'} hoy`}
+            </p>
+          </div>
+          <button onClick={onCerrar} aria-label="Cerrar" className="px-2 text-2xl leading-none">
+            ×
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {abiertos.map((s) => {
+            const cobra = shipmentCash(s).atDelivery;
+            return (
+              <div
+                key={s.id}
+                className="rounded-2xl border border-[var(--edr-divisor)] bg-[var(--edr-panel-2)] px-3.5 py-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="edr-mono text-[13px] font-bold text-[var(--edr-text-4)]">
+                    {s.tracking_code}
+                  </span>
+                  <span className="font-bebas text-[13px] tracking-[.07em] text-[var(--edr-yellow)]">
+                    {ETIQUETA_ESTADO[s.status]}
+                  </span>
+                  {cobra > 0 && (
+                    <span className="edr-mono ml-auto rounded-full bg-[var(--edr-yellow)] px-2.5 py-0.5 text-[13px] font-extrabold text-[var(--edr-blue)]">
+                      {money(cobra)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-0.5 text-[15px] font-semibold text-[var(--edr-text)]">
+                  {s.address_street}
+                  {s.address_extra ? ` · ${s.address_extra}` : ''}
+                </div>
+
+                <div className="text-[12.5px] text-[var(--edr-text-4)]">
+                  {s.recipient_name}
+                  {s.client_name_raw ? ` · de ${s.client_name_raw}` : ''}
+                  {s.delivery_window ? ` · ${s.delivery_window}` : ''}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Los dos lugares a donde se puede querer seguir: la tabla para
+            tocarlos, el mapa para ver por dónde andan. */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={`/admin?repartidor=${r.id}`}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--edr-yellow)] px-4 py-3 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-yellow)]"
+          >
+            VER EN LA TABLA
+            <ArrowUpRight size={15} strokeWidth={2.5} />
+          </Link>
+          <Link
+            href="/admin/mapa"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--edr-divisor)] px-4 py-3 font-bebas text-[15px] tracking-[.06em] text-[var(--edr-text-4)]"
+          >
+            VER EN EL MAPA
+            <ArrowUpRight size={15} strokeWidth={2.5} />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TarjetaRepartidor({ r, onVer }: { r: Repartidor; onVer: () => void }) {
   const iniciales = r.nombre
     .trim()
     .split(/\s+/)
@@ -263,7 +398,13 @@ function TarjetaRepartidor({ r }: { r: Repartidor }) {
   const perdido = r.haceMinutos === null || r.haceMinutos > 30;
 
   return (
-    <div className="rounded-[20px] border border-[var(--edr-divisor)] bg-[var(--edr-panel-2)] p-4">
+    /* Toda la tarjeta es el botón, no un enlacito adentro: en el celular se
+       toca con el pulgar sin apuntar, y la pregunta que se hace mirándola es
+       siempre la misma — "¿qué le queda a este?". */
+    <button
+      onClick={onVer}
+      className="rounded-[20px] border border-[var(--edr-divisor)] bg-[var(--edr-panel-2)] p-4 text-left transition hover:border-[var(--edr-yellow)]"
+    >
       <div className="flex items-center gap-2.5">
         {/* Amarillo con la letra azul, como el de la barra lateral: el azul
             sobre azul se pierde y el redondel deja de leerse. */}
@@ -324,6 +465,10 @@ function TarjetaRepartidor({ r }: { r: Repartidor }) {
             : `Sin novedades hace ${r.haceMinutos} min`}
         </div>
       )}
-    </div>
+
+      <div className="mt-2.5 font-bebas text-[13px] tracking-[.07em] text-[var(--edr-yellow)]">
+        VER QUÉ LE QUEDA
+      </div>
+    </button>
   );
 }

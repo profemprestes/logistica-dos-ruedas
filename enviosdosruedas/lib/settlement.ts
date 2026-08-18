@@ -57,6 +57,32 @@ export function logCash(l: DeliveryLog): number {
   return 0; // no entregado: no cobró nada
 }
 
+/**
+ * Lo que le queda al repartidor por ESE envío.
+ *
+ * Está separada para que el detalle envío por envío y el total del día salgan
+ * de la misma cuenta. Si el renglón de la lista se calculara aparte, algún día
+ * la suma de la lista no iba a dar el total de arriba — y ese es exactamente el
+ * momento en que se deja de confiar en la pantalla.
+ *
+ *   · Envío normal: el 70%. El 30% es la comisión de la empresa.
+ *   · Envío de Shippy: entero, sin comisión. A la empresa Shippy le paga
+ *     aparte y ahí está la ganancia; descontarle el 30% al repartidor sería
+ *     cobrarle una comisión que ya está cobrada del otro lado.
+ */
+export function pagoDelEnvio(l: DeliveryLog): number {
+  const valor = Number(l.shipment?.shipping_fee ?? 0);
+
+  if (esShippy(l.shipment?.client_name_raw ?? '')) {
+    // Sin valor cargado se usa el de la regla: con Shippy está acordado.
+    return valor || REGLAS.envioShippyPorDefecto;
+  }
+
+  // Un envío normal sin valor suma cero a propósito: no hay nada acordado que
+  // suponer, y que se note es mejor que inventar un precio.
+  return Math.round(valor * (1 - REGLAS.comision));
+}
+
 export interface DaySummary {
   delivered: DeliveryLog[];
   failed: DeliveryLog[];
@@ -133,14 +159,10 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   const deShippy = delivered.filter((l) => esShippy(l.shipment?.client_name_raw ?? ''));
   const normales = delivered.filter((l) => !esShippy(l.shipment?.client_name_raw ?? ''));
 
-  const earningsShippy = deShippy.reduce(
-    (acc, l) => acc + (Number(l.shipment?.shipping_fee) || REGLAS.envioShippyPorDefecto),
-    0,
-  );
-
-  const earningsNormales =
-    normales.reduce((acc, l) => acc + Number(l.shipment?.shipping_fee ?? 0), 0) *
-    (1 - REGLAS.comision);
+  // Los dos totales salen de sumar `pagoDelEnvio`, la misma que muestra cada
+  // renglón de la lista: así la suma de la lista SIEMPRE da el total.
+  const earningsShippy = deShippy.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
+  const earningsNormales = normales.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
 
   return {
     delivered,
@@ -151,8 +173,8 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
     cashTotal: cashFromDeliveries + cashFromPickups,
     shippingTotal,
     shippingMissing,
-    driverEarnings: Math.round(earningsNormales + earningsShippy),
-    earningsNormales: Math.round(earningsNormales),
+    driverEarnings: earningsNormales + earningsShippy,
+    earningsNormales,
     earningsShippy,
     countShippy: deShippy.length,
   };

@@ -7,6 +7,7 @@ import {
   customRange,
   dayShift,
   LOG_SELECT,
+  pagoDelEnvio,
   summarizeLogs,
   today,
   weekRange,
@@ -115,6 +116,9 @@ export default function CajaPage() {
    * decide el admin, y un número calculado acá con otra regla sería justamente
    * el que arma la discusión.
    */
+  /** El cierre ya hecho trae el número definitivo: ahí deja de ser estimado. */
+  const cierreConGanancia = cierre?.earnings !== null && cierre?.earnings !== undefined;
+
   const saldo = cierre
     ? Number(cierre.cash_total) - Number(cierre.actual_amount) - Number(cierre.earnings ?? 0)
     : null;
@@ -206,6 +210,76 @@ export default function CajaPage() {
                 oficina los complete.
               </p>
             )}
+          </div>
+
+          {/*
+            LO QUE LE TOCA, ENVÍO POR ENVÍO.
+
+            Es la misma cuenta que hace la oficina —sale de `pagoDelEnvio`, la
+            función que también suma el total del cierre— así que la lista y el
+            total no se pueden separar. Pero es una ESTIMACIÓN y hay que decirlo
+            fuerte: la oficina puede ajustar valores, cargar un envío que quedó
+            sin precio o corregir algo, y el número final es el del cierre. Un
+            número que después cambia sin aviso es peor que no mostrarlo.
+          */}
+          <div className="rounded-3xl border border-white/10 bg-[var(--edr-blue)] p-4">
+            <div className="font-bebas text-[15px] tracking-[.08em] text-[var(--edr-yellow)]">
+              LO QUE TE TOCA {cierreConGanancia ? '' : '(ESTIMADO)'}
+            </div>
+
+            <div className="edr-mono text-[38px] font-extrabold leading-none tracking-[-.03em] text-white">
+              {money(cierreConGanancia ? Number(cierre!.earnings) : resumen.driverEarnings)}
+            </div>
+
+            <p className="mt-1 text-xs text-[var(--edr-muted)]">
+              {cierreConGanancia
+                ? 'Confirmado por la oficina al cerrar el día.'
+                : 'Es una cuenta del sistema y PUEDE CAMBIAR: el número final lo confirma la oficina al cerrar el día.'}
+            </p>
+
+            {resumen.countShippy > 0 && (
+              <p className="mt-1 text-xs text-[var(--edr-muted)]">
+                {resumen.countShippy} de Shippy van enteros, sin comisión.
+              </p>
+            )}
+
+            <ul className="mt-3 flex flex-col gap-1.5">
+              {resumen.delivered.map((l) => {
+                const valor = Number(l.shipment?.shipping_fee ?? 0);
+                const paga = pagoDelEnvio(l);
+                // Sin valor cargado no se inventa nada: se dice que falta.
+                const sinCargar = valor === 0 && paga === 0;
+
+                return (
+                  <li
+                    key={l.id}
+                    className="flex items-center gap-2 rounded-2xl bg-black/20 px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[14px] font-semibold text-white">
+                        {l.shipment?.address_street ?? 'Sin dirección'}
+                      </div>
+                      <div className="truncate text-[11.5px] text-[var(--edr-muted)]">
+                        {l.shipment?.client_name_raw ?? ''}
+                        {valor > 0 ? ` · envío ${money(valor)}` : ''}
+                      </div>
+                    </div>
+
+                    {sinCargar ? (
+                      <span className="shrink-0 text-right text-[11px] font-semibold leading-tight text-[var(--edr-naranja-claro)]">
+                        lo carga
+                        <br />
+                        la oficina
+                      </span>
+                    ) : (
+                      <span className="edr-mono shrink-0 text-[15px] font-extrabold text-[var(--edr-yellow)]">
+                        {money(paga)}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
 
           {unDia && (

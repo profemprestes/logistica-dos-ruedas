@@ -170,6 +170,15 @@ export default function BillingPage() {
   const enviosNum = Number(envios) || 0;
   const gananciaNum = Number(earnings) || 0;
 
+  /**
+   * Los entregados que quedaron sin valor de envío cargado.
+   *
+   * Se muestran con nombre y apellido y no como un número: "3 sin valor" es un
+   * dato; tres códigos con su comercio y su dirección es algo que se puede
+   * arreglar en dos minutos antes de cerrar el día.
+   */
+  const sinValor = delivered.filter((l) => !Number(l.shipment?.shipping_fee));
+
   /* -------------------------------------------------------------- acciones */
   async function settle() {
     if (!driverId) return;
@@ -443,6 +452,41 @@ export default function BillingPage() {
                     />
                   }
                 />
+
+                {/*
+                  CUÁLES quedaron sin valor, no cuántos.
+                  
+                  El contador decía "3 envío(s) sin valor cargado" y había que
+                  ir a buscarlos a la tabla uno por uno, así que se cerraba el
+                  día igual y esos tres se pagaban en cero. Con los códigos acá
+                  se completan antes de cerrar, que es el único momento en que
+                  alguien los está mirando.
+                */}
+                {sinValor.length > 0 && (
+                  <div className="rounded border-2 border-orange-300 bg-orange-50 px-3 py-2.5 text-sm text-orange-900">
+                    <div className="font-black">
+                      {sinValor.length} entregado(s) sin valor de envío — se pagan $0
+                    </div>
+                    <ul className="mt-1.5 space-y-1">
+                      {sinValor.map((l) => (
+                        <li key={l.id} className="flex flex-wrap items-center gap-x-2">
+                          <a
+                            href={`/admin?buscar=${encodeURIComponent(l.shipment?.tracking_code ?? '')}`}
+                            className="edr-mono font-bold underline"
+                          >
+                            {l.shipment?.tracking_code}
+                          </a>
+                          <span className="text-orange-800">
+                            {l.shipment?.client_name_raw ?? ''} · {l.shipment?.address_street ?? ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1.5 text-xs">
+                      Cargales el valor y volvé a esta pantalla: el cálculo se rehace solo.
+                    </p>
+                  </div>
+                )}
 
                 <Renglon
                   label="Envíos a cobrar (comisión descontada)"

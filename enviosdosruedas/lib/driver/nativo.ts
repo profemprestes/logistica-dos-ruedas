@@ -127,7 +127,30 @@ export async function mandarPosicionNativa(
      */
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return false;
+
+    /*
+     * SIN TOKEN NO SE MANDA NADA, Y HAY QUE DECIRLO.
+     *
+     * Esto devolvía `false` en silencio, y es la falla más difícil de ver que
+     * tiene el sistema: la app se ve perfecta, el GPS anda, el aviso fijo está
+     * en pantalla, y la oficina no recibe una sola posición.
+     *
+     * Pasa porque el token dura una hora. Con el teléfono en el bolsillo, la
+     * renovación no sale: Android estrangula la red del navegador a los cinco
+     * minutos, que es justo cuando haría falta. Al volver a abrir la app se
+     * renueva y todo vuelve solo — por eso desde afuera parece un problema del
+     * GPS y no lo es.
+     */
+    if (!token) {
+      ultimoFallo = 'la sesión venció y no se pudo renovar con la app cerrada';
+      return false;
+    }
+
+    const vence = data.session?.expires_at;
+    if (vence && vence * 1000 < Date.now()) {
+      ultimoFallo = 'la sesión está vencida';
+      return false;
+    }
 
     const res = await CapacitorHttp.post({
       url: `${url}/rest/v1/rpc/registrar_posicion`,
@@ -139,10 +162,24 @@ export async function mandarPosicionNativa(
       data: { p_lat: lat, p_lng: lng, p_accuracy_m: accuracy },
     });
 
-    return res.status >= 200 && res.status < 300;
+    const ok = res.status >= 200 && res.status < 300;
+
+    // 401 es la sesión; el resto es el servidor. Distinguirlos es la
+    // diferencia entre saber qué arreglar y volver a probar a ciegas.
+    if (!ok) {
+      ultimoFallo =
+        res.status === 401
+          ? 'el servidor no aceptó la sesión (vencida)'
+          : `el servidor contestó ${res.status}`;
+    } else {
+      ultimoFallo = null;
+    }
+
+    return ok;
   } catch {
-    // Sin señal, o el pedido no salió. Se pierde el punto y ya está: el
-    // repartidor no tiene que enterarse de esto.
+    // Sin señal, o el pedido no salió. Esto SÍ es normal andando por la calle,
+    // así que no se marca como falla: el indicador ya muestra el silencio con
+    // el "hace cuánto", que es lo que importa.
     return false;
   }
 }

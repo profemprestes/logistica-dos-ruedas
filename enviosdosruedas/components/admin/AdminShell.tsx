@@ -284,7 +284,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
         {/* `edr-oficina` es lo que hace que todo lo de adentro sea claro: ahí
             cambian de significado los colores. Ver app/globals.css. */}
-        <main className="edr-oficina min-w-0 flex-1 pb-20 lg:pb-0">{children}</main>
+        {/* El lugar que deja abajo para la barra fija está en `.edr-oficina`
+            (ver globals.css): tiene que contar la franja del gesto de inicio,
+            y eso con una clase de medida fija no se puede. */}
+        <main className="edr-oficina min-w-0 flex-1">{children}</main>
       </div>
 
       {cajon && <Cajon cerrar={() => setCajon(false)}>{navegacion}</Cajon>}

@@ -221,6 +221,27 @@ body {
 }
 
 /* ==========================================================================
+   LUGAR PARA LA BARRA DE ABAJO DEL PANEL
+
+   La barra de secciones del celular es fija, así que el contenido tiene que
+   terminar antes o queda tapado. Reservaba 80 px fijos y no alcanzaba: la
+   barra mide unos 62 MÁS la franja que los teléfonos con gesto de inicio
+   agregan abajo de todo, que son otros 20 a 34. El resultado era que lo último
+   de la página —el borde del mapa, el último botón— quedaba abajo de la barra.
+
+   `env(safe-area-inset-bottom)` es cuánto mide esa franja en ESE teléfono. En
+   uno con botones da cero y no se reserva de más.
+
+   Por eso también se le saca el `pb-20` al elemento: dos reglas peleando por
+   el mismo borde son la forma segura de que un día gane la equivocada.
+   ========================================================================== */
+@media (max-width: 1023px) {
+  .edr-oficina {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* ==========================================================================
    IMPRESIÓN DE ETIQUETA 10 x 15 cm
    El navegador imprime SOLO lo que esté dentro de #print-root.
    ========================================================================== */

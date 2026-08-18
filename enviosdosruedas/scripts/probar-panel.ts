@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
+import { tramosDeHorario } from '../lib/franja';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
@@ -51,6 +52,11 @@ function envio(p: Partial<Shipment>): Shipment {
 }
 
 let fallas = 0;
+
+/** Para lo que da un número y no una lista: cuántos tramos, qué hora. */
+function casoNumero(nombre: string, obtenido: number, esperado: number) {
+  caso(nombre, [String(obtenido)], [String(esperado)]);
+}
 
 function caso(nombre: string, obtenido: string[], esperado: string[]) {
   const ok =
@@ -329,6 +335,36 @@ caso('y a las 10 todavía no', tipos([excepcion], 10), []);
 const otroIgual = enLocal({ comercio: { pickup_window: '9 a 18 hs' } });
 caso('varios paquetes del mismo comercio dan un solo aviso',
   tipos([cierra18, otroIgual], 17.5), ['sin_retirar']);
+
+/*
+ * ------------------------------------------ comercios que cierran al mediodía
+ *
+ * Ama y Pola abre "9 a 13 hs y 15:30 a 18 hs", y eso rompía la primera
+ * versión: tomaba la última hora del texto —las 18— y se perdía la siesta
+ * entera. El repartidor llegaba a las 13:30 a una persiana baja, y el aviso de
+ * "está por cerrar" no saltaba a las 12:30, que es justo cuando había que
+ * salir.
+ *
+ * La siesta NO avisa: el paquete sale igual a la tarde, y un aviso todos los
+ * días a las dos se aprende a ignorar justo antes del que importa.
+ */
+const amaYPola = enLocal({ comercio: { pickup_window: '9 a 13 hs y 15:30 a 18 hs' } });
+
+caso('a las 11 no avisa: cierra recién a las 13', tipos([amaYPola], 11), []);
+caso('a las 12:30 avisa: cierra por la siesta en media hora',
+  tipos([amaYPola], 12.5), ['sin_retirar']);
+caso('a las 14, en plena siesta, NO avisa: vuelve a abrir a las 15:30',
+  tipos([amaYPola], 14), []);
+caso('a las 16 tampoco: abrió de nuevo y cierra recién a las 18',
+  tipos([amaYPola], 16), []);
+caso('a las 17:30 avisa: ahora sí cierra por hoy', tipos([amaYPola], 17.5), ['sin_retirar']);
+
+/* Y el partido se entiende igual con otras formas de escribirlo. */
+casoNumero('escrito con guiones', tramosDeHorario('9-13 / 15:30-18').length, 2);
+casoNumero('escrito de corrido', tramosDeHorario('9 a 13 y 15:30 a 18').length, 2);
+casoNumero('uno solo sigue siendo uno', tramosDeHorario('9 a 18 hs').length, 1);
+casoNumero('"hasta las 13" es un cierre sin apertura', tramosDeHorario('hasta las 13')[0].hasta, 13);
+casoNumero('al revés se descarta', tramosDeHorario('18 a 9').length, 0);
 
 // ----------------------------------------------- cómo se entiende la búsqueda
 

@@ -19,7 +19,14 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { horaDelDiaAR, type Shipment } from '@/lib/format';
-import { faltaTexto, horarioDeRetiro, minutosParaElCierre, textoFranja } from '@/lib/franja';
+import {
+  comoHora,
+  estadoDelComercio,
+  faltaTexto,
+  horarioDeRetiro,
+  minutosParaElCierre,
+  textoFranja,
+} from '@/lib/franja';
 
 /** Menos de esto es "salí ya". Es el mismo número que usa la oficina. */
 const MINUTOS_DE_ALERTA = 60;
@@ -61,20 +68,49 @@ export default function Apurate({ envios }: { envios: Shipment[] }) {
       const enElComercio = s.status === 'creado' || s.status === 'pendiente_retiro';
       const entrega = minutosParaElCierre(s.delivery_window, hora);
 
-      const retiro = enElComercio
+      const texto = enElComercio
         ? horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } })
         : null;
-      const faltaRetiro = retiro ? Math.round((retiro.limite - hora) * 60) : null;
+
+      const local = texto ? estadoDelComercio(texto, hora) : null;
+
+      /*
+       * Del comercio sólo apura lo que se cierra AHORA.
+       *
+       * Si está en la siesta y vuelve a abrir a las 15:30, no hay nada que
+       * correr: el paquete sale igual a la tarde. Lo urgente es el rato que se
+       * está terminando, o que ya cerró por hoy.
+       */
+      const faltaRetiro = local
+        ? local.abierto
+          ? local.cierraEnMin
+          : local.abreA !== null
+            ? null
+            : -1
+        : null;
 
       // El más apurado de los dos es el que manda lo que hay que hacer ahora.
       const porRetiro = faltaRetiro !== null && (entrega === null || faltaRetiro < entrega);
 
-      const falta = porRetiro ? faltaRetiro! : entrega;
-      return { s, falta, porRetiro, cuando: porRetiro ? retiro!.texto : s.delivery_window };
+      const falta = porRetiro ? faltaRetiro : entrega;
+      return {
+        s,
+        falta,
+        porRetiro,
+        cuando: porRetiro ? texto : s.delivery_window,
+        vuelveAAbrir: local?.abierto ? local.vuelveAAbrir : null,
+      };
     })
     .filter(
-      (x): x is { s: Shipment; falta: number; porRetiro: boolean; cuando: string | null } =>
-        x.falta !== null,
+      (
+        x,
+      ): x is {
+        s: Shipment;
+        falta: number;
+        porRetiro: boolean;
+        cuando: string | null;
+        vuelveAAbrir: number | null;
+      } => x.falta !== null,
     )
     .filter((x) => x.falta < MINUTOS_DE_ALERTA)
     // El que menos tiempo tiene, primero. Si ya se pasaron dos, primero el que
@@ -94,7 +130,7 @@ export default function Apurate({ envios }: { envios: Shipment[] }) {
           {urgentes.length === 1 ? 'Se te vence uno' : `Se te vencen ${urgentes.length}`}
         </div>
 
-        {urgentes.map(({ s, falta, porRetiro, cuando }) => {
+        {urgentes.map(({ s, falta, porRetiro, cuando, vuelveAAbrir }) => {
           const enElComercio = s.status === 'creado' || s.status === 'pendiente_retiro';
 
           return (
@@ -104,11 +140,10 @@ export default function Apurate({ envios }: { envios: Shipment[] }) {
                     mostrador le falta un viaje más, y si lo que se vence es el
                     horario del local, lo urgente es pasar a buscarlo. */}
                 {porRetiro
-                  ? 'PASÁ A RETIRAR · EL COMERCIO CIERRA'
-                  : enElComercio
-                    ? 'RETIRAR Y ENTREGAR'
-                    : 'ENTREGAR'}{' '}
-                · {(falta < 0 ? faltaTexto(falta) : faltaTexto(falta)).toUpperCase()}
+                  ? falta < 0
+                    ? 'EL COMERCIO YA CERRÓ'
+                    : `PASÁ A RETIRAR · CIERRA ${faltaTexto(falta).toUpperCase()}`
+                  : `${enElComercio ? 'RETIRAR Y ENTREGAR' : 'ENTREGAR'} · ${faltaTexto(falta).toUpperCase()}`}
               </div>
 
               <div className="font-anton text-[19px] uppercase leading-tight tracking-[-.02em] text-white">
@@ -117,6 +152,7 @@ export default function Apurate({ envios }: { envios: Shipment[] }) {
 
               <div className="text-[13px] font-semibold text-white/85">
                 {textoFranja(cuando)}
+                {porRetiro && vuelveAAbrir !== null ? ` · vuelve a abrir ${comoHora(vuelveAAbrir)}` : ''}
                 {porRetiro && s.address_street ? ` · después va a ${s.address_street}` : ''}
                 {!porRetiro && enElComercio && s.pickup_address
                   ? ` · retirás en ${s.pickup_address}`

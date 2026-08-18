@@ -1,5 +1,12 @@
 import { diaAR, horaAR, horaDelDiaAR, hoyAR, type Shipment } from '@/lib/format';
-import { faltaTexto, horarioDeRetiro, limiteDeLaFranja, textoFranja } from '@/lib/franja';
+import {
+  comoHora,
+  estadoDelComercio,
+  faltaTexto,
+  horarioDeRetiro,
+  limiteDeLaFranja,
+  textoFranja,
+} from '@/lib/franja';
 
 // Se reexporta porque las pruebas y el panel ya la importaban desde acá.
 export { limiteDeLaFranja };
@@ -189,18 +196,30 @@ export function buscarAtrasos({
    * hacer dudar de cuál mirar. Gana ésta porque tiene la hora dura: pasada la
    * persiana no hay nada que hacer hasta mañana.
    */
-  const porCerrar = new Map<string, { envios: Shipment[]; texto: string; falta: number }>();
+  const porCerrar = new Map<
+    string,
+    { envios: Shipment[]; texto: string; estado: NonNullable<ReturnType<typeof estadoDelComercio>> }
+  >();
   /** A quiénes ya avisa esta regla, para que la de abajo no los repita. */
   const avisadosPorElComercio = new Set<number>();
 
   for (const s of deHoy) {
     if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
 
-    const retiro = horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } });
-    if (!retiro) continue;
+    const texto = horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } });
+    if (!texto) continue;
 
-    const falta = Math.round((retiro.limite - horaAhora) * 60);
-    if (falta >= ALERTA_ANTES_DEL_CIERRE_HS * 60) continue;
+    const estado = estadoDelComercio(texto, horaAhora);
+    if (!estado) continue;
+
+    /*
+     * Abierto y con rato de sobra: no hay nada que decir. Y cerrado pero con
+     * hora de reapertura tampoco: el paquete sale igual esta tarde, y avisar de
+     * la siesta todos los días a las dos sería un aviso que se aprende a
+     * ignorar justo antes del que importa.
+     */
+    if (estado.abierto && estado.cierraEnMin >= ALERTA_ANTES_DEL_CIERRE_HS * 60) continue;
+    if (!estado.abierto && estado.abreA !== null) continue;
 
     avisadosPorElComercio.add(s.id);
 
@@ -208,27 +227,39 @@ export function buscarAtrasos({
     const previo = porCerrar.get(donde);
     porCerrar.set(donde, {
       envios: [...(previo?.envios ?? []), s],
-      texto: retiro.texto,
-      // El más apurado manda: si dos envíos del mismo lugar tienen horarios
-      // distintos, el que cierra antes es el que decide cuándo salir.
-      falta: Math.min(previo?.falta ?? Infinity, falta),
+      texto,
+      estado,
     });
   }
 
   for (const [donde, x] of porCerrar) {
     const cuantos = x.envios.length;
+    const e = x.estado;
+
+    /*
+     * Tres situaciones distintas y cada una pide otra cosa:
+     *
+     *   · está por cerrar y después vuelve a abrir → hay que ir ahora o
+     *     esperar a la tarde, y saber a qué hora abre cambia la decisión;
+     *   · está por cerrar y no vuelve → es ahora o mañana;
+     *   · ya cerró por hoy → no hay nada que hacer, hay que avisarle a alguien.
+     */
+    const titulo = !e.abierto
+      ? 'EL COMERCIO YA CERRÓ'
+      : `EL COMERCIO CIERRA ${faltaTexto(e.cierraEnMin).toUpperCase()}`;
+
+    const desde = !e.abierto
+      ? `retira ${textoFranja(x.texto)} · quedan para mañana si nadie pasa`
+      : e.vuelveAAbrir !== null
+        ? `retira ${textoFranja(x.texto)} · vuelve a abrir ${comoHora(e.vuelveAAbrir)}`
+        : `retira ${textoFranja(x.texto)}`;
+
     avisos.push({
       clave: `cierra-comercio-${donde}`,
       tipo: 'sin_retirar',
-      titulo:
-        x.falta < 0
-          ? 'EL COMERCIO YA CERRÓ'
-          : `EL COMERCIO CIERRA ${faltaTexto(x.falta).toUpperCase()}`,
+      titulo,
       detalle: `${donde} · ${cuantos} ${cuantos === 1 ? 'paquete' : 'paquetes'} sin retirar`,
-      desde:
-        x.falta < 0
-          ? `retiraba ${textoFranja(x.texto)} · quedan para mañana si nadie pasa`
-          : `retira ${textoFranja(x.texto)}`,
+      desde,
       tono: 'rojo',
       accion: 'VER',
       href: `/admin?buscar=${encodeURIComponent(x.envios[0].tracking_code)}`,

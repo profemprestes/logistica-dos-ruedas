@@ -275,6 +275,25 @@ function TarjetaRepartidor({ r }: { r: Repartidor }) {
           <div className="text-xs text-[var(--edr-text-4)]">
             {r.haceMinutos === null ? 'sin señal hoy' : `GPS hace ${r.haceMinutos} min`}
           </div>
+
+          {/*
+            CÓMO LE MANDÓ EL GPS HOY, para poder contestar "¿es el sistema o es
+            su teléfono?".
+
+            El hueco más largo es el número que importa: uno con 90 minutos y
+            otro con 2 el mismo día es el teléfono del primero matando la app en
+            segundo plano, no el sistema. Sólo se muestra cuando pasa de 10
+            minutos — abajo de eso es la calle, un túnel o un sótano, y no hay
+            nada que hacer. Ver el paso 47.
+          */}
+          {r.senal && r.senal.huecoMaxMin > 10 && (
+            <div className="text-xs font-semibold text-[var(--edr-naranja-claro)]">
+              se cortó {r.senal.huecoMaxMin} min hoy
+              {r.senal.bateriaMin !== null && r.senal.bateriaMin <= 25
+                ? ` · bajó a ${r.senal.bateriaMin}% de batería`
+                : ''}
+            </div>
+          )}
         </div>
       </div>
 

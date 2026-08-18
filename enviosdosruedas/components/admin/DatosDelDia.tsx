@@ -38,6 +38,16 @@ export interface Repartidor {
   total: number;
   /** Plata que lleva encima ahora mismo, de lo que ya cobró. */
   lleva: number;
+
+  /**
+   * Cómo le mandó el GPS hoy. `null` mientras no haya mandado nada.
+   *
+   * Sirve para una pregunta que antes no se podía contestar: si un repartidor
+   * desaparece del mapa, ¿es el sistema o es su teléfono? Con el hueco más
+   * largo del día al lado del nombre se ve de una — uno con 90 minutos y otro
+   * con 2 el mismo día es el teléfono, no el sistema. Ver el paso 47.
+   */
+  senal: { posiciones: number; huecoMaxMin: number; bateriaMin: number | null } | null;
 }
 
 export interface DatosDelDia {
@@ -75,7 +85,7 @@ const VACIO: Omit<DatosDelDia, 'refrescar'> = {
 async function traer(hoy: string) {
   const desdeHoy = new Date(`${hoy}T00:00:00`).toISOString();
 
-  const [envios, pendientes, posiciones, movimientos] = await Promise.all([
+  const [envios, pendientes, posiciones, movimientos, senales] = await Promise.all([
     supabase
       .from('shipments')
       .select('*, driver:assigned_driver(full_name)')
@@ -103,6 +113,12 @@ async function traer(hoy: string) {
       .gte('happened_at', desdeHoy)
       .order('happened_at', { ascending: true })
       .limit(1000),
+    // Cómo mandó el GPS cada uno hoy (paso 47). Son números, no recorridos:
+    // cuántas señales y cuál fue el silencio más largo.
+    supabase
+      .from('senal_dia')
+      .select('driver_id, posiciones, hueco_max_seg, bateria_min')
+      .eq('fecha', hoy),
   ]);
 
   return {
@@ -114,6 +130,12 @@ async function traer(hoy: string) {
       driver_id: string | null;
       event: string;
       happened_at: string;
+    }[],
+    senales: (senales.data ?? []) as unknown as {
+      driver_id: string;
+      posiciones: number;
+      hueco_max_seg: number;
+      bateria_min: number | null;
     }[],
   };
 }
@@ -151,7 +173,7 @@ export function ProveedorDelDia({ children }: { children: ReactNode }) {
     let vivo = true;
 
     traer(hoyLocal())
-      .then(({ deHoy, colgados, posiciones, movimientos }) => {
+      .then(({ deHoy, colgados, posiciones, movimientos, senales }) => {
         if (!vivo) return;
 
         // Desde cuándo está en camino cada envío. Los movimientos vienen del
@@ -194,6 +216,16 @@ export function ProveedorDelDia({ children }: { children: ReactNode }) {
               entregados: 0,
               total: 0,
               lleva: 0,
+              senal: (() => {
+                const x = senales.find((z) => z.driver_id === id);
+                return x
+                  ? {
+                      posiciones: x.posiciones,
+                      huecoMaxMin: Math.round(x.hueco_max_seg / 60),
+                      bateriaMin: x.bateria_min,
+                    }
+                  : null;
+              })(),
             } satisfies Repartidor);
 
           r.total += 1;

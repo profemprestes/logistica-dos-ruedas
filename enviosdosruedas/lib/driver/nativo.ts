@@ -107,6 +107,8 @@ export async function mandarPosicionNativa(
   lat: number,
   lng: number,
   accuracy: number | null,
+  /** La batería del teléfono, si se pudo leer. Ver `leerBateria`. */
+  pila?: { pct: number; cargando: boolean } | null,
 ): Promise<boolean | null> {
   if (!(await esAppNativa())) return null;
 
@@ -159,7 +161,13 @@ export async function mandarPosicionNativa(
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      data: { p_lat: lat, p_lng: lng, p_accuracy_m: accuracy },
+      data: {
+        p_lat: lat,
+        p_lng: lng,
+        p_accuracy_m: accuracy,
+        p_bateria: pila?.pct ?? null,
+        p_cargando: pila?.cargando ?? null,
+      },
     });
 
     const ok = res.status >= 200 && res.status < 300;

@@ -49,6 +49,41 @@ export function segundosDesdeLaUltima(): number | null {
 }
 
 /**
+ * La batería del teléfono, para mandarla con la posición.
+ *
+ * POR QUÉ IMPORTA. El ahorro de energía de Android mata los servicios en
+ * segundo plano y el repartidor desaparece del mapa sin que nadie se entere.
+ * El ajuste no se puede leer desde acá —es nativo— pero si los silencios caen
+ * siempre con la batería baja, ya sabemos que el ahorro se prendió solo.
+ *
+ * El objeto que devuelve el navegador se actualiza SOLO, así que se pide una
+ * vez y después se lee cuantas veces haga falta. Pedirlo en cada latido sería
+ * crear un objeto nuevo cada treinta segundos para leer el mismo número.
+ *
+ * `null` cuando el navegador no lo da —algunos no lo tienen— y eso no puede
+ * impedir guardar el punto: la posición vale igual sin la batería.
+ */
+type Bateria = { level: number; charging: boolean };
+let pilaPedida: Promise<Bateria | null> | null = null;
+
+export async function leerBateria(): Promise<{ pct: number; cargando: boolean } | null> {
+  if (typeof navigator === 'undefined') return null;
+
+  if (!pilaPedida) {
+    const nav = navigator as Navigator & { getBattery?: () => Promise<Bateria> };
+    pilaPedida = nav.getBattery ? nav.getBattery().catch(() => null) : Promise.resolve(null);
+  }
+
+  try {
+    const b = await pilaPedida;
+    if (!b) return null;
+    return { pct: Math.round(b.level * 100), cargando: Boolean(b.charging) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Sube un punto ya tomado. Devuelve si el servidor lo aceptó.
  *
  * Está separado de `avisarPosicion` porque el seguimiento en vivo ya tiene la
@@ -80,7 +115,11 @@ async function intentarGuardar(
   lng: number,
   accuracy?: number | null,
 ): Promise<boolean> {
-  const porNativo = await mandarPosicionNativa(lat, lng, accuracy ?? null);
+  // La batería viaja con el punto. Si no se pudo leer va en null y no pasa
+  // nada: el punto es lo importante, esto es el dato de al lado.
+  const pila = await leerBateria();
+
+  const porNativo = await mandarPosicionNativa(lat, lng, accuracy ?? null, pila);
   if (porNativo !== null) return porNativo;
 
   try {
@@ -88,6 +127,8 @@ async function intentarGuardar(
       p_lat: lat,
       p_lng: lng,
       p_accuracy_m: accuracy ?? null,
+      p_bateria: pila?.pct ?? null,
+      p_cargando: pila?.cargando ?? null,
     });
 
     if (error) {

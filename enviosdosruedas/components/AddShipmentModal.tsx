@@ -126,6 +126,7 @@ const emptyForm = () => ({
   /** Piso o depto: va aparte porque el buscador de direcciones no lo entiende. */
   pickup_extra: '',
   pickup_notes: '',
+  pickup_window: '',
   recipient_name: '',
   recipient_phone: '',
   address_street: '',
@@ -184,6 +185,7 @@ function formFromShipment(s: Shipment): FormState {
     // guardó no se toca solo.
     pickup_extra: '',
     pickup_notes: s.pickup_notes ?? '',
+    pickup_window: s.pickup_window ?? '',
     recipient_name: s.recipient_name,
     recipient_phone: s.recipient_phone ?? '',
     address_street: s.address_street,
@@ -269,9 +271,12 @@ function ShipmentForm({
     Record<string, { lat: number; lng: number } | null>
   >({});
 
+  /** El horario de retiro por comercio, al pegar una tanda. */
+  const [horariosRetiro, setHorariosRetiro] = useState<Record<string, string>>({});
+
   /** Los comercios ya cargados, para mostrar el punto que YA tienen guardado. */
   const [comerciosConocidos, setComerciosConocidos] = useState<
-    { id: number; name: string; lat: number | null; lng: number | null }[]
+    { id: number; name: string; lat: number | null; lng: number | null; pickup_window: string | null }[]
   >([]);
   /**
    * A quién se le asigna lo que se está cargando.
@@ -330,7 +335,7 @@ function ShipmentForm({
     let vivo = true;
 
     async function traer() {
-      const { data } = await supabase.from('clients').select('id, name, lat, lng');
+      const { data } = await supabase.from('clients').select('id, name, lat, lng, pickup_window');
       if (vivo) setComerciosConocidos(data ?? []);
     }
 
@@ -339,6 +344,14 @@ function ShipmentForm({
       vivo = false;
     };
   }, [retiros.length]);
+
+  /** El horario a mostrar: el que escribiste ahora, o el que ya tenía la ficha. */
+  const horarioDeRetiroDe = (clave: string) => {
+    const escrito = horariosRetiro[clave];
+    if (escrito !== undefined) return escrito;
+    const guardado = comerciosConocidos.find((c) => claveComercio(c.name) === clave);
+    return guardado?.pickup_window ?? '';
+  };
 
   /** El punto a mostrar: el que confirmaste ahora, o el que ya tenía guardado. */
   const puntoDeRetiro = (clave: string) => {
@@ -502,6 +515,10 @@ function ShipmentForm({
           // El pin que confirmaste arriba, si lo confirmaste. Si el comercio ya
           // tenía uno guardado, `asegurarComercio` no lo pisa.
           punto: puntosRetiro[clave] ?? null,
+          // El horario sí se pisa cuando lo escribís: es un dato que cambia
+          // —el local cambia el horario en verano— y el que carga lo está
+          // mirando en ese momento.
+          horario: horariosRetiro[clave],
         }),
       );
     }
@@ -696,6 +713,18 @@ function ShipmentForm({
               </Field>
               <Field label="Piso / depto / local">
                 <input className={field} value={form.pickup_extra} onChange={(e) => set('pickup_extra', e.target.value)} />
+              </Field>
+              <Field label="Horario de retiro (sólo si es distinto)">
+                <input
+                  className={field}
+                  value={form.pickup_window}
+                  onChange={(e) => set('pickup_window', e.target.value)}
+                  placeholder="dejalo vacío y usa el del comercio"
+                />
+                {/* Casi siempre va vacío: lo normal es que mande el horario
+                    cargado en la ficha del comercio. Esto es para el "este
+                    retiralo antes de las 12 porque el cliente lo pidió", que no
+                    tiene por qué cambiarle el horario al local entero. */}
               </Field>
               <Field label="Notas de retiro" className="sm:col-span-2">
                 <input className={field} value={form.pickup_notes} onChange={(e) => set('pickup_notes', e.target.value)} />
@@ -973,6 +1002,27 @@ function ShipmentForm({
                           }))
                         }
                       />
+
+                      {/* El horario del local, para toda la tanda de una vez.
+                          Va acá y no en cada fila porque es del COMERCIO: los
+                          veinte paquetes se retiran en el mismo lugar y a la
+                          misma hora. Se guarda en su ficha, así que la próxima
+                          tanda ya viene con el horario puesto. */}
+                      <div className="mt-2">
+                        <label className={labelCls}>Horario de retiro del comercio</label>
+                        <input
+                          className={field}
+                          value={horarioDeRetiroDe(clave)}
+                          onChange={(e) =>
+                            setHorariosRetiro((prev) => ({ ...prev, [clave]: e.target.value }))
+                          }
+                          placeholder="9 a 18 hs"
+                        />
+                        <p className="mt-1 text-[11px] text-[var(--edr-muted)]">
+                          Se avisa cuando el comercio está por cerrar y todavía queda
+                          algo sin retirar.
+                        </p>
+                      </div>
                     </div>
                   ))}
 

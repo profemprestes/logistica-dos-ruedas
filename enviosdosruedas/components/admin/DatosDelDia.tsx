@@ -88,7 +88,9 @@ async function traer(hoy: string) {
   const [envios, pendientes, posiciones, movimientos, senales] = await Promise.all([
     supabase
       .from('shipments')
-      .select('*, driver:assigned_driver(full_name)')
+      // El horario de retiro sale del comercio salvo que el envío traiga el
+      // suyo: sin esto, el aviso de "el comercio cierra" no tendría con qué.
+      .select('*, driver:assigned_driver(full_name), comercio:client_id(pickup_window)')
       .eq('scheduled_date', hoy),
     // Los colgados no tienen fecha: justamente el problema es que quedaron
     // atrás. Se traen aparte y sin filtro de día.

@@ -53,6 +53,29 @@ export function faltaTexto(minutos: number): string {
   return minutos < 0 ? `se pasó hace ${cuanto}` : `en ${cuanto}`;
 }
 
+/**
+ * Hasta qué hora se puede retirar ese envío.
+ *
+ * MANDA EL DEL ENVÍO Y, SI NO TIENE, EL DEL COMERCIO. El del comercio es el
+ * que se carga una vez y vale siempre —"TOY PIOLA, de 9 a 18"—; el del envío
+ * es la excepción del día, el "este retiralo antes de las 12 porque el cliente
+ * lo pidió", que no tiene por qué cambiarle el horario al local entero.
+ *
+ * Devuelve el texto además de la hora porque lo que se muestra en pantalla es
+ * lo que escribió la oficina, no el número que sacamos nosotros: si alguien
+ * escribió "hasta las 13 que cierran por la siesta", esa aclaración vale.
+ */
+export function horarioDeRetiro(envio: {
+  pickup_window?: string | null;
+  comercio?: { pickup_window?: string | null } | null;
+}): { texto: string; limite: number } | null {
+  const texto = (envio.pickup_window ?? envio.comercio?.pickup_window ?? '').trim();
+  if (!texto) return null;
+
+  const limite = limiteDeLaFranja(texto);
+  return limite === null ? null : { texto, limite };
+}
+
 /** La franja tal cual la escribió la oficina, sin que grite. */
 export function textoFranja(texto: string | null | undefined): string {
   const t = (texto ?? '').trim();

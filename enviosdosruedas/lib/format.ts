@@ -21,6 +21,13 @@ export interface Shipment {
   client_name_raw: string | null;
   pickup_address: string | null;
   pickup_notes: string | null;
+  /**
+   * Hasta qué hora se puede retirar ESTE envío, si es la excepción.
+   *
+   * Vacío casi siempre: lo normal es que mande el horario del comercio. Ver
+   * `horarioDeRetiro` en `lib/franja.ts`, que decide cuál de los dos gana.
+   */
+  pickup_window?: string | null;
   recipient_name: string;
   recipient_phone: string | null;
   address_street: string;

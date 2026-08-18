@@ -81,7 +81,9 @@ function fetchRoute(driverId: string) {
   return (
     supabase
       .from('shipments')
-      .select('*')
+      // El horario de retiro del comercio viene pegado: es el que manda cuando
+      // el envío no trae el suyo. Ver `horarioDeRetiro` en `lib/franja.ts`.
+      .select('*, comercio:client_id(pickup_window)')
       .eq('assigned_driver', driverId)
       /*
        * Los reprogramados no van.

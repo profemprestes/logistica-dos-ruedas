@@ -49,6 +49,8 @@ export async function asegurarComercio(opciones: {
   notas?: string;
   /** El punto verificado a mano en el mapa, si lo hubo. */
   punto?: { lat: number; lng: number } | null;
+  /** El horario de retiro del local: "9 a 18 hs". Ver el paso 48. */
+  horario?: string;
 }): Promise<number | null> {
   ultimoProblema = null;
   const nombre = opciones.nombre.trim();
@@ -98,6 +100,21 @@ export async function asegurarComercio(opciones: {
         await supabase
           .from('clients')
           .update({ lat: opciones.punto.lat, lng: opciones.punto.lng })
+          .eq('id', id);
+      }
+
+      /*
+       * El horario SÍ se pisa, al revés que el punto.
+       *
+       * Un punto verificado en el mapa no mejora con el tiempo: el de la ficha
+       * se revisó mirando, y pisarlo con uno buscado a las apuradas sería
+       * empeorarlo. El horario es al revés — cambia de verdad, el local corre
+       * el cierre en verano — y el que lo está escribiendo lo tiene fresco.
+       */
+      if (opciones.horario?.trim()) {
+        await supabase
+          .from('clients')
+          .update({ pickup_window: opciones.horario.trim() })
           .eq('id', id);
       }
 
@@ -170,6 +187,7 @@ export async function asegurarComercio(opciones: {
         pickup_address: direccion,
         pickup_extra: opciones.extra?.trim() || null,
         pickup_notes: opciones.notas?.trim() || null,
+        pickup_window: opciones.horario?.trim() || null,
         lat,
         lng,
         active: true,

@@ -34,6 +34,7 @@ interface Comercio {
    */
   pickup_extra: string | null;
   pickup_notes: string | null;
+  pickup_window: string | null;
   lat: number | null;
   lng: number | null;
   active: boolean;
@@ -50,6 +51,7 @@ const VACIO: Omit<Comercio, "id"> = {
   pickup_address: null,
   pickup_extra: null,
   pickup_notes: null,
+  pickup_window: null,
   lat: null,
   lng: null,
   active: true,
@@ -318,6 +320,7 @@ function Editar({
     pickup_address: comercio.pickup_address ?? "",
     pickup_extra: comercio.pickup_extra ?? "",
     pickup_notes: comercio.pickup_notes ?? "",
+    pickup_window: comercio.pickup_window ?? "",
     lat: comercio.lat,
     lng: comercio.lng,
     active: comercio.active,
@@ -340,6 +343,7 @@ function Editar({
       pickup_address: form.pickup_address.trim() || null,
       pickup_extra: form.pickup_extra.trim() || null,
       pickup_notes: form.pickup_notes.trim() || null,
+      pickup_window: form.pickup_window.trim() || null,
       lat: form.lat,
       lng: form.lng,
       active: form.active,
@@ -426,6 +430,25 @@ function Editar({
             <p className="mt-1 text-[11px] text-[var(--edr-muted)]">
               Va acá y no pegado a la dirección: el buscador no entiende
               &quot;Belgrano 2875 5A&quot; y no encuentra el punto.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelCls}>Horario de retiro</label>
+            <input
+              className={campo}
+              value={form.pickup_window}
+              onChange={(e) => set("pickup_window", e.target.value)}
+              placeholder="9 a 18 hs"
+            />
+            {/* Es el horario del LOCAL, no el de la entrega. Con esto cargado,
+                el panel avisa cuando el comercio está por cerrar y todavía hay
+                paquetes ahí, y al repartidor le aparece "pasá a retirar". Sin
+                cargar no salta nada: no se adivina a qué hora cierra. */}
+            <p className="mt-1 text-[11px] leading-snug text-[var(--edr-muted)]">
+              Hasta qué hora este comercio entrega los paquetes. Se avisa cuando
+              está por cerrar y todavía queda algo sin retirar. Se puede escribir
+              como venga: &quot;9 a 18 hs&quot;, &quot;hasta las 13&quot;.
             </p>
           </div>
 

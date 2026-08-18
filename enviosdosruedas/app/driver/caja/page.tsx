@@ -96,8 +96,20 @@ export default function CajaPage() {
    * el de un rango. Por eso ese bloque sólo se muestra cuando se está mirando
    * un día suelto.
    */
-  const unDia = periodo.tipo === 'dia';
-  const dia = unDia ? dayShift(today(), periodo.dias) : today();
+  /*
+   * Un rango con las dos puntas iguales ES un día, y tiene que comportarse
+   * como tal: elegir "del 10 al 10" y que no aparezca el cierre de ese día
+   * sería esconder justo lo que se fue a buscar.
+   */
+  const unDia =
+    periodo.tipo === 'dia' || (periodo.tipo === 'rango' && desdeElegido === hastaElegido);
+
+  const dia =
+    periodo.tipo === 'dia'
+      ? dayShift(today(), periodo.dias)
+      : periodo.tipo === 'rango'
+        ? desdeElegido
+        : today();
 
   const { desde, hasta } =
     periodo.tipo === 'dia'
@@ -163,9 +175,19 @@ export default function CajaPage() {
   /** El cierre ya hecho trae el número definitivo: ahí deja de ser estimado. */
   const cierreConGanancia = cierre?.earnings !== null && cierre?.earnings !== undefined;
 
+  /** La oficina ya cerró este día: recién ahí el número tiene signo. */
+  const cerrado = unDia && cierre !== null;
+
   const saldo = cierre
     ? Number(cierre.cash_total) - Number(cierre.actual_amount) - Number(cierre.earnings ?? 0)
     : null;
+
+  /*
+   * Positivo quiere decir que la plata la tiene él y hay que devolverla;
+   * negativo, que la empresa le debe. El nombre lo dice para no tener que
+   * acordarse del signo cada vez que se lee una línea de abajo.
+   */
+  const leFaltaRendir = (saldo ?? 0) >= 0;
 
   return (
     <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
@@ -253,13 +275,44 @@ export default function CajaPage() {
 
       {resumen && (
         <>
-          <div className="rounded-3xl bg-[var(--edr-yellow)] p-5 text-[var(--edr-blue)] shadow-[var(--edr-sombra)]">
-            <div className="font-bebas text-[17px] tracking-[.1em]">TENÉS QUE RENDIR</div>
-            <div className="edr-mono text-[56px] font-extrabold leading-[.95] tracking-[-.04em]">
-              {money(resumen.cashTotal)}
+          {/*
+            EL CARTEL GRANDE CAMBIA DE CARA SEGÚN EN QUÉ PARTE DEL DÍA ESTÁ.
+
+            Durante la jornada es amarillo y muestra lo que va juntando: es
+            plata que tiene encima y que todavía no es de nadie hasta que se
+            haga la cuenta. No dice si le va a sobrar o faltar, porque todavía
+            no se sabe.
+
+            Cerrado el día ya hay un número con signo, y el signo es lo único
+            que importa: verde si le tienen que pagar, rojo si tiene que
+            entregar plata. Que sean colores y no un menos adelante es a
+            propósito — un "-13.030" se lee mal en la calle, con el celular al
+            sol y apurado.
+          */}
+          <div
+            className="rounded-3xl p-5 shadow-[var(--edr-sombra)]"
+            style={{
+              background: !cerrado
+                ? 'var(--edr-yellow)'
+                : leFaltaRendir
+                  ? 'var(--edr-rojo)'
+                  : 'var(--edr-verde)',
+              // Sobre amarillo el blanco no se lee: ahí va el azul de la marca.
+              color: cerrado ? '#fff' : 'var(--edr-blue)',
+            }}
+          >
+            <div className="font-bebas text-[17px] tracking-[.1em]">
+              {!cerrado ? 'TENÉS QUE RENDIR' : leFaltaRendir ? 'TENÉS QUE RENDIR' : 'TENÉS QUE COBRAR'}
             </div>
+
+            <div className="edr-mono text-[56px] font-extrabold leading-[.95] tracking-[-.04em]">
+              {money(cerrado ? Math.abs(saldo ?? 0) : resumen.cashTotal)}
+            </div>
+
             <div className="text-[13px] font-semibold opacity-80">
-              efectivo cobrado {comoSeLlama(periodo, desde, hasta)}
+              {cerrado
+                ? 'según el cierre que hizo la oficina'
+                : `efectivo cobrado ${comoSeLlama(periodo, desde, hasta)}`}
             </div>
           </div>
 
@@ -311,7 +364,7 @@ export default function CajaPage() {
           */}
           <div className="rounded-3xl border border-white/10 bg-[var(--edr-blue)] p-4">
             <div className="font-bebas text-[15px] tracking-[.08em] text-[var(--edr-yellow)]">
-              LO QUE TE TOCA {cierreConGanancia ? '' : '(ESTIMADO)'}
+              TU GANANCIA {cierreConGanancia ? '' : '(ESTIMADA)'}
             </div>
 
             <div className="edr-mono text-[38px] font-extrabold leading-none tracking-[-.03em] text-white">
@@ -373,26 +426,27 @@ export default function CajaPage() {
             <div className="rounded-3xl bg-[var(--edr-dark)] p-4">
               {cierre ? (
                 <>
+                  {/* El número ya está arriba, grande y con color. Acá va de
+                      dónde sale, que es lo que se mira cuando no cierra: las
+                      tres cuentas, en el mismo orden que las ve la oficina. */}
                   <div className="font-bebas text-[15px] tracking-[.08em] text-[var(--edr-muted)]">
-                    {saldo !== null && saldo >= 0 ? 'TE FALTA RENDIR' : 'TE QUEDA A FAVOR'}
+                    CÓMO SE SACÓ
                   </div>
-                  <div
-                    className={`edr-mono text-[32px] font-extrabold leading-tight ${
-                      saldo !== null && saldo >= 0
-                        ? 'text-[var(--edr-yellow)]'
-                        : 'text-emerald-400'
-                    }`}
-                  >
-                    {money(Math.abs(saldo ?? 0))}
-                  </div>
-                  <p className="text-xs text-[var(--edr-muted)]">
-                    Según el cierre que hizo la oficina.
+                  <dl className="mt-2 space-y-2">
+                    <Renglon label="Efectivo cobrado" valor={Number(cierre.cash_total)} />
+                    <Renglon label="Ya rendido" valor={Number(cierre.actual_amount)} />
+                    <Renglon label="Tu ganancia" valor={Number(cierre.earnings ?? 0)} />
+                  </dl>
+                  <p className="mt-2.5 text-xs text-[var(--edr-muted)]">
+                    {leFaltaRendir
+                      ? 'Cobraste más de lo que te toca: la diferencia hay que entregarla.'
+                      : 'Tu ganancia es mayor que lo que cobraste: la diferencia te la pagan.'}
                   </p>
                 </>
               ) : (
                 <p className="text-sm font-semibold text-[var(--edr-muted)]">
-                  La oficina todavía no cerró este día. Cuando lo cierre, acá vas a ver cuánto te
-                  queda a favor.
+                  La oficina todavía no cerró este día. Cuando lo cierre, el cartel de arriba pasa
+                  a verde si te tienen que pagar, o a rojo si tenés que entregar plata.
                 </p>
               )}
             </div>

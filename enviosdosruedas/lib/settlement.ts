@@ -180,6 +180,27 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   };
 }
 
+/**
+ * Del 1 al último del mes en el que cae `day`.
+ *
+ * El día 0 del mes siguiente es el último del actual, y así no hay que saberse
+ * cuáles tienen 30, cuáles 31 y qué pasa en febrero de un año bisiesto.
+ */
+export function monthRange(day: string) {
+  const [a, m] = day.split('-').map(Number);
+  const ultimo = new Date(a, m, 0).getDate();
+
+  const desde = `${a}-${String(m).padStart(2, '0')}-01`;
+  const hasta = `${a}-${String(m).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
+
+  return {
+    from: new Date(`${desde}T00:00:00`).toISOString(),
+    to: new Date(`${hasta}T23:59:59.999`).toISOString(),
+    desde,
+    hasta,
+  };
+}
+
 /** Lunes a domingo de la semana en la que cae `day`. */
 export function weekRange(day: string) {
   const d = new Date(`${day}T12:00:00`);

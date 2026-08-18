@@ -7,6 +7,7 @@ import {
   customRange,
   dayShift,
   LOG_SELECT,
+  monthRange,
   pagoDelEnvio,
   summarizeLogs,
   today,
@@ -32,11 +33,41 @@ import { money } from '@/lib/format';
  * ve para poder rendir sabiendo cuánto, no para cerrarlo.
  */
 
-const PERIODOS = [
-  { label: 'HOY', dias: 0 },
-  { label: 'AYER', dias: -1 },
-  { label: 'SEMANA', dias: null },
-] as const;
+/**
+ * Qué período se está mirando.
+ *
+ * Antes eran tres botones fijos —hoy, ayer, semana— y para saber cuánto hizo en
+ * el mes había que sumar a mano día por día. El que reparte lleva su propia
+ * cuenta, y si el sistema no se la da la lleva en un papel: ahí es donde
+ * aparecen las diferencias que después hay que discutir.
+ */
+type Periodo =
+  | { tipo: 'dia'; dias: number }
+  | { tipo: 'semana' }
+  | { tipo: 'mes' }
+  | { tipo: 'rango' };
+
+const PERIODOS: { label: string; p: Periodo }[] = [
+  { label: 'HOY', p: { tipo: 'dia', dias: 0 } },
+  { label: 'AYER', p: { tipo: 'dia', dias: -1 } },
+  { label: 'SEMANA', p: { tipo: 'semana' } },
+  { label: 'MES', p: { tipo: 'mes' } },
+  { label: 'FECHAS', p: { tipo: 'rango' } },
+];
+
+/** Cómo se lee cada período abajo del número grande. */
+function comoSeLlama(p: Periodo, desde: string, hasta: string): string {
+  if (p.tipo === 'dia') return p.dias === 0 ? 'en el día' : 'ayer';
+  if (p.tipo === 'semana') return 'en la semana';
+  if (p.tipo === 'mes') return 'en el mes';
+  return desde === hasta ? `el ${diaCorto(desde)}` : `del ${diaCorto(desde)} al ${diaCorto(hasta)}`;
+}
+
+/** "18/08", de una fecha ISO y sin pasar por el calendario. */
+function diaCorto(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${d}/${m}`;
+}
 
 /** El cierre que ya hizo la oficina, si lo hizo. */
 interface Cierre {
@@ -48,7 +79,10 @@ interface Cierre {
 
 export default function CajaPage() {
   const [driverId, setDriverId] = useState('');
-  const [periodo, setPeriodo] = useState<number | null>(0);
+  const [periodo, setPeriodo] = useState<Periodo>({ tipo: 'dia', dias: 0 });
+  /** Las dos puntas del rango, cuando elige "FECHAS". Arrancan en hoy. */
+  const [desdeElegido, setDesdeElegido] = useState(() => today());
+  const [hastaElegido, setHastaElegido] = useState(() => today());
   const [resumen, setResumen] = useState<DaySummary | null>(null);
   const [cierre, setCierre] = useState<Cierre | null>(null);
   const [error, setError] = useState('');
@@ -57,16 +91,26 @@ export default function CajaPage() {
     supabase.auth.getUser().then(({ data }) => setDriverId(data.user?.id ?? ''));
   }, []);
 
-  const unDia = periodo !== null;
-  const dia = unDia ? dayShift(today(), periodo) : today();
+  /*
+   * El cierre de la oficina es de UN día: no existe el cierre de una semana ni
+   * el de un rango. Por eso ese bloque sólo se muestra cuando se está mirando
+   * un día suelto.
+   */
+  const unDia = periodo.tipo === 'dia';
+  const dia = unDia ? dayShift(today(), periodo.dias) : today();
+
+  const { desde, hasta } =
+    periodo.tipo === 'dia'
+      ? { desde: dia, hasta: dia }
+      : periodo.tipo === 'semana'
+        ? weekRange(today())
+        : periodo.tipo === 'mes'
+          ? monthRange(today())
+          : { desde: desdeElegido, hasta: hastaElegido };
 
   useEffect(() => {
     if (!driverId) return;
     let vivo = true;
-
-    const { desde, hasta } = unDia
-      ? { desde: dia, hasta: dia }
-      : { desde: weekRange(today()).desde, hasta: weekRange(today()).hasta };
 
     const { from, to } = customRange(desde, hasta);
 
@@ -107,7 +151,7 @@ export default function CajaPage() {
     return () => {
       vivo = false;
     };
-  }, [driverId, dia, unDia]);
+  }, [driverId, dia, unDia, desde, hasta]);
 
   /**
    * Lo que le queda a favor, según la oficina.
@@ -126,31 +170,74 @@ export default function CajaPage() {
   return (
     <div className="flex flex-col gap-3.5 px-3.5 pb-6 pt-4">
       <h1 className="font-anton text-[26px] uppercase leading-none tracking-[-.02em] text-white">
-        Caja del día
+        {/* Con un mes o un rango a la vista, "Caja del día" es mentira. */}
+        {unDia ? 'Caja del día' : 'Caja'}
       </h1>
 
-      <div className="flex gap-2">
-        {PERIODOS.map((p) => {
-          const activo = p.dias === periodo;
+      {/* Cinco botones no entran en una fila de teléfono: se acomodan en dos. */}
+      <div className="flex flex-wrap gap-2">
+        {PERIODOS.map(({ label, p }) => {
+          const activo =
+            p.tipo === periodo.tipo &&
+            (p.tipo !== 'dia' || (periodo.tipo === 'dia' && p.dias === periodo.dias));
+
           return (
             <button
-              key={p.label}
+              key={label}
               onClick={() => {
                 // Se limpia acá, en el toque, y no adentro del efecto.
                 setResumen(null);
-                setPeriodo(p.dias);
+                setPeriodo(p);
               }}
-              className={`min-h-11 flex-1 rounded-full border font-bebas text-base tracking-[.06em] transition active:scale-95 ${
+              className={`min-h-11 flex-1 basis-[28%] rounded-full border font-bebas text-base tracking-[.06em] transition active:scale-95 ${
                 activo
                   ? 'border-[var(--edr-yellow)] bg-[var(--edr-yellow)] text-[var(--edr-blue)]'
                   : 'border-white/20 text-[var(--edr-muted)]'
               }`}
             >
-              {p.label}
+              {label}
             </button>
           );
         })}
       </div>
+
+      {/* Las dos fechas aparecen sólo cuando elige "FECHAS": si estuvieran
+          siempre, ocuparían media pantalla para algo que se usa de vez en
+          cuando. */}
+      {periodo.tipo === 'rango' && (
+        <div className="flex items-end gap-2">
+          <label className="flex-1">
+            <span className="mb-1 block font-bebas text-[13px] tracking-[.08em] text-[var(--edr-muted)]">
+              DESDE
+            </span>
+            <input
+              type="date"
+              value={desdeElegido}
+              max={today()}
+              onChange={(e) => {
+                setResumen(null);
+                setDesdeElegido(e.target.value);
+              }}
+              className="min-h-11 w-full rounded-2xl border border-white/20 bg-[var(--edr-blue)] px-3 text-[15px] font-semibold text-white"
+            />
+          </label>
+          <label className="flex-1">
+            <span className="mb-1 block font-bebas text-[13px] tracking-[.08em] text-[var(--edr-muted)]">
+              HASTA
+            </span>
+            <input
+              type="date"
+              value={hastaElegido}
+              max={today()}
+              onChange={(e) => {
+                setResumen(null);
+                setHastaElegido(e.target.value);
+              }}
+              className="min-h-11 w-full rounded-2xl border border-white/20 bg-[var(--edr-blue)] px-3 text-[15px] font-semibold text-white"
+            />
+          </label>
+        </div>
+      )}
 
       {error && (
         <p className="rounded-2xl bg-[var(--edr-rojo)] px-4 py-3 text-base font-bold text-white">
@@ -172,7 +259,7 @@ export default function CajaPage() {
               {money(resumen.cashTotal)}
             </div>
             <div className="text-[13px] font-semibold opacity-80">
-              efectivo cobrado {unDia ? 'en el día' : 'en la semana'}
+              efectivo cobrado {comoSeLlama(periodo, desde, hasta)}
             </div>
           </div>
 

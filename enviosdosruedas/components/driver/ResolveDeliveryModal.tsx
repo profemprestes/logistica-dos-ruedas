@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ChevronLeft, MapPin } from 'lucide-react';
 import PhotoInput from '@/components/driver/PhotoInput';
 import { useCerrarConAtras } from '@/lib/driver/useAtras';
@@ -102,28 +102,86 @@ export default function ResolveDeliveryModal({
     };
   }, [shipment.id, kind]);
 
+  /**
+   * Un espejo de lo último escrito, siempre fresco.
+   *
+   * Sirve para poder guardar desde un manejador de eventos —cuando la app se va
+   * al fondo— sin tener que volver a suscribirse en cada tecla.
+   */
+  const ultimo = useRef({
+    shipmentId: shipment.id,
+    kind,
+    receiverName,
+    receiverDni,
+    comment,
+    reason,
+    photos,
+  });
+  // Se refresca en un efecto SIN lista de dependencias —o sea, después de cada
+  // dibujado— y no durante el render: escribir un ref mientras se dibuja es
+  // justo lo que React pide no hacer, y acá además no hace falta.
+  useEffect(() => {
+    ultimo.current = {
+      shipmentId: shipment.id,
+      kind,
+      receiverName,
+      receiverDni,
+      comment,
+      reason,
+      photos,
+    };
+  });
+
   /*
-   * Se guarda con un respiro de medio segundo: escribir el nombre no tiene por
-   * qué disparar una escritura por letra. La foto, que es lo caro de rehacer,
-   * entra por el mismo camino.
+   * El texto se guarda con un respiro de medio segundo: escribir el nombre no
+   * tiene por qué disparar una escritura por letra.
    */
   useEffect(() => {
     if (!cargado) return;
 
     const t = setTimeout(() => {
-      void guardarBorrador({
-        shipmentId: shipment.id,
-        kind,
-        receiverName,
-        receiverDni,
-        comment,
-        reason,
-        photos,
-      });
+      void guardarBorrador(ultimo.current);
     }, 500);
 
     return () => clearTimeout(t);
-  }, [cargado, shipment.id, kind, receiverName, receiverDni, comment, reason, photos]);
+  }, [cargado, shipment.id, kind, receiverName, receiverDni, comment, reason]);
+
+  /*
+   * LA FOTO NO ESPERA. Va al celular apenas se saca.
+   *
+   * El medio segundo de respiro está bien para el nombre —se escribe letra por
+   * letra y no pasa nada si se guarda un poco después— pero es exactamente el
+   * rato en el que Android puede matar la app después de usar la cámara. Y la
+   * foto es lo único que no se puede rehacer sin volver a la puerta.
+   */
+  useEffect(() => {
+    if (!cargado || photos.length === 0) return;
+    void guardarBorrador(ultimo.current);
+  }, [cargado, photos]);
+
+  /*
+   * Y AL IRSE AL FONDO, GUARDAR YA.
+   *
+   * Es el último momento en que se puede hacer algo: cuando el repartidor
+   * minimiza la app o apaga la pantalla, Android puede matarla en cualquier
+   * momento y sin avisar. Lo que no esté guardado acá, se perdió.
+   */
+  useEffect(() => {
+    if (!cargado) return;
+
+    const guardarYa = () => void guardarBorrador(ultimo.current);
+    const alEsconderse = () => {
+      if (document.visibilityState === 'hidden') guardarYa();
+    };
+
+    document.addEventListener('visibilitychange', alEsconderse);
+    window.addEventListener('pagehide', guardarYa);
+
+    return () => {
+      document.removeEventListener('visibilitychange', alEsconderse);
+      window.removeEventListener('pagehide', guardarYa);
+    };
+  }, [cargado]);
 
   /** Descarta lo recuperado y deja el formulario limpio. */
   function empezarDeNuevo() {
@@ -386,6 +444,18 @@ export default function ResolveDeliveryModal({
           <label className={labelCls}>
             1 · {flexEntregado ? 'FOTO DEL PAQUETE CON LA FACHADA' : 'FOTO DEL COMPROBANTE'}
           </label>
+
+          {/* CÓMO SACARLA, ESCRITO ACÁ Y NO EXPLICADO UNA VEZ.
+              Una foto del piso o de una pared blanca no prueba nada, y eso se
+              descubre recién cuando el cliente reclama y hay que defender la
+              entrega con lo que se sacó. Decirlo en el momento cuesta una
+              línea; explicárselo a cada repartidor cada vez, no. */}
+          <p className="mb-2 text-[13px] leading-snug text-[var(--edr-muted)]">
+            Que se vea <span className="font-bold text-white">el paquete</span> y, de fondo,{' '}
+            <span className="font-bold text-white">la fachada</span> o el número de la casa. Si con
+            una sola no se entiende, sacá una segunda.
+          </p>
+
           <PhotoInput
             photos={photos}
             onPhotos={setPhotos}

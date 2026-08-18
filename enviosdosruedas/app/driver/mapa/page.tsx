@@ -15,7 +15,7 @@ import type { PuntoMapa } from '@/components/MapaEnvios';
 const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[65vh] items-center justify-center rounded-lg border border-dashed border-[var(--edr-border)] text-sm font-bold text-[var(--edr-muted)]">
+    <div className="edr-mapa flex items-center justify-center rounded-lg border border-dashed border-[var(--edr-border)] text-sm font-bold text-[var(--edr-muted)]">
       Abriendo el mapa…
     </div>
   ),
@@ -282,7 +282,7 @@ export default function MapaRepartidorPage() {
           <MapaEnvios
             puntos={[...puntos, ...puntosColecta]}
             miUbicacion={yo}
-            alto="h-[65vh]"
+            alto="edr-mapa"
             onTocar={(id) =>
               setElegido(id < 0 ? null : (ubicados.find((u) => u.envio.id === id) ?? null))
             }

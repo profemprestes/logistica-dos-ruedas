@@ -47,7 +47,7 @@ export interface PuntoMapa {
 export default function MapaEnvios({
   puntos,
   miUbicacion,
-  alto = 'h-[70vh]',
+  alto = 'edr-mapa',
   onTocar,
 }: {
   puntos: PuntoMapa[];

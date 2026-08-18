@@ -195,6 +195,32 @@ body {
 }
 
 /* ==========================================================================
+   EL ALTO DEL MAPA
+
+   En la computadora el mapa puede ser grande: la pantalla es ancha y alrededor
+   sobra lugar. En el teléfono no. Con 70vh, al abrir el mapa se veía mapa y
+   nada más —tapaba hasta la barra de abajo— y para llegar a los filtros o a la
+   lista de repartidores había que scrollear a ciegas.
+
+   46vh deja ver qué hay arriba y abajo, que es lo que dice de qué se trata la
+   pantalla. Y el mapa igual se puede agrandar con los dedos.
+
+   Va acá y no como clase de Tailwind a propósito: las clases nuevas con
+   medidas entre corchetes no se generan en el servidor de desarrollo de este
+   proyecto, así que no habría forma de comprobarlo antes de publicar. Esto sí
+   se puede medir.
+   ========================================================================== */
+.edr-mapa {
+  height: 70vh;
+}
+
+@media (max-width: 640px) {
+  .edr-mapa {
+    height: 46vh;
+  }
+}
+
+/* ==========================================================================
    IMPRESIÓN DE ETIQUETA 10 x 15 cm
    El navegador imprime SOLO lo que esté dentro de #print-root.
    ========================================================================== */

@@ -19,7 +19,7 @@ import type { PuntoMapa } from '@/components/MapaEnvios';
 const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[70vh] items-center justify-center rounded-lg border border-dashed border-[var(--edr-border)] text-sm text-[var(--edr-muted)]">
+    <div className="edr-mapa flex items-center justify-center rounded-lg border border-dashed border-[var(--edr-border)] text-sm text-[var(--edr-muted)]">
       Abriendo el mapa…
     </div>
   ),

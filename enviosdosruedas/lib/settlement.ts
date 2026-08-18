@@ -113,6 +113,20 @@ export interface DaySummary {
   earningsShippy: number;
   /** Cuántos de Shippy hubo, para poder revisar la cuenta de un vistazo. */
   countShippy: number;
+
+  /**
+   * Lo que le queda a la empresa por los envíos del día.
+   *
+   * Dos orígenes y conviene verlos separados, porque se mueven por razones
+   * distintas: la comisión sube si suben las tarifas, y lo de Shippy sube sólo
+   * si se hacen más envíos de ellos. Un mes con la misma facturación y menos
+   * ganancia es casi siempre un cambio en la mezcla, no en los precios.
+   */
+  companyProfit: number;
+  /** El 30% de los envíos normales. */
+  profitComision: number;
+  /** Lo fijo por cada envío de Shippy: ellos pagan más de lo que se paga. */
+  profitShippy: number;
 }
 
 export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
@@ -164,6 +178,22 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   const earningsShippy = deShippy.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
   const earningsNormales = normales.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
 
+  /*
+   * Y lo que le queda a la empresa, con las mismas dos reglas dadas vuelta.
+   *
+   * En los normales es la comisión: lo que se factura menos lo que se paga. En
+   * los de Shippy NO es una resta sino un número fijo por envío, porque Shippy
+   * paga por su lado y esa negociación no está en el sistema. Si mañana cambia
+   * lo que pagan, hay que tocar `REGLAS.gananciaPorShippy` a mano — ninguna
+   * otra cosa se va a dar cuenta.
+   */
+  const facturadoNormales = normales.reduce(
+    (acc, l) => acc + Number(l.shipment?.shipping_fee ?? 0),
+    0,
+  );
+  const profitComision = Math.round(facturadoNormales - earningsNormales);
+  const profitShippy = deShippy.length * REGLAS.gananciaPorShippy;
+
   return {
     delivered,
     failed,
@@ -177,6 +207,9 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
     earningsNormales,
     earningsShippy,
     countShippy: deShippy.length,
+    companyProfit: profitComision + profitShippy,
+    profitComision,
+    profitShippy,
   };
 }
 

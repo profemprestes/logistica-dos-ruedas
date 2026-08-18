@@ -17,6 +17,7 @@ import {
   Search,
   Store,
   Users,
+  PiggyBank,
   Wallet,
   Warehouse,
   X,
@@ -59,6 +60,9 @@ const ITEMS: Item[] = [
   // trabaja, una del lado de adentro y otra del de afuera.
   { href: '/admin/comercios', label: 'Comercios', Icono: Store },
   { href: '/admin/billing', label: 'Cierre de caja', Icono: Wallet, corto: 'CAJA' },
+  // Va pegada al cierre y no con las estadísticas: son la misma plata mirada
+  // de cerca y de lejos, y quien cierra un día es el que quiere ver el total.
+  { href: '/admin/caja', label: 'Caja y ganancia', Icono: PiggyBank },
   { href: '/admin/resumenes', label: 'Resúmenes', Icono: MessageCircle },
   { href: '/admin/stats', label: 'Estadísticas', Icono: BarChart3 },
   { href: '/admin/stock', label: 'Stock', Icono: Warehouse },

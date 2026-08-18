@@ -73,6 +73,14 @@ export default function MapaEnvios({
    */
   const [listo, setListo] = useState(false);
 
+  /**
+   * Si el mapa está esperando el primer toque para dejarse arrastrar.
+   *
+   * Sólo pasa en el teléfono, y hay que DECIRLO: un mapa que no responde al
+   * dedo, sin explicación, se lee como un mapa roto.
+   */
+  const [dormido, setDormido] = useState(false);
+
   const alTocar = useRef(onTocar);
   useEffect(() => {
     alTocar.current = onTocar;
@@ -86,7 +94,40 @@ export default function MapaEnvios({
       const L = (await import('leaflet')).default;
       if (!vivo || !caja.current || mapa.current) return;
 
-      const m = L.map(caja.current).setView([CENTRO_MDP.lat, CENTRO_MDP.lng], 12);
+      /*
+       * EN EL TELÉFONO EL MAPA ARRANCA QUIETO, y se despierta al tocarlo.
+       *
+       * Leaflet le pone `touch-action: none` al mapa, así que cualquier dedo
+       * que empiece ahí lo captura él entero. Con el mapa ocupando el 65% de
+       * la pantalla en el medio de una página larga, no queda por dónde
+       * scrollear: el panel se volvía imposible de navegar desde el celular.
+       * Medido el 19/08/2026: 528 px de mapa sobre 812 de pantalla.
+       *
+       * Así que en pantallas chicas nace sin arrastre —el dedo pasa de largo y
+       * la página scrollea— y se activa con un toque, que es lo mismo que hace
+       * cualquier mapa metido adentro de una página. En la computadora no
+       * cambia nada: ahí se scrollea con la rueda y no hay conflicto.
+       */
+      const enElTelefono =
+        typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+      const m = L.map(caja.current, { dragging: !enElTelefono }).setView(
+        [CENTRO_MDP.lat, CENTRO_MDP.lng],
+        12,
+      );
+
+      if (enElTelefono) {
+        // Un toque lo despierta. `once` alcanza: una vez despierto, se queda.
+        caja.current.addEventListener(
+          'click',
+          () => {
+            m.dragging.enable();
+            setDormido(false);
+          },
+          { once: true },
+        );
+        setDormido(true);
+      }
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap',
@@ -255,13 +296,26 @@ export default function MapaEnvios({
   }, [miUbicacion, listo]);
 
   return (
-    <div
-      ref={caja}
-      className={`w-full overflow-hidden rounded-lg border border-[var(--edr-border)] ${alto}`}
-      // Las baldosas son claras: sin fondo blanco, mientras cargan se ve el
-      // azul del panel y parece que está roto.
-      style={{ background: '#fff' }}
-    />
+    <div className="relative">
+      <div
+        ref={caja}
+        className={`w-full overflow-hidden rounded-lg border border-[var(--edr-border)] ${alto}`}
+        // Las baldosas son claras: sin fondo blanco, mientras cargan se ve el
+        // azul del panel y parece que está roto.
+        style={{ background: '#fff' }}
+      />
+
+      {/* El cartelito del mapa dormido. Va sobre el mapa pero sin taparlo y sin
+          recibir el toque —`pointer-events: none`— porque el toque tiene que
+          llegar al mapa: es el que lo despierta. */}
+      {dormido && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
+          <span className="rounded-full bg-black/70 px-3 py-1.5 text-xs font-bold text-white">
+            Tocá el mapa para moverlo
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1,0 +1,234 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+
+/**
+ * Alta, cambio de contraseña y baja del usuario con el que entra un comercio a
+ * ver SUS ENVÍOS.
+ *
+ * Es hermana de `/api/stock-users`, que hace lo mismo para el stock. Están
+ * separadas porque cuelgan de tablas distintas —`clients` acá, `stock_clients`
+ * allá— y un comercio puede tener envíos sin tener stock. Juntarlas obligaría
+ * a que las dos cosas existan siempre.
+ *
+ * CORRE EN EL SERVIDOR porque crear usuarios necesita la clave de servicio, y
+ * esa clave no puede viajar al navegador ni una vez: quien la tenga puede leer
+ * y escribir toda la base salteándose los permisos.
+ *
+ * El usuario queda con rol `comercio` y enganchado a la ficha por `profile_id`.
+ * Ese enganche es el que usan las políticas del paso 49 para dejarlo ver lo
+ * suyo y nada más.
+ */
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const DOMAIN = 'enviosdosruedas.local';
+const toEmail = (username: string) =>
+  username.includes('@')
+    ? username.trim().toLowerCase()
+    : `${username.trim().toLowerCase()}@${DOMAIN}`;
+
+let cached: SupabaseClient | null = null;
+
+function getAdminClient(): SupabaseClient | null {
+  if (cached) return cached;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  cached = createClient(url, key, { auth: { persistSession: false } });
+  return cached;
+}
+
+const missingKeys = () =>
+  NextResponse.json(
+    {
+      error:
+        'Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor. Cargala en las variables de entorno y volvé a publicar.',
+    },
+    { status: 500 },
+  );
+
+async function requireAdmin(request: Request, admin: SupabaseClient) {
+  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) return null;
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .single();
+
+  return profile?.role === 'admin' ? data.user : null;
+}
+
+/* ------------------------------------------------------- crear el acceso */
+export async function POST(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return missingKeys();
+
+  if (!(await requireAdmin(request, admin))) {
+    return NextResponse.json(
+      { error: 'Solo un administrador puede crear accesos de comercio.' },
+      { status: 403 },
+    );
+  }
+
+  const { client_id, username, password } = (await request.json()) ?? {};
+
+  if (!client_id || !username?.trim() || !password?.trim()) {
+    return NextResponse.json(
+      { error: 'Faltan el comercio, el usuario o la contraseña.' },
+      { status: 400 },
+    );
+  }
+  if (String(password).length < 6) {
+    return NextResponse.json(
+      { error: 'La contraseña debe tener al menos 6 caracteres.' },
+      { status: 400 },
+    );
+  }
+
+  const { data: comercio, error: clientError } = await admin
+    .from('clients')
+    .select('id, name, profile_id')
+    .eq('id', client_id)
+    .single();
+
+  if (clientError || !comercio) {
+    return NextResponse.json({ error: 'No encontré ese comercio.' }, { status: 404 });
+  }
+  if (comercio.profile_id) {
+    return NextResponse.json(
+      {
+        error:
+          'Ese comercio ya tiene un acceso creado. Cambiale la contraseña en vez de crear otro.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const { data: created, error: authError } = await admin.auth.admin.createUser({
+    email: toEmail(username),
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: comercio.name },
+  });
+
+  if (authError) {
+    const already = /already|registered|exists/i.test(authError.message);
+    return NextResponse.json(
+      { error: already ? 'Ese usuario ya existe. Elegí otro.' : authError.message },
+      { status: 400 },
+    );
+  }
+
+  const { error: profileError } = await admin.from('profiles').upsert({
+    id: created.user.id,
+    full_name: comercio.name,
+    role: 'comercio',
+    active: true,
+  });
+
+  if (profileError) {
+    await admin.auth.admin.deleteUser(created.user.id);
+    return NextResponse.json({ error: profileError.message }, { status: 400 });
+  }
+
+  /*
+   * El enganche va ÚLTIMO y si falla se deshace todo.
+   *
+   * Si quedara un usuario creado sin enganchar, esa persona podría entrar al
+   * sistema y no ver absolutamente nada, sin que nadie sepa por qué: el
+   * comercio jura que le dieron un acceso y desde el panel figura sin acceso.
+   */
+  const { error: linkError } = await admin
+    .from('clients')
+    .update({ profile_id: created.user.id })
+    .eq('id', client_id);
+
+  if (linkError) {
+    await admin.auth.admin.deleteUser(created.user.id);
+    return NextResponse.json({ error: linkError.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ id: created.user.id, email: toEmail(username) });
+}
+
+/* -------------------------------------------------- cambiar la contraseña */
+export async function PATCH(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return missingKeys();
+
+  if (!(await requireAdmin(request, admin))) {
+    return NextResponse.json(
+      { error: 'Solo un administrador puede cambiar la contraseña de un comercio.' },
+      { status: 403 },
+    );
+  }
+
+  const { client_id, password } = (await request.json()) ?? {};
+  if (!client_id || !password) {
+    return NextResponse.json({ error: 'Faltan el comercio o la contraseña.' }, { status: 400 });
+  }
+  if (String(password).length < 6) {
+    return NextResponse.json(
+      { error: 'La contraseña debe tener al menos 6 caracteres.' },
+      { status: 400 },
+    );
+  }
+
+  const { data: comercio } = await admin
+    .from('clients')
+    .select('profile_id')
+    .eq('id', client_id)
+    .single();
+
+  if (!comercio?.profile_id) {
+    return NextResponse.json(
+      { error: 'Ese comercio todavía no tiene acceso creado.' },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(comercio.profile_id, { password });
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  return NextResponse.json({ ok: true });
+}
+
+/* ---------------------------------------------------------- dar de baja */
+export async function DELETE(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return missingKeys();
+
+  if (!(await requireAdmin(request, admin))) {
+    return NextResponse.json(
+      { error: 'Solo un administrador puede eliminar accesos de comercio.' },
+      { status: 403 },
+    );
+  }
+
+  const { client_id } = (await request.json()) ?? {};
+  if (!client_id) return NextResponse.json({ error: 'Falta el comercio.' }, { status: 400 });
+
+  const { data: comercio } = await admin
+    .from('clients')
+    .select('profile_id')
+    .eq('id', client_id)
+    .single();
+
+  if (!comercio?.profile_id) return NextResponse.json({ ok: true });
+
+  /*
+   * `profile_id` es `on delete set null`: borrar el usuario deja la ficha del
+   * comercio y sus envíos intactos. Lo único que se cae es el acceso — que es
+   * exactamente lo que se quiso hacer.
+   */
+  const { error } = await admin.auth.admin.deleteUser(comercio.profile_id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  return NextResponse.json({ ok: true });
+}

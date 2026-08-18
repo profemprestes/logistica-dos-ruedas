@@ -274,6 +274,62 @@ caso('retirado, a las 18 en punto todavía no', tipos([enLaMoto], 18), []);
 caso('retirado, a las 18:30 sí', tipos([enLaMoto], 18.5), ['demorado']);
 caso('retirado, a las 18:30 avisa en rojo', tono([enLaMoto], 18.5), ['rojo']);
 
+/*
+ * ------------------------------------------- el comercio está por cerrar
+ *
+ * Es una restricción distinta de la franja de entrega, y por eso se prueba
+ * aparte: un paquete con entrega "antes de 19" que se retira en un local que
+ * cierra a las 18 hay que ir a buscarlo antes de las 18, no antes de las 19.
+ *
+ * El horario sale del comercio, o del envío cuando trae el suyo (paso 48).
+ */
+type ConComercio = Shipment & { comercio?: { pickup_window?: string | null } | null };
+
+const enLocal = (extra: Partial<ConComercio>): Shipment =>
+  ({
+    ...envio({ ...cargadoAyer, status: 'pendiente_retiro', delivery_window: 'antes de 19 hs' }),
+    ...extra,
+  }) as Shipment;
+
+const cierra18 = enLocal({ comercio: { pickup_window: '9 a 18 hs' } });
+
+/*
+ * Sin horario de retiro cargado, esta regla no aporta nada: a las 16:30 no hay
+ * ningún aviso, y a las 17:30 hay UNO SOLO, el de la franja de entrega, que ya
+ * existía. Es la comprobación de que agregar la regla del comercio no ensució
+ * lo que ya andaba.
+ */
+caso('sin horario cargado, a las 16:30 no avisa nada', tipos([enLocal({})], 16.5), []);
+caso('sin horario cargado, a las 17:30 avisa sólo por la entrega',
+  tipos([enLocal({})], 17.5), ['sin_retirar']);
+
+/*
+ * Y con el local cerrando, UN SOLO aviso y no dos.
+ *
+ * Las dos reglas hablan del mismo paquete a la misma hora —hay que entregarlo
+ * antes de las 19 y se retira donde cierran a las 18— y mostrarlo dos veces con
+ * dos motivos distintos hace dudar de cuál mirar. Gana el del comercio, que
+ * tiene la hora dura: pasada la persiana no hay nada que hacer hasta mañana.
+ * Se nota en el color: la regla de la entrega a esa hora sería naranja.
+ */
+caso('a las 16:30, con el local abierto hasta 18, todavía no', tipos([cierra18], 16.5), []);
+caso('a las 17:30 avisa que el comercio cierra', tipos([cierra18], 17.5), ['sin_retirar']);
+caso('y avisa en rojo', tono([cierra18], 17.5), ['rojo']);
+
+// El del envío le gana al del comercio: "este retiralo antes de las 12".
+const excepcion = enLocal({
+  comercio: { pickup_window: '9 a 18 hs' },
+  pickup_window: 'antes de las 12',
+});
+caso('con horario propio, avisa a las 11:30 aunque el local cierre a las 18',
+  tipos([excepcion], 11.5), ['sin_retirar']);
+caso('y a las 10 todavía no', tipos([excepcion], 10), []);
+
+// Cinco paquetes en el mismo local son UN aviso, no cinco.
+const otroIgual = enLocal({ comercio: { pickup_window: '9 a 18 hs' } });
+caso('varios paquetes del mismo comercio dan un solo aviso',
+  tipos([cierra18, otroIgual], 17.5), ['sin_retirar']);
+
 // ----------------------------------------------- cómo se entiende la búsqueda
 
 console.log('\n=== lo que se pega en el buscador ===\n');

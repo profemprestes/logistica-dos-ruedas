@@ -147,6 +147,8 @@ export function buscarAtrasos({
   const avisos: Atraso[] = [];
   const deHoy = envios.filter((s) => s.scheduled_date === hoy && abierto(s));
   const t = ahora.getTime();
+  /** La hora del día en Mar del Plata, 14.5 = 14:30. La usan varias reglas. */
+  const horaAhora = horaDelDiaAR(ahora);
 
   // ---- 1. Nadie lo va a llevar --------------------------------------------
   // Van juntos en un solo renglón a propósito: seis envíos sin repartidor son
@@ -167,7 +169,74 @@ export function buscarAtrasos({
   }
 
   /*
-   * ---- 2. Tiene dueño pero sigue en el comercio ---------------------------
+   * ---- 2. El comercio está por cerrar -------------------------------------
+   *
+   * Otra restricción, y distinta de todas las de arriba: si el local cierra a
+   * las 18 y a las 17:40 quedan tres paquetes ahí, hay un problema aunque la
+   * entrega venza recién mañana. Después de que cierra ya no se puede hacer
+   * nada hasta el otro día.
+   *
+   * El horario sale del comercio, o del envío cuando trae el suyo (paso 48).
+   * Sin horario cargado no salta nada: no se adivina a qué hora cierra un
+   * local, porque un aviso inventado es peor que ninguno.
+   *
+   * Van juntos por comercio: cinco paquetes en el mismo local que cierra son
+   * un viaje, no cinco problemas.
+   *
+   * VA ANTES QUE LA REGLA DE ABAJO Y LE GANA. Las dos pueden hablar del mismo
+   * paquete a la misma hora —uno que hay que entregar antes de las 19 y se
+   * retira donde cierran a las 18— y mostrarlo dos veces con dos motivos es
+   * hacer dudar de cuál mirar. Gana ésta porque tiene la hora dura: pasada la
+   * persiana no hay nada que hacer hasta mañana.
+   */
+  const porCerrar = new Map<string, { envios: Shipment[]; texto: string; falta: number }>();
+  /** A quiénes ya avisa esta regla, para que la de abajo no los repita. */
+  const avisadosPorElComercio = new Set<number>();
+
+  for (const s of deHoy) {
+    if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
+
+    const retiro = horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } });
+    if (!retiro) continue;
+
+    const falta = Math.round((retiro.limite - horaAhora) * 60);
+    if (falta >= ALERTA_ANTES_DEL_CIERRE_HS * 60) continue;
+
+    avisadosPorElComercio.add(s.id);
+
+    const donde = (s.pickup_address ?? s.client_name_raw ?? 'el comercio').trim();
+    const previo = porCerrar.get(donde);
+    porCerrar.set(donde, {
+      envios: [...(previo?.envios ?? []), s],
+      texto: retiro.texto,
+      // El más apurado manda: si dos envíos del mismo lugar tienen horarios
+      // distintos, el que cierra antes es el que decide cuándo salir.
+      falta: Math.min(previo?.falta ?? Infinity, falta),
+    });
+  }
+
+  for (const [donde, x] of porCerrar) {
+    const cuantos = x.envios.length;
+    avisos.push({
+      clave: `cierra-comercio-${donde}`,
+      tipo: 'sin_retirar',
+      titulo:
+        x.falta < 0
+          ? 'EL COMERCIO YA CERRÓ'
+          : `EL COMERCIO CIERRA ${faltaTexto(x.falta).toUpperCase()}`,
+      detalle: `${donde} · ${cuantos} ${cuantos === 1 ? 'paquete' : 'paquetes'} sin retirar`,
+      desde:
+        x.falta < 0
+          ? `retiraba ${textoFranja(x.texto)} · quedan para mañana si nadie pasa`
+          : `retira ${textoFranja(x.texto)}`,
+      tono: 'rojo',
+      accion: 'VER',
+      href: `/admin?buscar=${encodeURIComponent(x.envios[0].tracking_code)}`,
+    });
+  }
+
+  /*
+   * ---- 2b. Tiene dueño pero sigue en el comercio ---------------------------
    *
    * LO QUE SE MIRA ES CUÁNTO FALTA PARA EL CIERRE, no hace cuánto se cargó.
    *
@@ -182,11 +251,11 @@ export function buscarAtrasos({
    * queda margen para retirar y llegar a tiempo. Sin franja escrita, manda el
    * corte general de las 15.
    */
-  const horaAhora = horaDelDiaAR(ahora);
-
   for (const s of deHoy) {
     if (!s.assigned_driver) continue;
     if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
+    // Ya lo dijo la regla del comercio, con una hora más concreta.
+    if (avisadosPorElComercio.has(s.id)) continue;
 
     const cierre = limiteDeLaFranja(s.delivery_window);
     const avisarDesde =
@@ -266,63 +335,6 @@ export function buscarAtrasos({
       tono: 'rojo',
       accion: 'VER MAPA',
       href: '/admin/mapa',
-    });
-  }
-
-  /*
-   * ---- 2c. El comercio está por cerrar ------------------------------------
-   *
-   * Otra restricción, y distinta de todas las de arriba: si el local cierra a
-   * las 18 y a las 17:40 quedan tres paquetes ahí, hay un problema aunque la
-   * entrega venza recién mañana. Después de que cierra ya no se puede hacer
-   * nada hasta el otro día.
-   *
-   * El horario sale del comercio, o del envío cuando trae el suyo (paso 48).
-   * Sin horario cargado no salta nada: no se adivina a qué hora cierra un
-   * local, porque un aviso inventado es peor que ninguno.
-   *
-   * Van juntos por comercio: cinco paquetes en el mismo local que cierra son
-   * un viaje, no cinco problemas.
-   */
-  const porCerrar = new Map<string, { envios: Shipment[]; texto: string; falta: number }>();
-
-  for (const s of deHoy) {
-    if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
-
-    const retiro = horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } });
-    if (!retiro) continue;
-
-    const falta = Math.round((retiro.limite - horaAhora) * 60);
-    if (falta >= ALERTA_ANTES_DEL_CIERRE_HS * 60) continue;
-
-    const donde = (s.pickup_address ?? s.client_name_raw ?? 'el comercio').trim();
-    const previo = porCerrar.get(donde);
-    porCerrar.set(donde, {
-      envios: [...(previo?.envios ?? []), s],
-      texto: retiro.texto,
-      // El más apurado manda: si dos envíos del mismo lugar tienen horarios
-      // distintos, el que cierra antes es el que decide cuándo salir.
-      falta: Math.min(previo?.falta ?? Infinity, falta),
-    });
-  }
-
-  for (const [donde, x] of porCerrar) {
-    const cuantos = x.envios.length;
-    avisos.push({
-      clave: `cierra-comercio-${donde}`,
-      tipo: 'sin_retirar',
-      titulo:
-        x.falta < 0
-          ? 'EL COMERCIO YA CERRÓ'
-          : `EL COMERCIO CIERRA ${faltaTexto(x.falta).toUpperCase()}`,
-      detalle: `${donde} · ${cuantos} ${cuantos === 1 ? 'paquete' : 'paquetes'} sin retirar`,
-      desde:
-        x.falta < 0
-          ? `retiraba ${textoFranja(x.texto)} · quedan para mañana si nadie pasa`
-          : `retira ${textoFranja(x.texto)}`,
-      tono: 'rojo',
-      accion: 'VER',
-      href: `/admin?buscar=${encodeURIComponent(x.envios[0].tracking_code)}`,
     });
   }
 

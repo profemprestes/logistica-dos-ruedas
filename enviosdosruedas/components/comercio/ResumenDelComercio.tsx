@@ -294,9 +294,21 @@ export default function ResumenDelComercio({
         </p>
       )}
 
-      {/* El mismo comprobante que usa la oficina: la misma foto, los mismos
-          datos, el mismo PDF. No hay una versión "para el comercio". */}
-      <ProofOfDeliveryModal shipment={comprobante} onClose={() => setComprobante(null)} />
+      {/*
+        El mismo comprobante que usa la oficina: la misma foto, los mismos
+        datos, el mismo PDF.
+
+        Con una diferencia: acá se ven sólo los movimientos que CIERRAN el
+        envío. Que se retiró a las 12:25 y salió a la calle a las 15:10 es la
+        cocina nuestra, no la prueba de nada. Va así también cuando lo mira la
+        oficina desde la ficha del comercio, porque esa pantalla existe para
+        ver lo mismo que él.
+      */}
+      <ProofOfDeliveryModal
+        shipment={comprobante}
+        onClose={() => setComprobante(null)}
+        paraElComercio
+      />
     </div>
   );
 }

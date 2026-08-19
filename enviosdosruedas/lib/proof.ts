@@ -46,6 +46,34 @@ export const REASON_LABEL: Record<string, string> = {
   otro: 'Otro motivo',
 };
 
+/**
+ * Los movimientos que cierran un envío.
+ *
+ * Un envío deja un rastro de seis o siete pasos —creado, asignado, retirado,
+ * en camino, entregado— y de todos ésos, uno solo es el que le importa a quien
+ * mandó el paquete: cómo terminó. Retirado y en camino son la cocina nuestra.
+ *
+ * `cancelado` está en la lista porque también es un final: un envío dado de
+ * baja tiene que poder mostrarse como tal y no como "en curso" para siempre.
+ */
+export const EVENTOS_FINALES = ['entregado', 'no_entregado', 'cancelado'];
+
+export function movimientosFinales(logs: ProofLog[]): ProofLog[] {
+  return logs.filter((l) => EVENTOS_FINALES.includes(l.event));
+}
+
+/**
+ * Si en este envío tiene sentido mostrar quién recibió y su DNI.
+ *
+ * En un Mercado Libre Flex, no: esos datos los toma la app de ellos y el
+ * repartidor no los pide (ver `ResolveDeliveryModal`). Mostrar "Recibió: —" y
+ * "DNI: —" hace que un comprobante correcto parezca incompleto, y el comercio
+ * termina preguntando por un dato que nunca existió.
+ */
+export function pideQuienRecibio(shipment: { is_flex?: boolean | null }): boolean {
+  return !shipment.is_flex;
+}
+
 /** Las fotos viven en un bucket privado: hay que pedir un link temporal. */
 export async function signedPhotoUrl(path: string, segundos = 3600): Promise<string | null> {
   const { data } = await supabase.storage.from('delivery-photos').createSignedUrl(path, segundos);

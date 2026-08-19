@@ -6,7 +6,14 @@ import {
   Text,
   View,
 } from '@react-pdf/renderer';
-import { EVENT_LABEL, REASON_LABEL, fechaHora, type ProofLog } from '@/lib/proof';
+import {
+  EVENT_LABEL,
+  REASON_LABEL,
+  fechaHora,
+  movimientosFinales,
+  pideQuienRecibio,
+  type ProofLog,
+} from '@/lib/proof';
 import { money, type Shipment } from '@/lib/format';
 
 /**
@@ -188,20 +195,24 @@ export default function ProofPdfDocument({
   logoSrc = '/icon.png',
 }: ProofPdfProps) {
   /**
-   * Sólo la entrega y los intentos fallidos.
+   * Sólo los movimientos que cierran el envío.
    *
    * Los pasos de adentro de la operación —retirado, en camino— no van: a quien
    * recibe este papel le importa si el paquete llegó y quién lo recibió, no la
    * logística nuestra. El historial completo queda en el panel.
    */
-  const intentos = logs.filter((l) => l.event === 'entregado' || l.event === 'no_entregado');
+  const intentos = movimientosFinales(logs);
 
-  // El movimiento que define el estado del papel: la entrega o el intento fallido.
+  // El movimiento que define el estado del papel.
   const cierre = intentos[0] ?? null;
   const entregado = cierre?.event === 'entregado';
+  const cancelado = cierre?.event === 'cancelado';
 
-  const colorSello = entregado ? '#047857' : cierre ? '#c2410c' : AZUL;
-  const fondoSello = entregado ? '#ecfdf5' : cierre ? '#fff7ed' : '#eef4ff';
+  const colorSello = entregado ? '#047857' : cancelado ? '#4b5563' : cierre ? '#c2410c' : AZUL;
+  const fondoSello = entregado ? '#ecfdf5' : cancelado ? '#f3f4f6' : cierre ? '#fff7ed' : '#eef4ff';
+
+  /** En un Flex no se pide nombre ni DNI: los toma la app de Mercado Libre. */
+  const conReceptor = pideQuienRecibio(shipment);
 
   const direccion = [
     shipment.address_street,
@@ -235,7 +246,7 @@ export default function ProofPdfDocument({
         {/* ---------- Sello ---------- */}
         <View style={[styles.sello, { borderColor: colorSello, backgroundColor: fondoSello }]}>
           <Text style={[styles.selloTexto, { color: colorSello }]}>
-            {entregado ? 'ENTREGADO' : cierre ? 'NO ENTREGADO' : 'EN CURSO'}
+            {entregado ? 'ENTREGADO' : cancelado ? 'CANCELADO' : cierre ? 'NO ENTREGADO' : 'EN CURSO'}
           </Text>
           <Text style={styles.selloFecha}>
             {cierre
@@ -312,7 +323,9 @@ export default function ProofPdfDocument({
                 )}
 
                 <View style={styles.datos}>
-                  {log.event === 'entregado' && (
+                  {/* En un Flex no van: no se piden, y ponerlos con un guión
+                      hace que un comprobante correcto parezca a medio llenar. */}
+                  {log.event === 'entregado' && conReceptor && (
                     <>
                       <Linea label="Recibió" value={log.receiver_name || '—'} />
                       <Linea label="DNI" value={log.receiver_dni || '—'} />

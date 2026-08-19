@@ -3,14 +3,17 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { money, type Shipment } from '@/lib/format';
+import ComprobanteEnPantalla from '@/components/proof/ComprobanteEnPantalla';
 import {
   EVENT_LABEL,
   REASON_LABEL,
   downloadPhoto,
   fechaHora,
+  movimientosFinales,
   photoAsDataUrl,
   photoFileName,
   photoPaths,
+  pideQuienRecibio,
   saveBlob,
   signedPhotoUrl,
   type ProofLog,
@@ -22,9 +25,25 @@ const fotoKey = (logId: string, indice: number) => `${logId}:${indice}`;
 export default function ProofOfDeliveryModal({
   shipment,
   onClose,
+  paraElComercio = false,
 }: {
   shipment: Shipment | null;
   onClose: () => void;
+  /**
+   * Lo está mirando el comercio y no la oficina.
+   *
+   * Cambian dos cosas. Una: se muestran SÓLO los movimientos que cierran el
+   * envío —entregado, no entregado, cancelado—. Retirado y en camino son pasos
+   * de la operación nuestra; al que mandó el paquete le importa cómo terminó,
+   * y esos pasos de más hacen ruido y muestran de más.
+   *
+   * La otra: arriba va el comprobante como sale en papel, así no hay que bajar
+   * el PDF para saber qué dice el PDF.
+   *
+   * En el panel queda todo como estaba: la oficina sí necesita el rastro entero
+   * para saber a qué hora se retiró y cuándo salió a la calle.
+   */
+  paraElComercio?: boolean;
 }) {
   const [logs, setLogs] = useState<ProofLog[]>([]);
   const [photos, setPhotos] = useState<Record<string, string>>({});
@@ -57,7 +76,10 @@ export default function ProofOfDeliveryModal({
         return;
       }
 
-      const list = (data ?? []) as ProofLog[];
+      const todos = (data ?? []) as ProofLog[];
+      // Al comercio se le muestran sólo los cierres, así que tampoco hace falta
+      // pedirle al servidor un link para las fotos de los pasos internos.
+      const list = paraElComercio ? movimientosFinales(todos) : todos;
       setLogs(list);
       setLoading(false);
 
@@ -75,7 +97,7 @@ export default function ProofOfDeliveryModal({
     return () => {
       alive = false;
     };
-  }, [shipment]);
+  }, [shipment, paraElComercio]);
 
   if (!shipment) return null;
 
@@ -221,7 +243,31 @@ export default function ProofOfDeliveryModal({
 
           {!loading && logs.length === 0 && (
             <p className="py-8 text-center text-[var(--edr-muted)]">
-              Todavía no hay movimientos registrados para este envío.
+              {paraElComercio
+                ? 'Este envío todavía no se cerró: el comprobante se completa cuando el repartidor registre la entrega.'
+                : 'Todavía no hay movimientos registrados para este envío.'}
+            </p>
+          )}
+
+          {/* El papel, en pantalla. Va arriba porque es lo que se viene a ver;
+              abajo quedan los mismos datos con lo que se puede tocar: bajar la
+              foto, copiar para pegar en la app del cliente. */}
+          {paraElComercio && !loading && (
+            <div className="mb-5">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
+                Así sale el comprobante
+              </p>
+              <ComprobanteEnPantalla
+                shipment={shipment}
+                logs={logs}
+                urlDeFoto={(log, i) => photos[fotoKey(log.id, i)]}
+              />
+            </div>
+          )}
+
+          {paraElComercio && !loading && logs.length > 0 && (
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
+              Los mismos datos, para copiar o bajar la foto suelta
             </p>
           )}
 
@@ -316,7 +362,10 @@ export default function ProofOfDeliveryModal({
 
                     {/* Datos */}
                     <dl className="space-y-1.5 text-sm">
-                      {log.event === 'entregado' && (
+                      {/* En un Flex no se piden: los toma la app de Mercado
+                          Libre. Mostrarlos vacíos hacía que un comprobante
+                          correcto pareciera a medio llenar. */}
+                      {log.event === 'entregado' && pideQuienRecibio(shipment) && (
                         <>
                           <div>
                             <dt className="inline font-semibold">Recibió: </dt>

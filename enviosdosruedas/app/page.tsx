@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Bike, Store } from 'lucide-react';
 import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import TrackBox from '@/components/TrackBox';
@@ -118,19 +118,30 @@ export default function Home() {
         </section>
 
         {/* ---------- Acceso ----------
-            Una línea y listo. El que tiene usuario ya sabe qué es esto; el que
-            no lo tiene, no le sirve que se lo expliquen. Está acá abajo además
-            del botón de arriba porque en el celular la portada se scrollea y
-            nadie vuelve al encabezado. */}
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-3xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-6 py-5">
-          <span className="text-base font-bold">¿Tenés usuario del sistema?</span>
-          <Link
-            href="/login"
-            className="rounded-full bg-[var(--edr-yellow)] px-8 py-3 font-bebas text-lg tracking-[.07em] text-[var(--edr-blue)] transition hover:brightness-95"
-          >
-            INGRESAR
-          </Link>
-        </div>
+            Dos puertas y no una.
+
+            La puerta es la misma —el mismo usuario, la misma contraseña, y el
+            sistema lleva a cada uno a lo suyo por su rol— pero el que llega no
+            tiene por qué saberlo. Un repartidor y un comercio buscan cosas
+            distintas, y "INGRESAR" a secas no le confirma a ninguno de los dos
+            que esté en el lugar correcto. Con el nombre puesto, sí.
+
+            El admin no tiene la suya a propósito: es una persona, ya sabe que
+            entra por cualquiera de las dos, y una tercera puerta sólo agregaría
+            ruido para el resto.
+
+            Está acá abajo además del botón del encabezado porque en el celular
+            la portada se scrollea y nadie vuelve arriba. */}
+        <section className="mt-8">
+          <h2 className="font-bebas text-sm tracking-[.12em] text-[var(--edr-muted)]">
+            ¿TENÉS USUARIO DEL SISTEMA?
+          </h2>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Puerta href="/login?como=repartidor" Icono={Bike} titulo="Ingreso repartidores" />
+            <Puerta href="/login?como=comercio" Icono={Store} titulo="Ingreso comercios" />
+          </div>
+        </section>
 
         {/* ---------- Web comercial ---------- */}
         <a
@@ -157,5 +168,32 @@ export default function Home() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/**
+ * Una de las dos puertas.
+ *
+ * El nombre y nada más. Es un botón para el que ya sabe quién es: explicarle
+ * qué va a encontrar adentro sería explicarle su propio trabajo.
+ */
+function Puerta({ href, Icono, titulo }: { href: string; Icono: typeof Bike; titulo: string }) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-3xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-5 py-4 transition hover:border-[var(--edr-yellow)]"
+    >
+      <span className="shrink-0 rounded-full bg-[var(--edr-yellow)] p-2.5 text-[var(--edr-blue)]">
+        <Icono size={22} strokeWidth={2.5} />
+      </span>
+      <span className="font-bebas text-xl uppercase leading-none tracking-[.05em] text-[var(--edr-yellow)]">
+        {titulo}
+      </span>
+      <ArrowUpRight
+        size={18}
+        strokeWidth={2.5}
+        className="ml-auto shrink-0 text-[var(--edr-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--edr-yellow)]"
+      />
+    </Link>
   );
 }

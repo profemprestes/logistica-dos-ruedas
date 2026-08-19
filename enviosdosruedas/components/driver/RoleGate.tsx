@@ -57,7 +57,7 @@ export default function RoleGate({ children }: { children: ReactNode }) {
         clearTimeout(reloj);
         if (!s.logueado) return aplicar('/login');
         if (s.rol === 'admin') return aplicar('/admin');
-        if (s.rol === 'comercio') return aplicar('/stock');
+        if (s.rol === 'comercio') return aplicar('/comercio');
         // 'repartidor' o rol desconocido (sin señal): entra.
         aplicar(null);
       })

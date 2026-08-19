@@ -47,9 +47,16 @@ export async function leerSesion(): Promise<Sesion> {
   return { logueado: true, rol: null };
 }
 
-/** A dónde va cada uno al entrar. */
+/**
+ * A dónde va cada uno al entrar.
+ *
+ * El comercio va a sus ENVÍOS y no a su stock. Antes iba al stock porque era
+ * lo único que había para él; hoy lo que un comercio viene a mirar cien veces
+ * por semana es dónde está su paquete, y el stock lo usan dos. Desde el portal
+ * de envíos hay link al stock para el que lo tenga.
+ */
 export function pantallaDe(rol: Rol): string {
   if (rol === 'admin') return '/admin';
-  if (rol === 'comercio') return '/stock';
+  if (rol === 'comercio') return '/comercio';
   return '/driver';
 }

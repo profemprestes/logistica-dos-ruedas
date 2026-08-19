@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, FileText, RefreshCw, Search } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Pencil, RefreshCw, Search } from 'lucide-react';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import { supabase } from '@/lib/supabaseClient';
 import {
@@ -64,7 +64,21 @@ const TOPE = 500;
 const chipBase =
   'rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ring-inset';
 
-export default function ResumenDelComercio({ comercio }: { comercio: FichaComercio }) {
+export default function ResumenDelComercio({
+  comercio,
+  desdeLaOficina = false,
+}: {
+  comercio: FichaComercio;
+  /**
+   * Lo está mirando el admin y no el comercio.
+   *
+   * Lo único que cambia es que aparece el link para abrir el envío en el
+   * panel, donde sí se puede editar, reasignar y borrar. La lista, los
+   * casilleros y los comprobantes son exactamente los mismos: si fueran
+   * distintos, la oficina y el comercio no podrían hablar del mismo envío.
+   */
+  desdeLaOficina?: boolean;
+}) {
   const [envios, setEnvios] = useState<Shipment[]>([]);
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
@@ -239,6 +253,7 @@ export default function ResumenDelComercio({ comercio }: { comercio: FichaComerc
               envio={s}
               hoy={hoy}
               copiado={copiado === s.tracking_code}
+              desdeLaOficina={desdeLaOficina}
               onCopiar={() => copiarLink(s)}
               onComprobante={() => setComprobante(s)}
             />
@@ -335,12 +350,14 @@ function Tarjeta({
   envio: s,
   hoy,
   copiado,
+  desdeLaOficina,
   onCopiar,
   onComprobante,
 }: {
   envio: Shipment;
   hoy: string;
   copiado: boolean;
+  desdeLaOficina: boolean;
   onCopiar: () => void;
   onComprobante: () => void;
 }) {
@@ -409,6 +426,17 @@ function Tarjeta({
           >
             <Copy size={14} /> {copiado ? '¡Copiado!' : 'Copiar link'}
           </button>
+        )}
+
+        {/* Sólo para la oficina: la lista es de lectura, y para tocar el envío
+            está el panel, que es donde vive el editor de verdad. */}
+        {desdeLaOficina && (
+          <a
+            href={`/admin?buscar=${encodeURIComponent(s.tracking_code)}`}
+            className="ml-auto inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
+          >
+            <Pencil size={14} /> Abrir en el panel
+          </a>
         )}
       </div>
     </article>

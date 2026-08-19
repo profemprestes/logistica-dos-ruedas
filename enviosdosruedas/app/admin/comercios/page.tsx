@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * Los comercios de donde se retira.
@@ -13,60 +13,30 @@
  * pantalla es para MIRARLOS Y CORREGIRLOS, no para dar de alta antes de poder
  * trabajar. Si obligara a eso, sería una traba en el camino de lo único que
  * importa, que es cargar el envío.
+ *
+ * Tocar uno abre SU pantalla, y no un cuadrito con la dirección. Un comercio
+ * dejó de ser una dirección de retiro: tiene sus envíos, su acceso al portal y
+ * su ficha, y eso no entra en un cuadro.
  */
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { useAdminGuard } from "@/lib/adminGuard";
-import { Search } from "lucide-react";
-import VerificarPunto from "@/components/admin/VerificarPunto";
-
-interface Comercio {
-  id: number;
-  name: string;
-  phone: string | null;
-  pickup_address: string | null;
-  /**
-   * Piso, depto o local.
-   *
-   * VA SEPARADO de la dirección y no pegado atrás, porque el buscador de
-   * direcciones no entiende "Belgrano 2875 5A" — eso no existe como dirección y
-   * la búsqueda falla entera. Mismo criterio que `address_extra` en los envíos.
-   */
-  pickup_extra: string | null;
-  pickup_notes: string | null;
-  pickup_window: string | null;
-  lat: number | null;
-  lng: number | null;
-  active: boolean;
-}
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import { useAdminGuard } from '@/lib/adminGuard';
+import { KeyRound, Search } from 'lucide-react';
+import EditarComercio, { VACIO, borrarComercio, type Comercio } from '@/components/admin/EditarComercio';
 
 const campo =
-  "w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]";
-const labelCls =
-  "block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5";
-
-const VACIO: Omit<Comercio, "id"> = {
-  name: "",
-  phone: null,
-  pickup_address: null,
-  pickup_extra: null,
-  pickup_notes: null,
-  pickup_window: null,
-  lat: null,
-  lng: null,
-  active: true,
-};
+  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]';
 
 export default function ComerciosPage() {
   const ready = useAdminGuard();
+  const router = useRouter();
   const [comercios, setComercios] = useState<Comercio[]>([]);
   const [envios, setEnvios] = useState<Map<number, number>>(new Map());
   const [cargando, setCargando] = useState(true);
-  const [busqueda, setBusqueda] = useState("");
-  const [editando, setEditando] = useState<
-    Comercio | Omit<Comercio, "id"> | null
-  >(null);
-  const [error, setError] = useState("");
+  const [busqueda, setBusqueda] = useState('');
+  const [nuevo, setNuevo] = useState<Omit<Comercio, 'id'> | null>(null);
+  const [error, setError] = useState('');
 
   /*
    * Un número que sube para pedir de nuevo la lista.
@@ -84,14 +54,10 @@ export default function ComerciosPage() {
 
     const traer = async () => {
       const [{ data, error: e }, { data: usos }] = await Promise.all([
-        supabase.from("clients").select("*").order("name"),
+        supabase.from('clients').select('*').order('name'),
         // Cuántos envíos tiene cada uno: es lo que dice si un comercio importa
         // o si fue un retiro suelto de una vez.
-        supabase
-          .from("shipments")
-          .select("client_id")
-          .not("client_id", "is", null)
-          .limit(2000),
+        supabase.from('shipments').select('client_id').not('client_id', 'is', null).limit(2000),
       ]);
 
       if (!vivo) return;
@@ -121,17 +87,16 @@ export default function ComerciosPage() {
       ? comercios.filter(
           (c) =>
             c.name.toLowerCase().includes(q) ||
-            (c.pickup_address ?? "").toLowerCase().includes(q),
+            (c.pickup_address ?? '').toLowerCase().includes(q),
         )
       : comercios;
 
     // Los más usados arriba: es el orden en que se los busca.
-    return [...lista].sort(
-      (a, b) => (envios.get(b.id) ?? 0) - (envios.get(a.id) ?? 0),
-    );
+    return [...lista].sort((a, b) => (envios.get(b.id) ?? 0) - (envios.get(a.id) ?? 0));
   }, [comercios, busqueda, envios]);
 
   const sinPunto = comercios.filter((c) => c.lat == null).length;
+  const conAcceso = comercios.filter((c) => c.profile_id).length;
 
   if (!ready) return null;
 
@@ -141,7 +106,7 @@ export default function ComerciosPage() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-black sm:text-2xl">Comercios</h2>
           <button
-            onClick={() => setEditando({ ...VACIO })}
+            onClick={() => setNuevo({ ...VACIO })}
             className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)]"
           >
             + Nuevo comercio
@@ -149,17 +114,15 @@ export default function ComerciosPage() {
         </div>
 
         <p className="mb-3 text-sm text-[var(--edr-muted)]">
-          Se crean solos al cargar un envío con un comercio nuevo. Acá se
-          corrigen.
+          Tocá uno para ver sus envíos, su acceso al portal y su ficha.
           {sinPunto > 0 && (
             <>
-              {" "}
-              <strong className="text-[var(--edr-naranja-claro)]">
-                {sinPunto} sin ubicar
-              </strong>
-              : el mapa no los puede dibujar hasta que tengan punto.
+              {' '}
+              <strong className="text-[var(--edr-naranja-claro)]">{sinPunto} sin ubicar</strong>: el
+              mapa no los puede dibujar hasta que tengan punto.
             </>
           )}
+          {conAcceso > 0 && <> · {conAcceso} con acceso al portal.</>}
         </p>
 
         <div className="relative mb-3">
@@ -185,22 +148,20 @@ export default function ComerciosPage() {
           <p className="text-sm text-[var(--edr-muted)]">Cargando…</p>
         ) : visibles.length === 0 ? (
           <p className="rounded-lg border border-dashed border-[var(--edr-border)] px-4 py-8 text-center text-sm text-[var(--edr-muted)]">
-            {busqueda
-              ? "Ningún comercio con ese nombre."
-              : "Todavía no hay comercios cargados."}
+            {busqueda ? 'Ningún comercio con ese nombre.' : 'Todavía no hay comercios cargados.'}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
             {visibles.map((c) => (
               /* La fila era un botón entero. Ahora el botón es sólo la parte
-                 que abre la ficha, porque adentro de un botón no puede ir
+                 que abre el comercio, porque adentro de un botón no puede ir
                  otro: el de borrar quedaría inservible. */
               <div
                 key={c.id}
                 className="flex items-start gap-2 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-3 hover:border-[var(--edr-acento)]"
               >
                 <button
-                  onClick={() => setEditando(c)}
+                  onClick={() => router.push(`/admin/comercios/${c.id}`)}
                   className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
                 >
                   <div className="min-w-0">
@@ -216,11 +177,19 @@ export default function ComerciosPage() {
                           sin ubicar
                         </span>
                       )}
+                      {c.profile_id && (
+                        <span
+                          title="Puede entrar a ver sus envíos"
+                          className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-verde-claro)]"
+                        >
+                          <KeyRound size={10} /> entra
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-[var(--edr-muted)]">
-                      {c.pickup_address || "sin dirección de retiro"}
-                      {c.pickup_extra ? ` · ${c.pickup_extra}` : ""}
-                      {c.pickup_notes ? ` · ${c.pickup_notes}` : ""}
+                      {c.pickup_address || 'sin dirección de retiro'}
+                      {c.pickup_extra ? ` · ${c.pickup_extra}` : ''}
+                      {c.pickup_notes ? ` · ${c.pickup_notes}` : ''}
                     </div>
                   </div>
 
@@ -253,286 +222,16 @@ export default function ComerciosPage() {
         )}
       </main>
 
-      {editando && (
-        <Editar
-          comercio={editando}
-          onCerrar={() => setEditando(null)}
+      {nuevo && (
+        <EditarComercio
+          comercio={nuevo}
+          onCerrar={() => setNuevo(null)}
           onGuardado={() => {
-            setEditando(null);
+            setNuevo(null);
             setVersion((v) => v + 1);
           }}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * Borra un comercio, preguntando primero. Devuelve `null` si se arrepintió.
- *
- * LOS ENVÍOS VIEJOS NO SE VAN CON ÉL. El vínculo se corta —queda en null— pero
- * el nombre y la dirección de retiro están escritos en cada envío como texto,
- * así que el historial se sigue leyendo igual. Eso ya estaba previsto en el
- * paso 40 y por eso borrar acá es seguro.
- *
- * Se avisa cuántos envíos lo apuntan antes de preguntar. "¿Borrar TOY PIOLA?"
- * y "¿Borrar TOY PIOLA, que está en 47 envíos?" son dos preguntas distintas, y
- * la segunda es la que hay que contestar.
- *
- * OJO: el comercio se vuelve a crear solo si alguien escribe ese nombre al
- * cargar un envío. Para uno eventual —que se cargó una vez y no vuelve— esto
- * alcanza; para dejar de verlo sin borrarlo está el "Activo".
- */
-async function borrarComercio(c: Comercio): Promise<{ error?: string } | null> {
-  const { count } = await supabase
-    .from("shipments")
-    .select("id", { count: "exact", head: true })
-    .eq("client_id", c.id);
-
-  const cuantos = count ?? 0;
-  const aviso =
-    cuantos > 0
-      ? `¿Borrar ${c.name}?
-
-Está en ${cuantos} envío(s). Esos envíos NO se borran y siguen mostrando "${c.name}" y su dirección: lo único que se pierde es el punto guardado para el mapa.`
-      : `¿Borrar ${c.name}? No hay ningún envío que lo use.`;
-
-  if (!confirm(aviso)) return null;
-
-  const { error } = await supabase.from("clients").delete().eq("id", c.id);
-  return { error: error?.message };
-}
-
-/** El cuadro de alta y edición. Uno solo para las dos cosas: son los mismos campos. */
-function Editar({
-  comercio,
-  onCerrar,
-  onGuardado,
-}: {
-  comercio: Comercio | Omit<Comercio, "id">;
-  onCerrar: () => void;
-  onGuardado: () => void;
-}) {
-  const esNuevo = !("id" in comercio);
-  const [form, setForm] = useState({
-    name: comercio.name,
-    phone: comercio.phone ?? "",
-    pickup_address: comercio.pickup_address ?? "",
-    pickup_extra: comercio.pickup_extra ?? "",
-    pickup_notes: comercio.pickup_notes ?? "",
-    pickup_window: comercio.pickup_window ?? "",
-    lat: comercio.lat,
-    lng: comercio.lng,
-    active: comercio.active,
-  });
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState("");
-
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
-
-  async function guardar() {
-    if (!form.name.trim()) return setError("Falta el nombre.");
-
-    setGuardando(true);
-    setError("");
-
-    const fila = {
-      name: form.name.trim(),
-      phone: form.phone.trim() || null,
-      pickup_address: form.pickup_address.trim() || null,
-      pickup_extra: form.pickup_extra.trim() || null,
-      pickup_notes: form.pickup_notes.trim() || null,
-      pickup_window: form.pickup_window.trim() || null,
-      lat: form.lat,
-      lng: form.lng,
-      active: form.active,
-    };
-
-    const { error: e } = esNuevo
-      ? await supabase.from("clients").insert(fila)
-      : await supabase
-          .from("clients")
-          .update(fila)
-          .eq("id", (comercio as Comercio).id);
-
-    setGuardando(false);
-
-    if (e) {
-      // El nombre es único (paso 40): repetirlo es el error más probable acá.
-      setError(
-        e.message.includes("clients_nombre_unico")
-          ? "Ya existe un comercio con ese nombre."
-          : e.message,
-      );
-      return;
-    }
-
-    onGuardado();
-  }
-
-  async function borrar() {
-    setGuardando(true);
-    setError("");
-    const r = await borrarComercio(comercio as Comercio);
-    setGuardando(false);
-
-    if (r === null) return; // lo pensó mejor
-    if (r.error) return setError(r.error);
-    onGuardado();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
-      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-4 sm:rounded-2xl">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <h2 className="text-lg font-black">
-            {esNuevo ? "Nuevo comercio" : form.name}
-          </h2>
-          <button
-            onClick={onCerrar}
-            aria-label="Cerrar"
-            className="px-2 text-2xl leading-none"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className={labelCls}>Nombre</label>
-            <input
-              className={campo}
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="Toy Piola"
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Dirección de retiro</label>
-            <input
-              className={campo}
-              value={form.pickup_address}
-              onChange={(e) => set("pickup_address", e.target.value)}
-              placeholder="Independencia 2684"
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Piso / depto / local</label>
-            <input
-              className={campo}
-              value={form.pickup_extra}
-              onChange={(e) => set("pickup_extra", e.target.value)}
-              placeholder="5A · piso 2 · local 3"
-            />
-            <p className="mt-1 text-[11px] text-[var(--edr-muted)]">
-              Va acá y no pegado a la dirección: el buscador no entiende
-              &quot;Belgrano 2875 5A&quot; y no encuentra el punto.
-            </p>
-          </div>
-
-          <div>
-            <label className={labelCls}>Horario de retiro</label>
-            <input
-              className={campo}
-              value={form.pickup_window}
-              onChange={(e) => set("pickup_window", e.target.value)}
-              placeholder="9 a 18 hs"
-            />
-            {/* Es el horario del LOCAL, no el de la entrega. Con esto cargado,
-                el panel avisa cuando el comercio está por cerrar y todavía hay
-                paquetes ahí, y al repartidor le aparece "pasá a retirar". Sin
-                cargar no salta nada: no se adivina a qué hora cierra. */}
-            <p className="mt-1 text-[11px] leading-snug text-[var(--edr-muted)]">
-              Hasta qué hora este comercio entrega los paquetes. Se avisa cuando
-              está por cerrar y todavía queda algo sin retirar. Se puede escribir
-              como venga: &quot;9 a 18 hs&quot;, &quot;hasta las 13&quot;.
-            </p>
-          </div>
-
-          <div>
-            <label className={labelCls}>Notas de retiro</label>
-            <input
-              className={campo}
-              value={form.pickup_notes}
-              onChange={(e) => set("pickup_notes", e.target.value)}
-              placeholder="Tocar timbre del local · preguntar por Marce"
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Teléfono</label>
-            <input
-              className={campo}
-              value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-            />
-          </div>
-
-          {/*
-            El punto, con el mismo verificador que se usa al cargar un envío.
-
-            No alcanza con buscar la dirección y guardar lo que salga: acá el
-            punto se mira. Un comercio mal ubicado manda al repartidor a otra
-            cuadra todos los días, y a diferencia de un envío suelto ese error
-            se repite en cada retiro hasta que alguien lo note.
-          */}
-          <div>
-            <label className={labelCls}>Dónde queda</label>
-            <VerificarPunto
-              direccion={form.pickup_address}
-              ciudad="Mar del Plata"
-              lat={form.lat}
-              lng={form.lng}
-              onPunto={(punto) => {
-                set("lat", punto?.lat ?? null);
-                set("lng", punto?.lng ?? null);
-              }}
-            />
-          </div>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.active}
-              onChange={(e) => set("active", e.target.checked)}
-            />
-            Activo
-            <span className="text-xs text-[var(--edr-muted)]">
-              (los inactivos no aparecen al cargar un envío)
-            </span>
-          </label>
-
-          {error && (
-            <div className="rounded border border-red-400 bg-red-950 px-3 py-2 text-sm text-red-100">
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={guardar}
-            disabled={guardando}
-            className="w-full rounded-full bg-[var(--edr-yellow)] px-4 py-3 font-black text-[var(--edr-blue)] disabled:opacity-60"
-          >
-            {guardando ? "Guardando…" : "Guardar"}
-          </button>
-
-          {/* Borrar va abajo, sin color y chico: es lo que menos se hace de
-              esta pantalla, y un botón rojo grande al lado de "Guardar" se
-              termina tocando por error. */}
-          {!esNuevo && (
-            <button
-              onClick={borrar}
-              disabled={guardando}
-              className="mx-auto text-xs font-bold text-[var(--edr-muted)] underline underline-offset-4 disabled:opacity-60"
-            >
-              Borrar este comercio
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

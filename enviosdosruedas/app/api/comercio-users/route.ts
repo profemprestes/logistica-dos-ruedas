@@ -64,6 +64,46 @@ async function requireAdmin(request: Request, admin: SupabaseClient) {
   return profile?.role === 'admin' ? data.user : null;
 }
 
+/* ------------------------------------------------- con qué usuario entra */
+/**
+ * El nombre de usuario del comercio, para poder mostrarlo en el panel.
+ *
+ * Tiene que salir de acá y no de una consulta común: el usuario vive en la
+ * tabla de cuentas de Supabase, que sólo se lee con la clave de servicio. Sin
+ * esto el panel podría decir "tiene acceso" pero no CUÁL, y entonces cuando el
+ * comercio llama diciendo que no puede entrar, nadie sabe qué usuario darle.
+ */
+export async function GET(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return missingKeys();
+
+  if (!(await requireAdmin(request, admin))) {
+    return NextResponse.json({ error: 'Solo un administrador.' }, { status: 403 });
+  }
+
+  const clientId = new URL(request.url).searchParams.get('client_id');
+  if (!clientId) return NextResponse.json({ error: 'Falta el comercio.' }, { status: 400 });
+
+  const { data: comercio } = await admin
+    .from('clients')
+    .select('profile_id')
+    .eq('id', clientId)
+    .single();
+
+  if (!comercio?.profile_id) return NextResponse.json({ usuario: null });
+
+  const { data, error } = await admin.auth.admin.getUserById(comercio.profile_id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // Se devuelve sin el "@enviosdosruedas.local": eso es de adentro, y el
+  // comercio escribe sólo la primera parte para entrar.
+  const email = data.user?.email ?? '';
+  return NextResponse.json({
+    usuario: email.endsWith(`@${DOMAIN}`) ? email.slice(0, -(DOMAIN.length + 1)) : email,
+    email,
+  });
+}
+
 /* ------------------------------------------------------- crear el acceso */
 export async function POST(request: Request) {
   const admin = getAdminClient();
@@ -169,11 +209,15 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { client_id, password } = (await request.json()) ?? {};
-  if (!client_id || !password) {
-    return NextResponse.json({ error: 'Faltan el comercio o la contraseña.' }, { status: 400 });
+  const { client_id, password, username } = (await request.json()) ?? {};
+  if (!client_id) return NextResponse.json({ error: 'Falta el comercio.' }, { status: 400 });
+
+  // Se puede cambiar la contraseña, el usuario, o los dos. Lo que no se puede
+  // es llamar sin cambiar nada.
+  if (!password && !username?.trim()) {
+    return NextResponse.json({ error: 'No hay nada para cambiar.' }, { status: 400 });
   }
-  if (String(password).length < 6) {
+  if (password && String(password).length < 6) {
     return NextResponse.json(
       { error: 'La contraseña debe tener al menos 6 caracteres.' },
       { status: 400 },
@@ -193,8 +237,30 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { error } = await admin.auth.admin.updateUserById(comercio.profile_id, { password });
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  const cambios: { password?: string; email?: string } = {};
+  if (password) cambios.password = password;
+  /*
+   * Cambiar el usuario es cambiar el mail, y se confirma en el acto.
+   *
+   * Sin `email_confirm` Supabase deja el mail viejo andando hasta que alguien
+   * abra un link de confirmación — y estos mails no existen, son inventados
+   * para poder entrar con un usuario. El comercio se quedaría esperando un
+   * correo que no va a llegar nunca.
+   */
+  if (username?.trim()) cambios.email = toEmail(username);
+
+  const { error } = await admin.auth.admin.updateUserById(comercio.profile_id, {
+    ...cambios,
+    ...(cambios.email ? { email_confirm: true } : {}),
+  });
+
+  if (error) {
+    const repetido = /already|registered|exists/i.test(error.message);
+    return NextResponse.json(
+      { error: repetido ? 'Ese usuario ya está tomado. Elegí otro.' : error.message },
+      { status: 400 },
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }

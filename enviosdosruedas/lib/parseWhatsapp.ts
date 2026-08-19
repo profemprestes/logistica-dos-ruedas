@@ -167,6 +167,53 @@ const nextId = () => `row-${Date.now()}-${counter++}`;
 /* --------------------------------------------------------- sub-extractors */
 
 /** Saca el horario del texto y lo devuelve en formato legible. */
+/**
+ * Palabras que delatan una instrucción y no una persona.
+ *
+ * El paréntesis sin teléfono es ambiguo: "(Josefina remon)" es el
+ * destinatario y "(dejar en portería)" es una aclaración para el repartidor.
+ * Las dos son cortas y sin números, así que "una a tres palabras" no alcanza
+ * para separarlas y haría entrar "planta baja" como nombre de una persona.
+ *
+ * Con esta lista se resuelven los casos que aparecen de verdad. Cuando aparezca
+ * uno que no está, se agrega acá —es el lugar donde queda escrito qué
+ * confundió al parser alguna vez.
+ */
+const PALABRAS_DE_INSTRUCCION = [
+  'dejar', 'dejo', 'dejale', 'entregar', 'entrega', 'retirar', 'retira', 'rendir', 'llamar',
+  'llama', 'avisar', 'avisa', 'tocar', 'toca', 'timbre', 'porteria', 'porteria', 'planta',
+  'piso', 'depto', 'dpto', 'dto', 'casa', 'fondo', 'frente', 'contrafrente', 'atras',
+  'esquina', 'urgente', 'fragil', 'cuidado', 'baja', 'alta', 'trabajo', 'oficina', 'local',
+  'domicilio', 'direccion', 'coordinar', 'confirmar', 'preguntar', 'pedido', 'paquete',
+  'sobre', 'caja', 'bolsa', 'pagado', 'abonado', 'efectivo', 'transferencia', 'antes',
+  'despues', 'hasta', 'desde', 'volver', 'pasar', 'buscar', 'esperar', 'golpear', 'mano',
+];
+
+const sinAcentos = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Si un paréntesis sin teléfono parece el nombre de quien recibe.
+ *
+ * Regla acordada con Matías el 19/08/2026: de una a tres palabras y ningún
+ * número. Se le suma el filtro de arriba, porque sin él una aclaración corta
+ * como "(planta baja)" entraría como destinatario — y eso es peor que perder
+ * un nombre, porque el nombre igual queda escrito en las notas y lo otro
+ * ensucia el dato que ve el destinatario en el seguimiento.
+ *
+ * Cuando toma uno, el envío queda con un aviso en la pantalla de revisión: es
+ * una corazonada, y las corazonadas se muestran antes de guardar.
+ */
+function pareceNombre(t: string): boolean {
+  const texto = t.trim();
+  if (!texto || /\d/.test(texto)) return false;
+
+  const palabras = texto.split(/\s+/);
+  if (palabras.length < 1 || palabras.length > 3) return false;
+
+  return !palabras.some((p) => PALABRAS_DE_INSTRUCCION.includes(sinAcentos(p.replace(/[.,;:]/g, ''))));
+}
+
 function takeWindow(text: string): { window: string; rest: string } {
   let m = text.match(RE_RANGE);
   if (m) return { window: `${hhmm(m[1], m[2])} a ${hhmm(m[3], m[4])} hs`, rest: text.replace(m[0], ' ') };
@@ -354,7 +401,7 @@ export function parseWhatsappText(
         RE_FLAG_FLEX.test(t)
       ) {
         flags.push(t);
-      } else if (tieneTelefono(t)) {
+      } else if (tieneTelefono(t) || pareceNombre(t)) {
         contactos.push(t);
       } else {
         notasSueltas.push(t);
@@ -377,6 +424,11 @@ export function parseWhatsappText(
       // Lo que queda al sacarle el teléfono es el nombre, sin la coma que a
       // veces los separa: "Noelia, 223 634-6427".
       recipientName = clean(resto.replace(/[,;]/g, ' '));
+      // Sin teléfono, que sea un nombre es una corazonada: se avisa para que
+      // se vea antes de guardar, que es cuando todavía se puede corregir.
+      if (!telefono && recipientName) {
+        warnings.push(`Tomé "${recipientName}" como destinatario. Si era una aclaración, corregilo.`);
+      }
       // Un segundo contacto no se pierde: va a las notas.
       notasSueltas.push(...contactos.slice(1));
     }

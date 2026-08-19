@@ -160,6 +160,36 @@ const CASOS: Caso[] = [
       amountToCollect: 55930,
     },
   },
+  {
+    titulo: 'parentesis sin telefono con nombre: es el destinatario',
+    texto: TANDA_19_08,
+    fila: 1,
+    espera: { recipientName: 'Josefina remon', clientName: 'DROPIX3D' },
+  },
+  {
+    titulo: 'y el de tres palabras tambien',
+    texto: TANDA_19_08,
+    fila: 2,
+    espera: { recipientName: 'Juan Carlos Ferreyro' },
+  },
+  {
+    titulo: 'una aclaracion corta NO es un nombre',
+    texto:
+      'STARCELL\nRETIRA EN COLON 2749\n- SAN JUAN 1773. ENVIO $4000 (NO COBRAR) (dejar en porteria)',
+    espera: { notes: 'dejar en porteria' },
+  },
+  {
+    titulo: 'planta baja tampoco',
+    texto:
+      'STARCELL\nRETIRA EN COLON 2749\n- SAN JUAN 1773. ENVIO $4000 (NO COBRAR) (planta baja)',
+    espera: { notes: 'planta baja' },
+  },
+  {
+    titulo: 'una nota larga sigue yendo a notas',
+    texto:
+      'STARCELL\nRETIRA EN COLON 2749\n- SAN JUAN 1773. ENVIO $4000 (NO COBRAR) (volver a rendir al terminar)',
+    espera: { notes: 'volver a rendir al terminar' },
+  },
 ];
 
 let fallos = 0;

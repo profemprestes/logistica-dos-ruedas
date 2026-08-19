@@ -7,6 +7,7 @@ import { useAdminGuard } from '@/lib/adminGuard';
 import { dayShift, today } from '@/lib/settlement';
 import {
   marcaDeEstado,
+  nombreDelDestinatario,
   STATUS_LABEL,
   money,
   shipmentCash,
@@ -126,6 +127,8 @@ export default function MapaAdminPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [elegido, setElegido] = useState<Shipment | null>(null);
+  /** Los envíos que esperan en un mismo comercio, cuando se toca su punto. */
+  const [enElComercio, setEnElComercio] = useState<Ubicado[] | null>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -508,27 +511,32 @@ export default function MapaAdminPage() {
     };
   };
 
-  const puntos: PuntoMapa[] = useMemo(() => {
-    const envios: PuntoMapa[] = conPunto.map((u) => {
+  const puntosYGrupos = useMemo(() => {
+    /*
+     * UN SOLO PUNTO POR COMERCIO, con cuántos paquetes hay.
+     *
+     * Se dibujaba una marca por envío, y cuatro paquetes del mismo local son
+     * cuatro marcas en la MISMA coordenada: se ve una sola, tapa a las otras
+     * tres, y al tocarla se abre la de arriba como si fuera la única. Desde la
+     * oficina eso significaba no poder ver qué tiene cada comercio esperando,
+     * que es justo lo que se mira antes de mandar a alguien a retirar.
+     */
+    const porComercio = new Map<string, Ubicado[]>();
+    const envios: PuntoMapa[] = [];
+
+    for (const u of conPunto) {
       const s = u.envio;
-      const marca = marcaDeEstado(s.status);
 
       // En azul oscuro, con una R de retiro, los que todavía están en
       // el comercio. Es "acá hay que ir a buscar", no "acá hay que entregar".
       if (u.enElComercio) {
-        return {
-          id: s.id,
-          lat: u.lat as number,
-          lng: u.lng as number,
-          etiqueta: 'R',
-          color: AZUL_RETIRO,
-          colorTexto: '#fff',
-          titulo: `Retirar en ${s.pickup_address ?? u.comercio ?? ''}`,
-          detalle: `${u.comercio ?? ''} · va a ${s.address_street}`,
-        };
+        const clave = `${u.lat},${u.lng}`;
+        porComercio.set(clave, [...(porComercio.get(clave) ?? []), u]);
+        continue;
       }
 
-      return {
+      const marca = marcaDeEstado(s.status);
+      envios.push({
         id: s.id,
         lat: u.lat as number,
         lng: u.lng as number,
@@ -537,10 +545,27 @@ export default function MapaAdminPage() {
         colorTexto: marca.colorTexto,
         titulo: s.address_street,
         detalle:
-          `${s.recipient_name} · ${STATUS_LABEL[s.status]}` +
+          `${nombreDelDestinatario(s)} · ${STATUS_LABEL[s.status]}` +
           (s.client_name_raw ? ` · ${s.client_name_raw}` : ''),
-      };
-    });
+      });
+    }
+
+    const grupos = new Map<number, Ubicado[]>();
+
+    for (const delLugar of porComercio.values()) {
+      const u = delLugar[0];
+      grupos.set(u.envio.id, delLugar);
+      envios.push({
+        id: u.envio.id,
+        lat: u.lat as number,
+        lng: u.lng as number,
+        etiqueta: 'R',
+        color: AZUL_RETIRO,
+        colorTexto: '#fff',
+        titulo: `Retirar en ${u.envio.pickup_address ?? u.comercio ?? ''}`,
+        detalle: `${u.comercio ?? 'Comercio'} · ${delLugar.length} para retirar`,
+      });
+    }
 
     // Las motos van con id negativo para no chocar con el de ningún envío:
     // tocar una no tiene que abrir la ficha de un envío cualquiera.
@@ -554,8 +579,11 @@ export default function MapaAdminPage() {
       detalle: comoEsta(r).texto,
     }));
 
-    return [...envios, ...repartidores];
+    return { puntos: [...envios, ...repartidores], grupos };
   }, [conPunto, motos]);
+
+  const puntos = puntosYGrupos.puntos;
+  const gruposDeRetiro = puntosYGrupos.grupos;
 
   /**
    * La referencia va por grupo y no por estado: son los tres colores que
@@ -734,10 +762,83 @@ export default function MapaAdminPage() {
           <MapaEnvios
             puntos={puntos}
             // Los id negativos son repartidores: no tienen ficha de envío.
-            onTocar={(id) =>
-              setElegido(id < 0 ? null : (envios.find((s) => s.id === id) ?? null))
-            }
+            onTocar={(id) => {
+              if (id < 0) {
+                setElegido(null);
+                setEnElComercio(null);
+                return;
+              }
+
+              const grupo = gruposDeRetiro.get(id);
+
+              /*
+               * Con uno solo se abre la ficha derecho.
+               *
+               * Una lista de un elemento es un toque de más para llegar a lo
+               * mismo, y el caso de un solo paquete esperando es el más común
+               * de todos.
+               */
+              if (grupo && grupo.length > 1) {
+                setElegido(null);
+                setEnElComercio(grupo);
+                return;
+              }
+
+              setEnElComercio(null);
+              setElegido(envios.find((s) => s.id === id) ?? null);
+            }}
           />
+        )}
+
+        {/*
+          Lo que espera en un comercio, cuando hay más de uno.
+
+          Es la pregunta que se hace desde la oficina antes de mandar a alguien:
+          "¿qué hay que retirar acá?". Cada fila abre su ficha.
+        */}
+        {enElComercio && enElComercio.length > 0 && (
+          <div className="mt-3 rounded-lg border border-[var(--edr-yellow)] bg-[var(--edr-surface)] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-bold uppercase tracking-wide text-[var(--edr-acento)]">
+                  Para retirar en
+                </div>
+                <div className="text-lg font-bold">
+                  {enElComercio[0].envio.pickup_address ?? enElComercio[0].comercio}
+                </div>
+                <div className="text-sm text-[var(--edr-muted)]">
+                  {enElComercio[0].comercio} · {enElComercio.length} envío(s)
+                </div>
+              </div>
+              <button
+                onClick={() => setEnElComercio(null)}
+                aria-label="Cerrar"
+                className="shrink-0 px-2 text-2xl leading-none text-[var(--edr-muted)]"
+              >
+                ×
+              </button>
+            </div>
+
+            <ul className="mt-2 flex flex-col gap-1">
+              {enElComercio.map((u) => (
+                <li key={u.envio.id}>
+                  <button
+                    onClick={() => setElegido(u.envio)}
+                    className="w-full rounded border border-[var(--edr-border)] px-2.5 py-2 text-left text-sm hover:border-[var(--edr-acento)]"
+                  >
+                    <span className="edr-mono text-xs text-[var(--edr-muted)]">
+                      {u.envio.tracking_code}
+                    </span>
+                    <span className="block font-semibold">{u.envio.address_street}</span>
+                    <span className="text-xs text-[var(--edr-muted)]">
+                      {nombreDelDestinatario(u.envio)} · {STATUS_LABEL[u.envio.status]}
+                      {u.envio.driver?.full_name ? ` · ${u.envio.driver.full_name}` : ' · sin asignar'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {elegido && <Ficha envio={elegido} onCerrar={() => setElegido(null)} />}

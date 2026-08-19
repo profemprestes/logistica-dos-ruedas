@@ -25,7 +25,7 @@ import {
 import Logo from '@/components/Logo';
 import { supabase } from '@/lib/supabaseClient';
 import { diaDeHoyAR } from '@/lib/format';
-import { useCerrarConAtras } from '@/lib/driver/useAtras';
+import { cerrandoParaNavegar, useCerrarConAtras } from '@/lib/driver/useAtras';
 import { useDatosDelDia } from '@/components/admin/DatosDelDia';
 
 /**
@@ -173,9 +173,26 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             <Link
               key={href}
               href={href}
+              /*
+                `replace` y no `push`: la sección nueva PISA el paso que el
+                cajón agregó al historial al abrirse. Sin esto queda un paso
+                muerto —el del cajón, con la dirección de la pantalla anterior—
+                y desde la sección nueva hay que tocar "atrás" dos veces para
+                volver, porque la primera no hace nada visible.
+
+                Con esto el historial queda como si el cajón no existiera:
+                cada sección elegida es un paso, y atrás vuelve de a uno.
+              */
+              replace
               /* Elegir una sección cierra el cajón: si no, queda tapando la
-                 pantalla nueva. */
-              onClick={() => setCajon(false)}
+                 pantalla nueva. Y se avisa que el cierre es POR IRSE, o el
+                 cajón deshace la navegación al sacar su paso del historial —
+                 que es lo que hacía que el menú entero devolviera a la
+                 pantalla anterior. */
+              onClick={() => {
+                cerrandoParaNavegar();
+                setCajon(false);
+              }}
               className={`flex items-center gap-[11px] rounded-[10px] px-3 py-[11px] text-[14.5px] font-semibold transition ${
                 activo
                   ? 'bg-[var(--edr-blue)] text-white'
@@ -199,7 +216,15 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--edr-yellow)] font-anton text-[13px] text-[var(--edr-blue)]">
             {iniciales(quien.nombre)}
           </div>
-          <Link href="/admin/profile" onClick={() => setCajon(false)} className="min-w-0 flex-1">
+          <Link
+            href="/admin/profile"
+            replace
+            onClick={() => {
+              cerrandoParaNavegar();
+              setCajon(false);
+            }}
+            className="min-w-0 flex-1"
+          >
             <div className="truncate text-[13.5px] font-semibold text-white">{quien.nombre}</div>
             <div className="truncate text-[11.5px] text-[#7f9de8]">{quien.email}</div>
           </Link>

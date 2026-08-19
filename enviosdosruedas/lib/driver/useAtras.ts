@@ -34,6 +34,27 @@ import { useEffect, useRef } from 'react';
  */
 let abiertos = 0;
 
+/**
+ * El cuadro se está cerrando PARA IRSE A OTRA PÁGINA.
+ *
+ * EL BUG QUE ARREGLA. El cajón de secciones del panel se cierra al elegir una,
+ * y al cerrarse esta función sacaba su paso del historial con `history.back()`.
+ * Pero la navegación de Next también toca el historial, y en un teléfono el
+ * `back()` llegaba primero: el admin tocaba "Estadísticas", el cajón se
+ * cerraba, y la pantalla volvía sola a donde estaba. Con él parado en Cierre
+ * de caja parecía que TODO el menú llevaba a Cierre de caja.
+ *
+ * Por eso hay que avisar. Quien cierre un cuadro para navegar llama a esto
+ * ANTES, en el mismo toque: la bandera se lee al desmontarse, que pasa en ese
+ * mismo momento, y entonces el paso no se saca. Lo saca la navegación, que ya
+ * está poniendo el suyo encima.
+ */
+let seVaAOtraPagina = false;
+
+export function cerrandoParaNavegar(): void {
+  seVaAOtraPagina = true;
+}
+
 export function useCerrarConAtras(cerrar: () => void): void {
   // Por referencia: así el cuadro no se reinicia cada vez que el padre dibuja
   // de nuevo y le pasa otra función.
@@ -64,6 +85,10 @@ export function useCerrarConAtras(cerrar: () => void): void {
       abiertos -= 1;
       window.removeEventListener('popstate', alVolver);
 
+      // Se lee y se apaga acá: el aviso vale para este cierre y nada más.
+      const navegando = seVaAOtraPagina;
+      seVaAOtraPagina = false;
+
       /*
        * Se saca el paso recién en el siguiente turno, y sólo si no quedó otro
        * cuadro abierto. Para entonces ya corrió el que se estaba abriendo, si
@@ -74,6 +99,9 @@ export function useCerrarConAtras(cerrar: () => void): void {
        * nuestro, y entonces no se toca nada.
        */
       setTimeout(() => {
+        // Yendo a otra página el paso no se saca: lo pisa la navegación, y
+        // sacarlo acá deshacía la navegación recién hecha.
+        if (navegando) return;
         if (abiertos === 0 && window.history.state?.edrCuadro) window.history.back();
       }, 0);
     };

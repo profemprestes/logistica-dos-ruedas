@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, FileText, Pencil, RefreshCw, Search } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Pencil, Printer, RefreshCw, Search } from 'lucide-react';
 import ProofOfDeliveryModal from '@/components/ProofOfDeliveryModal';
 import { supabase } from '@/lib/supabaseClient';
 import {
@@ -117,6 +117,8 @@ export default function ResumenDelComercio({
   const [hasta, setHasta] = useState('');
   const [comprobante, setComprobante] = useState<Shipment | null>(null);
   const [copiado, setCopiado] = useState('');
+  /** El envío cuya etiqueta se está pidiendo, para apagar sólo ese botón. */
+  const [etiquetando, setEtiquetando] = useState('');
 
   /** El comercio y sus locales, que para esta pantalla son uno solo. */
   const ids = useMemo(
@@ -210,6 +212,63 @@ export default function ResumenDelComercio({
     } catch {
       setError('El navegador no dejó copiar. Abrí el seguimiento y copiá la dirección de arriba.');
     }
+  }
+
+  /**
+   * Abre la etiqueta para imprimir.
+   *
+   * EL LINK LO FIRMA EL SERVIDOR. La etiqueta lleva el teléfono del
+   * destinatario y el monto a cobrar, y los códigos son correlativos: sin
+   * firma, la dirección sería una lista de teléfonos ordenada por número de
+   * envío. El servidor comprueba además que el envío sea de este comercio.
+   *
+   * Se abre en otra pestaña y no en ésta: el comercio imprime y vuelve a su
+   * lista donde la dejó, sin perder el filtro ni la búsqueda.
+   */
+  async function imprimirEtiqueta(s: Shipment) {
+    setEtiquetando(s.tracking_code);
+    setError('');
+
+    /*
+     * La pestaña se abre ANTES de ir al servidor.
+     *
+     * Abrirla después de un `await` la convierte en una ventana emergente a
+     * los ojos del navegador, y la bloquea. Se abre vacía en el mismo toque y
+     * después se la manda a donde corresponde.
+     */
+    const pestania = window.open('', '_blank');
+
+    try {
+      const { data: sesion } = await supabase.auth.getSession();
+      const res = await fetch('/api/etiquetas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sesion.session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify({ codigos: [s.tracking_code] }),
+      });
+
+      const json = (await res.json().catch(() => ({}))) as {
+        links?: { codigo: string; url: string }[];
+        error?: string;
+      };
+
+      const url = json.links?.[0]?.url;
+      if (!res.ok || !url) {
+        pestania?.close();
+        setError(json.error ?? 'No se pudo abrir la etiqueta. Probá de nuevo.');
+        return;
+      }
+
+      if (pestania) pestania.location.href = url;
+      else window.open(url, '_blank');
+    } catch {
+      pestania?.close();
+      setError('No se pudo abrir la etiqueta. Fijate si tenés internet.');
+    }
+
+    setEtiquetando('');
   }
 
   const faltan = total - envios.length;
@@ -357,8 +416,10 @@ export default function ResumenDelComercio({
               hoy={hoy}
               local={s.client_id != null ? (nombreDeLocal.get(s.client_id) ?? '') : ''}
               copiado={copiado === s.tracking_code}
+              etiquetando={etiquetando === s.tracking_code}
               desdeLaOficina={desdeLaOficina}
               onCopiar={() => copiarLink(s)}
+              onEtiqueta={() => imprimirEtiqueta(s)}
               onComprobante={() => setComprobante(s)}
             />
           ))}
@@ -486,8 +547,10 @@ function Tarjeta({
   hoy,
   local,
   copiado,
+  etiquetando,
   desdeLaOficina,
   onCopiar,
+  onEtiqueta,
   onComprobante,
 }: {
   envio: Shipment;
@@ -495,8 +558,11 @@ function Tarjeta({
   /** De qué local salió. Vacío cuando el comercio tiene uno solo. */
   local: string;
   copiado: boolean;
+  /** Mientras el servidor firma el link de la etiqueta de ESTE envío. */
+  etiquetando: boolean;
   desdeLaOficina: boolean;
   onCopiar: () => void;
+  onEtiqueta: () => void;
   onComprobante: () => void;
 }) {
   const grupo = grupoDe(s, hoy);
@@ -548,6 +614,19 @@ function Tarjeta({
             className="inline-flex items-center gap-1.5 rounded bg-[var(--edr-yellow)] px-3 py-1.5 text-xs font-black text-[var(--edr-blue)] hover:brightness-95"
           >
             <Copy size={14} /> {copiado ? '¡Copiado!' : 'Copiar link de seguimiento'}
+          </button>
+        )}
+
+        {/* La etiqueta, sólo mientras el envío está en curso.
+            Una etiqueta de algo ya entregado no se pega en ningún lado: lo
+            único que haría es que alguien imprima el paquete equivocado. */}
+        {!cerrado && (
+          <button
+            onClick={onEtiqueta}
+            disabled={etiquetando}
+            className="inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
+          >
+            <Printer size={14} /> {etiquetando ? 'Abriendo…' : 'Etiqueta'}
           </button>
         )}
 

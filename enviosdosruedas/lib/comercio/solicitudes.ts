@@ -25,6 +25,7 @@ export interface Solicitud {
   pickup_extra: string | null;
   pickup_notes: string | null;
   pickup_window: string | null;
+  pickup_window_sabado: string | null;
   nota: string | null;
   estado: EstadoSolicitud;
   creada_at: string;
@@ -41,6 +42,7 @@ export const CAMPOS_PEDIBLES = [
   'pickup_extra',
   'pickup_notes',
   'pickup_window',
+  'pickup_window_sabado',
 ] as const;
 
 export type CampoPedible = (typeof CAMPOS_PEDIBLES)[number];
@@ -52,10 +54,11 @@ export const NOMBRE_CAMPO: Record<CampoPedible, string> = {
   pickup_extra: 'Piso / depto / local',
   pickup_notes: 'Notas de retiro',
   pickup_window: 'Horario de retiro',
+  pickup_window_sabado: 'Horario los sábados',
 };
 
 const COLUMNAS =
-  'id, client_id, phone, pickup_address, pickup_extra, pickup_notes, pickup_window, nota, estado, creada_at, resuelta_at, motivo';
+  'id, client_id, phone, pickup_address, pickup_extra, pickup_notes, pickup_window, pickup_window_sabado, nota, estado, creada_at, resuelta_at, motivo';
 
 /**
  * El pedido que el comercio tiene esperando, si tiene.

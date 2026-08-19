@@ -92,16 +92,33 @@ const VACIO: Omit<DatosDelDia, 'refrescar'> = {
   pedidosDeComercios: 0,
 };
 
+/**
+ * Los envíos de hoy, con el horario del comercio pegado.
+ *
+ * SE PUEDE PEDIR SIN EL SÁBADO. Una consulta que nombra una columna que
+ * todavía no existe no devuelve la fila sin ese campo: falla ENTERA. Entre que
+ * sale el código y se corre el paso 52, eso dejaría el panel de la oficina en
+ * cero envíos — que es bastante peor que no tener el horario del sábado.
+ */
+function enviosDeHoy(hoy: string, conSabado = true) {
+  return supabase
+    .from('shipments')
+    // El horario de retiro sale del comercio salvo que el envío traiga el
+    // suyo: sin esto, el aviso de "el comercio cierra" no tendría con qué.
+    .select(
+      '*, driver:assigned_driver(full_name), preasignado:preasignado_a(full_name), ' +
+        (conSabado
+          ? 'comercio:client_id(pickup_window, pickup_window_sabado)'
+          : 'comercio:client_id(pickup_window)'),
+    )
+    .eq('scheduled_date', hoy);
+}
+
 async function traer(hoy: string) {
   const desdeHoy = new Date(`${hoy}T00:00:00`).toISOString();
 
-  const [envios, pendientes, posiciones, movimientos, senales, pedidos] = await Promise.all([
-    supabase
-      .from('shipments')
-      // El horario de retiro sale del comercio salvo que el envío traiga el
-      // suyo: sin esto, el aviso de "el comercio cierra" no tendría con qué.
-      .select('*, driver:assigned_driver(full_name), preasignado:preasignado_a(full_name), comercio:client_id(pickup_window)')
-      .eq('scheduled_date', hoy),
+  const [primerIntento, pendientes, posiciones, movimientos, senales, pedidos] = await Promise.all([
+    enviosDeHoy(hoy),
     // Los colgados no tienen fecha: justamente el problema es que quedaron
     // atrás. Se traen aparte y sin filtro de día.
     supabase
@@ -143,6 +160,10 @@ async function traer(hoy: string) {
       .select('id', { count: 'exact', head: true })
       .eq('estado', 'pendiente'),
   ]);
+
+  const envios = primerIntento.error?.message.includes('pickup_window_sabado')
+    ? await enviosDeHoy(hoy, false)
+    : primerIntento;
 
   return {
     deHoy: (envios.data ?? []) as unknown as Shipment[],

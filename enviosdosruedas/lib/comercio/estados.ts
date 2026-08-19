@@ -101,3 +101,71 @@ export function coincide(s: Shipment, texto: string): boolean {
     s.product_detail,
   ].some((campo) => (campo ?? '').toLowerCase().includes(q));
 }
+
+/* ------------------------------------------------------------ los períodos */
+
+/**
+ * Desde cuándo mirar. Es el mismo juego que usa el repartidor en su caja, a
+ * propósito: si el comercio pregunta por WhatsApp "los del martes", quien
+ * atiende tiene que poder mirar exactamente lo mismo que él.
+ */
+export type Periodo = 'hoy' | 'ayer' | 'semana' | 'mes' | 'todo' | 'fechas';
+
+export const NOMBRE_PERIODO: Record<Periodo, string> = {
+  hoy: 'Hoy',
+  ayer: 'Ayer',
+  semana: 'Últimos 7 días',
+  mes: 'Últimos 30 días',
+  todo: 'Todos',
+  fechas: 'Elegir fechas',
+};
+
+export const ORDEN_PERIODOS: Periodo[] = ['hoy', 'ayer', 'semana', 'mes', 'todo', 'fechas'];
+
+/** Le suma (o resta) días a una fecha AAAA-MM-DD, sin pasar por el calendario. */
+function correr(fecha: string, dias: number): string {
+  const t = Date.parse(`${fecha}T00:00:00`) + dias * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/**
+ * Entre qué dos fechas cae cada período. `null` es "sin límite".
+ *
+ * SE MIRA `scheduled_date` Y NO CUÁNDO SE CARGÓ. Para el comercio, un envío es
+ * del día en que se reparte: uno cargado el jueves a la noche para el viernes
+ * es "el del viernes", y buscarlo entre los del jueves sería no encontrarlo.
+ */
+export function rangoDelPeriodo(
+  periodo: Periodo,
+  hoy: string,
+  desde?: string,
+  hasta?: string,
+): { desde: string | null; hasta: string | null } {
+  switch (periodo) {
+    case 'hoy':
+      return { desde: hoy, hasta: hoy };
+    case 'ayer':
+      return { desde: correr(hoy, -1), hasta: correr(hoy, -1) };
+    case 'semana':
+      return { desde: correr(hoy, -6), hasta: hoy };
+    case 'mes':
+      return { desde: correr(hoy, -29), hasta: hoy };
+    case 'fechas':
+      // Al revés se da vuelta solo: elegir primero el "hasta" es lo normal.
+      if (desde && hasta && desde > hasta) return { desde: hasta, hasta: desde };
+      return { desde: desde || null, hasta: hasta || null };
+    default:
+      return { desde: null, hasta: null };
+  }
+}
+
+/** Si el envío cae dentro del período. Sin fechas, entra todo. */
+export function entraEnElPeriodo(
+  s: Shipment,
+  rango: { desde: string | null; hasta: string | null },
+): boolean {
+  const dia = s.scheduled_date || s.created_at.slice(0, 10);
+  if (rango.desde && dia < rango.desde) return false;
+  if (rango.hasta && dia > rango.hasta) return false;
+  return true;
+}

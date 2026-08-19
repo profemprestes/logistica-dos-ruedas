@@ -9,6 +9,7 @@ import { WHATSAPP } from '@/components/SiteFooter';
 import MiCuenta from '@/components/comercio/MiCuenta';
 import ResumenDelComercio, { type FichaComercio } from '@/components/comercio/ResumenDelComercio';
 import { supabase } from '@/lib/supabaseClient';
+import { pidiendo } from '@/lib/columnaNueva';
 
 /**
  * El portal del comercio: sus envíos, todos, y nada más que los suyos.
@@ -53,12 +54,13 @@ async function cargar(): Promise<Carga> {
   if (perfil?.role === 'repartidor') return { destino: '/driver' };
 
   const CAMPOS = 'id, name, pickup_address, pickup_extra, pickup_notes, pickup_window, phone';
+  const CON_SABADO = `${CAMPOS}, pickup_window_sabado`;
 
-  const { data: ficha } = await supabase
-    .from('clients')
-    .select(CAMPOS)
-    .eq('profile_id', uid)
-    .maybeSingle();
+  const { data: ficha } = await pidiendo<FichaComercio>(
+    'pickup_window_sabado',
+    () => supabase.from('clients').select(CON_SABADO).eq('profile_id', uid).maybeSingle(),
+    () => supabase.from('clients').select(CAMPOS).eq('profile_id', uid).maybeSingle(),
+  );
 
   /*
    * Los otros locales del mismo dueño, si tiene.
@@ -68,7 +70,11 @@ async function cargar(): Promise<Carga> {
    * las sucursales de la ficha propia y ninguna otra.
    */
   const { data: locales } = ficha
-    ? await supabase.from('clients').select(CAMPOS).eq('parent_id', ficha.id).order('name')
+    ? await pidiendo<FichaComercio[]>(
+        'pickup_window_sabado',
+        () => supabase.from('clients').select(CON_SABADO).eq('parent_id', ficha.id).order('name'),
+        () => supabase.from('clients').select(CAMPOS).eq('parent_id', ficha.id).order('name'),
+      )
     : { data: [] };
 
   /*
@@ -83,8 +89,8 @@ async function cargar(): Promise<Carga> {
   if (!ficha && tieneStock) return { destino: '/stock' };
 
   return {
-    comercio: (ficha as FichaComercio) ?? null,
-    sucursales: (locales ?? []) as FichaComercio[],
+    comercio: ficha,
+    sucursales: locales ?? [],
     tieneStock,
   };
 }

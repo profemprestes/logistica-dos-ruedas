@@ -1,3 +1,5 @@
+import { esSabadoAR } from '@/lib/format';
+
 /**
  * Hasta qué hora hay que entregar, según lo que diga la franja.
  *
@@ -149,12 +151,38 @@ export function comoHora(hora: number): string {
  * lo que escribió la oficina, no el número que sacamos nosotros: si alguien
  * escribió "hasta las 13 que cierran por la siesta", esa aclaración vale.
  */
-export function horarioDeRetiro(envio: {
-  pickup_window?: string | null;
-  comercio?: { pickup_window?: string | null } | null;
-}): string | null {
-  const texto = (envio.pickup_window ?? envio.comercio?.pickup_window ?? '').trim();
-  return texto || null;
+export function horarioDeRetiro(
+  envio: {
+    pickup_window?: string | null;
+    comercio?: { pickup_window?: string | null; pickup_window_sabado?: string | null } | null;
+  },
+  /** Para qué momento se pregunta. Casi siempre ahora. */
+  cuando: Date = new Date(),
+): string | null {
+  /*
+   * EL DEL ENVÍO GANA SIEMPRE, sea el día que sea.
+   *
+   * Es la excepción escrita para ESE paquete —"éste retiralo antes de las
+   * 11"— y una excepción que el sábado dejara de valer no sería una excepción.
+   */
+  const delEnvio = (envio.pickup_window ?? '').trim();
+  if (delEnvio) return delEnvio;
+
+  /*
+   * Y si es sábado manda el del sábado, cuando está cargado.
+   *
+   * Un local que de lunes a viernes cierra a las 18 y el sábado a las 13 hacía
+   * saltar el aviso a las 17, con el comercio cerrado desde hacía cuatro
+   * horas: tarde justo el día que más falta hace. Vacío es "igual que
+   * siempre", así que los comercios que no aclaran nada siguen como estaban.
+   */
+  const delComercio = (
+    (esSabadoAR(cuando) ? envio.comercio?.pickup_window_sabado : null) ??
+    envio.comercio?.pickup_window ??
+    ''
+  ).trim();
+
+  return delComercio || null;
 }
 
 /** La franja tal cual la escribió la oficina, sin que grite. */

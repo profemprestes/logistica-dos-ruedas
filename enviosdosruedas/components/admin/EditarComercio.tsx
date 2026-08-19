@@ -29,6 +29,13 @@ export interface Comercio {
   pickup_extra: string | null;
   pickup_notes: string | null;
   pickup_window: string | null;
+  /**
+   * El horario de los sábados, cuando es distinto.
+   *
+   * Vacío quiere decir "el mismo de siempre": un comercio que no aclara nada
+   * sigue funcionando como antes y no hay que ir a cargarle nada.
+   */
+  pickup_window_sabado?: string | null;
   lat: number | null;
   lng: number | null;
   active: boolean;
@@ -122,6 +129,7 @@ export default function EditarComercio({
     pickup_extra: comercio.pickup_extra ?? '',
     pickup_notes: comercio.pickup_notes ?? '',
     pickup_window: comercio.pickup_window ?? '',
+    pickup_window_sabado: comercio.pickup_window_sabado ?? '',
     lat: comercio.lat,
     lng: comercio.lng,
     active: comercio.active,
@@ -175,6 +183,7 @@ export default function EditarComercio({
       pickup_extra: form.pickup_extra.trim() || null,
       pickup_notes: form.pickup_notes.trim() || null,
       pickup_window: form.pickup_window.trim() || null,
+      pickup_window_sabado: form.pickup_window_sabado.trim() || null,
       lat: form.lat,
       lng: form.lng,
       active: form.active,
@@ -204,6 +213,13 @@ export default function EditarComercio({
       const { parent_id, ...sinSucursal } = fila;
       void parent_id;
       ({ error: e } = await escribir(sinSucursal));
+    }
+
+    // Y lo mismo con el horario del sábado, que llega con el paso 52.
+    if (e && /pickup_window_sabado/.test(e.message)) {
+      const { pickup_window_sabado, ...sinSabado } = fila;
+      void pickup_window_sabado;
+      ({ error: e } = await escribir(sinSabado));
     }
 
     setGuardando(false);
@@ -293,6 +309,24 @@ export default function EditarComercio({
               Hasta qué hora este comercio entrega los paquetes. Se avisa cuando está por cerrar y
               todavía queda algo sin retirar. Se puede escribir como venga: &quot;9 a 18 hs&quot;,
               &quot;hasta las 13&quot;.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelCls}>Horario los sábados</label>
+            <input
+              className={campo}
+              value={form.pickup_window_sabado}
+              onChange={(e) => set('pickup_window_sabado', e.target.value)}
+              placeholder="9 a 13 hs"
+            />
+            {/* Vacío es "el mismo de siempre": los comercios que no aclaran
+                nada siguen como estaban y no hay que cargarles nada. El que no
+                abre los sábados se escribe "cerrado" — sin ninguna hora
+                adentro no se calcula ningún cierre y no salta ningún aviso. */}
+            <p className="mt-1 text-[11px] leading-snug text-[var(--edr-muted)]">
+              Sólo si el sábado cierra distinto. Vacío usa el horario de arriba. Si no abre,
+              escribí &quot;cerrado&quot;.
             </p>
           </div>
 

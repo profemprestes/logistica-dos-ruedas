@@ -56,6 +56,7 @@ export default function MiCuenta({
     pickup_extra: comercio.pickup_extra ?? '',
     pickup_notes: comercio.pickup_notes ?? '',
     pickup_window: comercio.pickup_window ?? '',
+    pickup_window_sabado: comercio.pickup_window_sabado ?? '',
   });
   const [nota, setNota] = useState('');
 
@@ -245,7 +246,13 @@ export default function MiCuenta({
                       className={campo}
                       value={datos[c]}
                       onChange={(e) => set(c, e.target.value)}
-                      placeholder={c === 'pickup_window' ? '9 a 18 hs' : ''}
+                      placeholder={
+                        c === 'pickup_window'
+                          ? '9 a 18 hs'
+                          : c === 'pickup_window_sabado'
+                            ? '9 a 13 hs · vacío = igual que siempre'
+                            : ''
+                      }
                     />
                   </div>
                 ))}

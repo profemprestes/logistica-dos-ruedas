@@ -39,16 +39,21 @@ export default function Apurate({ envios }: { envios: Shipment[] }) {
    * quedaría congelado: el repartidor deja la app abierta media hora y el
    * cartel seguiría diciendo "en 40 min" cuando faltan diez.
    */
-  const [hora, setHora] = useState<number | null>(null);
+  /*
+   * Se guarda el momento entero y no sólo la hora, porque el horario de
+   * retiro depende también del DÍA: el sábado el comercio cierra antes.
+   */
+  const [ahora, setAhora] = useState<Date | null>(null);
 
   useEffect(() => {
-    const mirar = () => setHora(horaDelDiaAR(new Date()));
+    const mirar = () => setAhora(new Date());
     mirar();
     const t = window.setInterval(mirar, 60_000);
     return () => window.clearInterval(t);
   }, []);
 
-  if (hora === null) return null;
+  if (ahora === null) return null;
+  const hora = horaDelDiaAR(ahora);
 
   /*
    * DOS RELOJES, y para cada envío gana el que corre primero.
@@ -69,7 +74,15 @@ export default function Apurate({ envios }: { envios: Shipment[] }) {
       const entrega = minutosParaElCierre(s.delivery_window, hora);
 
       const texto = enElComercio
-        ? horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } })
+        ? horarioDeRetiro(
+            s as Shipment & {
+              comercio?: {
+                pickup_window?: string | null;
+                pickup_window_sabado?: string | null;
+              } | null;
+            },
+            ahora,
+          )
         : null;
 
       const local = texto ? estadoDelComercio(texto, hora) : null;

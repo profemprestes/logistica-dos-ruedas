@@ -75,7 +75,15 @@ const ACTIVE_STATUSES = ['creado', 'pendiente_retiro', 'retirado', 'en_camino'];
  */
 const CERRADOS = ['entregado', 'pendiente_entrega'];
 
-function fetchRoute(driverId: string) {
+/**
+ * La hoja de ruta del día.
+ *
+ * `conSabado` existe por el rato entre publicar el código y correr el paso 52:
+ * una consulta que nombra una columna que todavía no está no devuelve la fila
+ * sin ese campo, falla ENTERA, y eso dejaría al repartidor con la hoja de ruta
+ * vacía arriba de la moto. Si la base la rechaza, se vuelve a pedir sin ella.
+ */
+function fetchRoute(driverId: string, conSabado = true) {
   const hoy = hoyLocal();
 
   return (
@@ -83,7 +91,11 @@ function fetchRoute(driverId: string) {
       .from('shipments')
       // El horario de retiro del comercio viene pegado: es el que manda cuando
       // el envío no trae el suyo. Ver `horarioDeRetiro` en `lib/franja.ts`.
-      .select('*, comercio:client_id(pickup_window)')
+      .select(
+        conSabado
+          ? '*, comercio:client_id(pickup_window, pickup_window_sabado)'
+          : '*, comercio:client_id(pickup_window)',
+      )
       .eq('assigned_driver', driverId)
       /*
        * Los reprogramados no van.
@@ -107,6 +119,18 @@ function fetchRoute(driverId: string) {
       )
       .order('id', { ascending: true })
   );
+}
+
+/**
+ * Pide la hoja de ruta y, si la base rechaza la columna del sábado —porque
+ * todavía no se corrió el paso 52—, la vuelve a pedir sin ella.
+ */
+async function traerRuta(driverId: string) {
+  const r = await fetchRoute(driverId);
+  if (r.error && r.error.message.includes('pickup_window_sabado')) {
+    return fetchRoute(driverId, false);
+  }
+  return r;
 }
 
 export default function DriverDashboardPage() {
@@ -265,7 +289,7 @@ export default function DriverDashboardPage() {
       setLoading(false);
     });
 
-    fetchRoute(driver.id).then(({ data, error }) => {
+    traerRuta(driver.id).then(({ data, error }) => {
       if (cancelled) return;
       fromNetwork = true;
       if (error) {
@@ -293,7 +317,7 @@ export default function DriverDashboardPage() {
     // anda. Ver `avisarPosicionSiCorresponde`.
     avisarPosicionSiCorresponde();
     setLoading(true);
-    fetchRoute(driver.id).then(({ data, error }) => {
+    traerRuta(driver.id).then(({ data, error }) => {
       setLoading(false);
       if (error) {
         toast('Sin señal: seguís viendo la última hoja de ruta guardada.', 'warn');

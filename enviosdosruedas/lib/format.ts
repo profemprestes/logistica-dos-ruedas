@@ -149,6 +149,22 @@ export function hoyAR(ahora: Date = new Date()): string {
 
 const DIAS_AR = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
+/**
+ * Qué día de la semana es en Mar del Plata. 0 domingo … 6 sábado.
+ *
+ * Va con la hora de Argentina y no con la del servidor: en Vercel son las 00:30
+ * del sábado cuando acá siguen siendo las 21:30 del viernes, y el horario de
+ * retiro del sábado empezaría a regir seis horas antes de tiempo.
+ */
+export function diaDeLaSemanaAR(ahora: Date = new Date()): number {
+  return enArgentina(ahora).getUTCDay();
+}
+
+/** Si hoy es sábado en Mar del Plata. */
+export function esSabadoAR(ahora: Date = new Date()): boolean {
+  return diaDeLaSemanaAR(ahora) === 6;
+}
+
 /** "viernes 14/08" */
 export function diaDeHoyAR(ahora: Date = new Date()): string {
   const d = enArgentina(ahora);

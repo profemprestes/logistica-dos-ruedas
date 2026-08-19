@@ -18,13 +18,18 @@ import { cuandoSeHace } from '@/lib/scheduled';
 import { trackUrl } from '@/lib/trackUrl';
 import {
   NOMBRE_GRUPO,
+  NOMBRE_PERIODO,
   ORDEN_GRUPOS,
+  ORDEN_PERIODOS,
   VACIO_GRUPO,
   coincide,
+  entraEnElPeriodo,
   estaCerrado,
   grupoDe,
   ordenar,
+  rangoDelPeriodo,
   type Grupo,
+  type Periodo,
 } from '@/lib/comercio/estados';
 
 /**
@@ -50,6 +55,7 @@ export interface FichaComercio {
   pickup_extra?: string | null;
   pickup_notes?: string | null;
   pickup_window?: string | null;
+  pickup_window_sabado?: string | null;
   phone?: string | null;
 }
 
@@ -99,6 +105,16 @@ export default function ResumenDelComercio({
 
   const [grupo, setGrupo] = useState<Grupo | 'todos'>('en_curso');
   const [busqueda, setBusqueda] = useState('');
+  /*
+   * Qué días mirar.
+   *
+   * Arranca en "todos" y no en "hoy" a propósito: lo primero que busca un
+   * comercio al entrar es si le falta algo, y eso puede ser de ayer. El día se
+   * elige cuando se pregunta por un día.
+   */
+  const [periodo, setPeriodo] = useState<Periodo>('todo');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
   const [comprobante, setComprobante] = useState<Shipment | null>(null);
   const [copiado, setCopiado] = useState('');
 
@@ -159,20 +175,32 @@ export default function ResumenDelComercio({
 
   const hoy = hoyAR();
 
+  /**
+   * Los envíos del período elegido.
+   *
+   * Recorta ANTES de repartir en casilleros para que los números de arriba, las
+   * solapas y la lista hablen todos del mismo pedazo de tiempo. Si el período
+   * filtrara sólo la lista, arriba diría "33 entregados" y abajo se verían dos.
+   */
+  const delPeriodo = useMemo(() => {
+    const rango = rangoDelPeriodo(periodo, hoy, desde, hasta);
+    return envios.filter((s) => entraEnElPeriodo(s, rango));
+  }, [envios, periodo, hoy, desde, hasta]);
+
   /** Cada envío en su casillero, una sola vez para toda la pantalla. */
   const porGrupo = useMemo(() => {
     const cajas = new Map<Grupo, Shipment[]>(ORDEN_GRUPOS.map((g) => [g, [] as Shipment[]]));
-    for (const s of envios) cajas.get(grupoDe(s, hoy))!.push(s);
+    for (const s of delPeriodo) cajas.get(grupoDe(s, hoy))!.push(s);
     return cajas;
-  }, [envios, hoy]);
+  }, [delPeriodo, hoy]);
 
   const visibles = useMemo(() => {
-    const base = grupo === 'todos' ? envios : (porGrupo.get(grupo) ?? []);
+    const base = grupo === 'todos' ? delPeriodo : (porGrupo.get(grupo) ?? []);
     return ordenar(
       grupo,
       base.filter((s) => coincide(s, busqueda)),
     );
-  }, [grupo, envios, porGrupo, busqueda]);
+  }, [grupo, delPeriodo, porGrupo, busqueda]);
 
   async function copiarLink(s: Shipment) {
     try {
@@ -212,6 +240,50 @@ export default function ResumenDelComercio({
         />
       </div>
 
+      {/* ------------------------------------------------- qué días mirar */}
+      <div className="mb-2 flex flex-wrap gap-2">
+        {ORDEN_PERIODOS.map((p) => (
+          <Pestania
+            key={p}
+            activo={periodo === p}
+            onClick={() => setPeriodo(p)}
+            texto={NOMBRE_PERIODO[p]}
+          />
+        ))}
+      </div>
+
+      {periodo === 'fechas' && (
+        <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
+              Desde
+            </label>
+            <input
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-2 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)]"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
+              Hasta
+            </label>
+            <input
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-2 py-1.5 text-sm outline-none focus:border-[var(--edr-yellow)]"
+            />
+          </div>
+          {/* Una sola fecha vale: dejar el otro campo vacío es "desde ahí en
+              adelante" o "hasta ahí", que es como se pregunta de verdad. */}
+          <span className="pb-1 text-[11px] text-[var(--edr-muted)]">
+            Podés poner una sola.
+          </span>
+        </div>
+      )}
+
       {/* ------------------------------------------------------ filtros */}
       <div className="mb-3 flex flex-wrap gap-2">
         {ORDEN_GRUPOS.map((g) => (
@@ -227,7 +299,7 @@ export default function ResumenDelComercio({
           activo={grupo === 'todos'}
           onClick={() => setGrupo('todos')}
           texto="Todos"
-          cuantos={envios.length}
+          cuantos={delPeriodo.length}
         />
       </div>
 
@@ -240,18 +312,22 @@ export default function ResumenDelComercio({
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por código, nombre, dirección o teléfono"
+            placeholder="Buscar por código, nombre o dirección"
             className="w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--edr-yellow)]"
           />
         </div>
         <button
           onClick={() => setVersion((v) => v + 1)}
           disabled={cargando}
-          title="Actualizar"
-          aria-label="Actualizar"
-          className="shrink-0 rounded border border-[var(--edr-border)] px-3 py-2 hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
+          title="Volver a pedir la lista"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-xs font-bold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)] disabled:opacity-50"
         >
           <RefreshCw size={16} className={cargando ? 'animate-spin' : ''} />
+          {/* Con la palabra al lado y no sólo la flechita, también en el
+              teléfono: el comercio entra dos veces por semana y no tiene por
+              qué adivinar qué hace un ícono. La búsqueda se achica un poco y
+              no pasa nada — el que busca escribe cuatro letras. */}
+          Actualizar
         </button>
       </div>
 
@@ -339,7 +415,8 @@ function Pestania({
   activo: boolean;
   onClick: () => void;
   texto: string;
-  cuantos: number;
+  /** Sin número para los períodos: ahí el número sería el mismo de la solapa. */
+  cuantos?: number;
 }) {
   return (
     <button
@@ -351,18 +428,36 @@ function Pestania({
       }`}
     >
       {texto}
-      <span className={`edr-mono ml-1.5 ${activo ? '' : 'text-[var(--edr-acento)]'}`}>
-        {cuantos}
-      </span>
+      {cuantos !== undefined && (
+        <span className={`edr-mono ml-1.5 ${activo ? '' : 'text-[var(--edr-acento)]'}`}>
+          {cuantos}
+        </span>
+      )}
     </button>
   );
 }
 
-/** El día en que se hace el envío, dicho como lo diría una persona. */
+/**
+ * El día en que se hace el envío, dicho como lo diría una persona.
+ *
+ * "13/08" a secas obliga a mirar el calendario para saber si eso fue anteayer
+ * o la semana pasada. Con el día de la semana adelante —y con "hoy" y "ayer"
+ * escritos— la fecha se entiende sin contar.
+ */
 function diaDelEnvio(s: Shipment, hoy: string): string {
   if (!s.scheduled_date) return diaAR(s.created_at);
+
   const corto = s.scheduled_date.split('-').reverse().slice(0, 2).join('/');
-  return s.scheduled_date > hoy ? `${corto} · ${cuandoSeHace(s.scheduled_date, hoy)}` : corto;
+  if (s.scheduled_date === hoy) return `hoy ${corto}`;
+  if (s.scheduled_date > hoy) return `${corto} · ${cuandoSeHace(s.scheduled_date, hoy)}`;
+
+  const ayer = new Date(Date.parse(`${hoy}T00:00:00`) - 86_400_000).toISOString().slice(0, 10);
+  if (s.scheduled_date === ayer) return `ayer ${corto}`;
+
+  const dia = new Date(`${s.scheduled_date}T00:00:00`).toLocaleDateString('es-AR', {
+    weekday: 'short',
+  });
+  return `${dia} ${corto}`;
 }
 
 /**

@@ -247,7 +247,12 @@ export function buscarAtrasos({
   for (const s of deHoy) {
     if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
 
-    const texto = horarioDeRetiro(s as Shipment & { comercio?: { pickup_window?: string | null } });
+    const texto = horarioDeRetiro(
+      s as Shipment & {
+        comercio?: { pickup_window?: string | null; pickup_window_sabado?: string | null } | null;
+      },
+      ahora,
+    );
     if (!texto) continue;
 
     const estado = estadoDelComercio(texto, horaAhora);

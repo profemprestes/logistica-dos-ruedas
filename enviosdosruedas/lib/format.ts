@@ -157,6 +157,56 @@ export function money(value: number | null | undefined): string {
   });
 }
 
+/**
+ * Cómo se nombra al destinatario cuando no hay nombre.
+ *
+ * EL PROBLEMA. De 63 envíos, 40 dicen "Sin nombre", y 38 de ésos son Flex. En
+ * un Flex el nombre no suele faltar por descuido: los datos de entrega viven
+ * en la app de Mercado Libre y el repartidor los lee de ahí. "Sin nombre" hace
+ * que un envío bien cargado parezca a medias, y el comercio pregunta por un
+ * dato que nunca existió.
+ *
+ * En los que no son Flex, cuando no vino el nombre, el dato igual está: viene
+ * escrito en el sobre o en el papel pegado al paquete. Decir eso es una
+ * instrucción; decir "Sin nombre" es un agujero.
+ *
+ * SE RESUELVE AL MOSTRAR Y NO EN LA BASE. Lo guardado no se toca: son 40
+ * envíos ya cerrados y reescribirlos sería cambiar el historial para arreglar
+ * un cartel. Además el parser va a seguir guardando "Sin nombre" cuando el
+ * WhatsApp no traiga ninguno, y así esa fila también queda bien contada.
+ */
+/**
+ * Lo que en el campo "nombre" en realidad quiere decir que no hay nombre.
+ *
+ * Las dos últimas ya están escritas a mano en la base: alguien de la oficina
+ * puso "Lo dice el sobre" en vez del nombre, que es exactamente esto. Se las
+ * reconoce para que la columna se lea igual en todas las filas y no queden
+ * tres formas de decir lo mismo.
+ */
+const SIN_NOMBRE = /^\s*(sin nombre|sin datos|s\/n|-{1,3}|lo dice el (sobre|papel)(\/(sobre|papel))?)\s*$/i;
+
+export const NOMBRE_FLEX = 'Datos de entrega en la aplicación Envíos Flex';
+export const NOMBRE_EN_EL_PAQUETE = 'Lo dice el sobre/papel';
+
+export function nombreDelDestinatario(
+  shipment: Pick<Shipment, 'recipient_name'> & { is_flex?: boolean | null },
+): string {
+  /*
+   * EL NOMBRE GANA SIEMPRE, sea Flex o no.
+   *
+   * Los carteles de abajo son para cuando no hay nombre, no en lugar del
+   * nombre. Un Flex puede venir con el destinatario cargado —pasa cuando el
+   * comercio lo pasa por WhatsApp igual— y tapar ese dato con un cartel sería
+   * esconder algo que alguien se tomó el trabajo de escribir.
+   */
+  const nombre = (shipment.recipient_name ?? '').trim();
+  if (nombre && !SIN_NOMBRE.test(nombre)) return nombre;
+
+  // No hay nombre. Qué decir en su lugar depende de por qué no lo hay: en un
+  // Flex está en la app de ellos; en el resto, escrito en el paquete.
+  return shipment.is_flex ? NOMBRE_FLEX : NOMBRE_EN_EL_PAQUETE;
+}
+
 export const STATUS_LABEL: Record<ShipmentStatus, string> = {
   creado: 'Creado',
   pendiente_retiro: 'Pendiente de retiro',

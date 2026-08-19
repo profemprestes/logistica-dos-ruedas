@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { money, type Shipment } from '@/lib/format';
+import { money, nombreDelDestinatario, type Shipment } from '@/lib/format';
 import ComprobanteEnPantalla from '@/components/proof/ComprobanteEnPantalla';
 import {
   EVENT_LABEL,
@@ -128,7 +128,7 @@ export default function ProofOfDeliveryModal({
     if (!shipment) return;
     const partes = [
       `Envío: ${shipment.tracking_code}`,
-      `Destinatario: ${shipment.recipient_name}`,
+      `Destinatario: ${nombreDelDestinatario(shipment)}`,
       `Dirección: ${shipment.address_street}${shipment.address_extra ? ` ${shipment.address_extra}` : ''}, ${shipment.city}`,
       `Estado: ${EVENT_LABEL[log.event] ?? log.event}`,
       `Fecha y hora: ${fechaHora(log.happened_at)}`,
@@ -221,7 +221,7 @@ export default function ProofOfDeliveryModal({
 
         <div className="px-4 py-4 sm:px-5 sm:py-5">
           <div className="mb-4 rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] p-3 text-sm">
-            <div className="font-semibold">{shipment.recipient_name}</div>
+            <div className="font-semibold">{nombreDelDestinatario(shipment)}</div>
             <div className="text-[var(--edr-muted)]">
               {shipment.address_street}
               {shipment.address_extra ? ` — ${shipment.address_extra}` : ''}, {shipment.city}

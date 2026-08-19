@@ -11,6 +11,7 @@ import {
   diaAR,
   hoyAR,
   money,
+  nombreDelDestinatario,
   type Shipment,
 } from '@/lib/format';
 import { cuandoSeHace } from '@/lib/scheduled';
@@ -418,7 +419,7 @@ function Tarjeta({
         <span className="ml-auto text-xs text-[var(--edr-muted)]">{diaDelEnvio(s, hoy)}</span>
       </div>
 
-      <div className="font-bold leading-tight">{s.recipient_name}</div>
+      <div className="font-bold leading-tight">{nombreDelDestinatario(s)}</div>
       <div className="text-sm text-[var(--edr-muted)]">
         {s.address_street}
         {s.address_extra ? ` — ${s.address_extra}` : ''}, {s.city}

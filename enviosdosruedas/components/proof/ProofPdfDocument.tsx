@@ -14,7 +14,7 @@ import {
   pideQuienRecibio,
   type ProofLog,
 } from '@/lib/proof';
-import { money, type Shipment } from '@/lib/format';
+import { money, nombreDelDestinatario, type Shipment } from '@/lib/format';
 
 /**
  * Comprobante de entrega en PDF, hoja A4.
@@ -258,7 +258,7 @@ export default function ProofPdfDocument({
         {/* ---------- Datos del envío ---------- */}
         <Text style={styles.seccion}>DATOS DEL ENVÍO</Text>
         <View style={styles.grilla}>
-          <Celda label="DESTINATARIO" value={shipment.recipient_name} />
+          <Celda label="DESTINATARIO" value={nombreDelDestinatario(shipment)} />
           <Celda label="TELÉFONO" value={shipment.recipient_phone || '—'} />
           <Celda label="DIRECCIÓN" value={direccion} ancha />
           <Celda label="COMERCIO / REMITENTE" value={shipment.client_name_raw || '—'} />

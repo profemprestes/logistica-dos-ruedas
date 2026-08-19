@@ -9,7 +9,7 @@ import {
   photoPaths,
   type ProofLog,
 } from '@/lib/proof';
-import { money, type Shipment } from '@/lib/format';
+import { money, nombreDelDestinatario, type Shipment } from '@/lib/format';
 
 /**
  * El comprobante como se ve EN PAPEL, pero en la pantalla.
@@ -120,7 +120,7 @@ export default function ComprobanteEnPantalla({
         {/* ------------------------------------------ datos del envío */}
         <Titulo>DATOS DEL ENVÍO</Titulo>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          <Celda label="DESTINATARIO" value={shipment.recipient_name} />
+          <Celda label="DESTINATARIO" value={nombreDelDestinatario(shipment)} />
           <Celda label="TELÉFONO" value={shipment.recipient_phone || '—'} />
           <Celda label="DIRECCIÓN" value={direccion} ancha />
           <Celda label="COMERCIO / REMITENTE" value={shipment.client_name_raw || '—'} />

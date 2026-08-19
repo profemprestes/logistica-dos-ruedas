@@ -84,7 +84,7 @@ function esActivo(pathname: string, href: string): boolean {
 export default function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { atrasos, enCalle } = useDatosDelDia();
+  const { atrasos, enCalle, pedidosDeComercios } = useDatosDelDia();
 
   const [cajon, setCajon] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -168,7 +168,17 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       <div className="flex flex-col gap-[3px]">
         {ITEMS.map(({ href, label, Icono }) => {
           const activo = esActivo(pathname, href);
-          const badge = href === '/admin/panel' ? atrasos.length : 0;
+          /*
+           * Dos globitos distintos en la misma barra: los atrasos del día en
+           * el Panel, y los pedidos de los comercios en Comercios. Es el único
+           * lugar donde él ve un pedido sin ir a buscarlo.
+           */
+          const badge =
+            href === '/admin/panel'
+              ? atrasos.length
+              : href === '/admin/comercios'
+                ? pedidosDeComercios
+                : 0;
           return (
             <Link
               key={href}
@@ -325,7 +335,17 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/12 bg-[var(--edr-blue)] px-2 pb-[env(safe-area-inset-bottom)] lg:hidden">
         {ITEMS.filter((i) => i.corto).map(({ href, corto, Icono }) => {
           const activo = esActivo(pathname, href);
-          const badge = href === '/admin/panel' ? atrasos.length : 0;
+          /*
+           * Dos globitos distintos en la misma barra: los atrasos del día en
+           * el Panel, y los pedidos de los comercios en Comercios. Es el único
+           * lugar donde él ve un pedido sin ir a buscarlo.
+           */
+          const badge =
+            href === '/admin/panel'
+              ? atrasos.length
+              : href === '/admin/comercios'
+                ? pedidosDeComercios
+                : 0;
           return (
             <Link
               key={href}

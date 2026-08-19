@@ -48,6 +48,7 @@ export interface FichaComercio {
   name: string;
   pickup_address?: string | null;
   pickup_extra?: string | null;
+  pickup_notes?: string | null;
   pickup_window?: string | null;
   phone?: string | null;
 }

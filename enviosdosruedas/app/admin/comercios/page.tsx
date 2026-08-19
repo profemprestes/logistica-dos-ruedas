@@ -33,6 +33,8 @@ export default function ComerciosPage() {
   const router = useRouter();
   const [comercios, setComercios] = useState<Comercio[]>([]);
   const [envios, setEnvios] = useState<Map<number, number>>(new Map());
+  /** Los que dejaron un pedido de cambio esperando. */
+  const [pidieron, setPidieron] = useState<Set<number>>(new Set());
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [nuevo, setNuevo] = useState<Omit<Comercio, 'id'> | null>(null);
@@ -53,11 +55,13 @@ export default function ComerciosPage() {
     let vivo = true;
 
     const traer = async () => {
-      const [{ data, error: e }, { data: usos }] = await Promise.all([
+      const [{ data, error: e }, { data: usos }, { data: pedidos }] = await Promise.all([
         supabase.from('clients').select('*').order('name'),
         // Cuántos envíos tiene cada uno: es lo que dice si un comercio importa
         // o si fue un retiro suelto de una vez.
         supabase.from('shipments').select('client_id').not('client_id', 'is', null).limit(2000),
+        // Quiénes están esperando una respuesta (paso 51).
+        supabase.from('solicitudes_comercio').select('client_id').eq('estado', 'pendiente'),
       ]);
 
       if (!vivo) return;
@@ -71,6 +75,7 @@ export default function ComerciosPage() {
         cuenta.set(id, (cuenta.get(id) ?? 0) + 1);
       }
       setEnvios(cuenta);
+      setPidieron(new Set(((pedidos ?? []) as { client_id: number }[]).map((p) => p.client_id)));
       setCargando(false);
     };
 
@@ -91,9 +96,19 @@ export default function ComerciosPage() {
         )
       : comercios;
 
-    // Los más usados arriba: es el orden en que se los busca.
-    return [...lista].sort((a, b) => (envios.get(b.id) ?? 0) - (envios.get(a.id) ?? 0));
-  }, [comercios, busqueda, envios]);
+    /*
+     * Primero los que están esperando una respuesta, después los más usados.
+     *
+     * Un pedido sin contestar es lo único de esta pantalla que tiene a alguien
+     * del otro lado esperando; el orden por cantidad de envíos sirve para
+     * buscar, pero no para eso.
+     */
+    return [...lista].sort(
+      (a, b) =>
+        Number(pidieron.has(b.id)) - Number(pidieron.has(a.id)) ||
+        (envios.get(b.id) ?? 0) - (envios.get(a.id) ?? 0),
+    );
+  }, [comercios, busqueda, envios, pidieron]);
 
   /** Para poder decir "sucursal de X" y no "sucursal de 3". */
   const nombres = useMemo(() => new Map(comercios.map((c) => [c.id, c.name])), [comercios]);
@@ -126,6 +141,15 @@ export default function ComerciosPage() {
             </>
           )}
           {conAcceso > 0 && <> · {conAcceso} con acceso al portal.</>}
+          {pidieron.size > 0 && (
+            <>
+              {' '}
+              <strong className="text-[var(--edr-acento)]">
+                {pidieron.size} pidió cambiar sus datos
+              </strong>
+              : está{pidieron.size > 1 ? 'n' : ''} primero en la lista.
+            </>
+          )}
         </p>
 
         <div className="relative mb-3">
@@ -186,6 +210,11 @@ export default function ComerciosPage() {
                           className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-verde-claro)]"
                         >
                           <KeyRound size={10} /> entra
+                        </span>
+                      )}
+                      {pidieron.has(c.id) && (
+                        <span className="rounded bg-[var(--edr-yellow)] px-1.5 py-0.5 text-[10px] font-black uppercase text-[var(--edr-blue)]">
+                          pidió un cambio
                         </span>
                       )}
                       {c.parent_id && (

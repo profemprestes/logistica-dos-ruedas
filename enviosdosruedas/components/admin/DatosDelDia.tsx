@@ -63,6 +63,15 @@ export interface DatosDelDia {
   /** Lo que hay para cobrar en la puerta hoy, de lo que todavía no se entregó. */
   aCobrar: number;
   entregados: number;
+  /**
+   * Cuántos comercios dejaron un pedido de cambio de datos esperando.
+   *
+   * Vive acá y no sólo en la pantalla de Comercios porque el aviso tiene que
+   * encontrarlo a él, no al revés: así se ve en la barra desde cualquier
+   * sección, igual que los atrasos del día. Un pedido que hay que ir a buscar
+   * es un pedido que se contesta dos días después.
+   */
+  pedidosDeComercios: number;
   refrescar: () => void;
 }
 
@@ -80,12 +89,13 @@ const VACIO: Omit<DatosDelDia, 'refrescar'> = {
   enCalle: 0,
   aCobrar: 0,
   entregados: 0,
+  pedidosDeComercios: 0,
 };
 
 async function traer(hoy: string) {
   const desdeHoy = new Date(`${hoy}T00:00:00`).toISOString();
 
-  const [envios, pendientes, posiciones, movimientos, senales] = await Promise.all([
+  const [envios, pendientes, posiciones, movimientos, senales, pedidos] = await Promise.all([
     supabase
       .from('shipments')
       // El horario de retiro sale del comercio salvo que el envío traiga el
@@ -121,6 +131,17 @@ async function traer(hoy: string) {
       .from('senal_dia')
       .select('driver_id, posiciones, hueco_max_seg, bateria_min')
       .eq('fecha', hoy),
+    /*
+     * Los pedidos de cambio de datos que dejaron los comercios (paso 51).
+     *
+     * Sólo la cuenta: acá alcanza con saber si hay algo esperando para poner
+     * el globito. El detalle se mira en la ficha del comercio, que es donde se
+     * puede hacer algo con él.
+     */
+    supabase
+      .from('solicitudes_comercio')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'pendiente'),
   ]);
 
   return {
@@ -139,6 +160,7 @@ async function traer(hoy: string) {
       hueco_max_seg: number;
       bateria_min: number | null;
     }[],
+    pedidosDeComercios: pedidos.count ?? 0,
   };
 }
 
@@ -175,7 +197,7 @@ export function ProveedorDelDia({ children }: { children: ReactNode }) {
     let vivo = true;
 
     traer(hoyLocal())
-      .then(({ deHoy, colgados, posiciones, movimientos, senales }) => {
+      .then(({ deHoy, colgados, posiciones, movimientos, senales, pedidosDeComercios }) => {
         if (!vivo) return;
 
         // Desde cuándo está en camino cada envío. Los movimientos vienen del
@@ -257,6 +279,7 @@ export function ProveedorDelDia({ children }: { children: ReactNode }) {
             .filter((s) => s.status !== 'entregado' && s.status !== 'cancelado')
             .reduce((n, s) => n + shipmentCash(s).atDelivery, 0),
           entregados: deHoy.filter((s) => s.status === 'entregado').length,
+          pedidosDeComercios,
         });
       })
       .catch(() => {

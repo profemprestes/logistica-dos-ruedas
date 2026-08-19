@@ -7,6 +7,7 @@ import { ArrowLeft, KeyRound, Pencil, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import AccesoDelComercio from '@/components/admin/AccesoDelComercio';
+import PedidoDelComercio from '@/components/admin/PedidoDelComercio';
 import EditarComercio, { VACIO, type Comercio } from '@/components/admin/EditarComercio';
 import ResumenDelComercio from '@/components/comercio/ResumenDelComercio';
 
@@ -100,6 +101,10 @@ export default function ComercioPage() {
           </p>
         ) : (
           <>
+            {/* El pedido va PRIMERO: si el comercio pidió algo, es lo que hay
+                que resolver antes de mirar cualquier otra cosa de su ficha. */}
+            <PedidoDelComercio comercio={comercio} onResuelto={recargar} />
+
             {/* ------------------------------------------------- la ficha */}
             <section className="mb-4 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Warehouse } from 'lucide-react';
+import { LogOut, UserCog, Warehouse } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { WHATSAPP } from '@/components/SiteFooter';
+import MiCuenta from '@/components/comercio/MiCuenta';
 import ResumenDelComercio, { type FichaComercio } from '@/components/comercio/ResumenDelComercio';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -51,7 +52,7 @@ async function cargar(): Promise<Carga> {
   if (perfil?.role === 'admin') return { destino: '/admin' };
   if (perfil?.role === 'repartidor') return { destino: '/driver' };
 
-  const CAMPOS = 'id, name, pickup_address, pickup_extra, pickup_window, phone';
+  const CAMPOS = 'id, name, pickup_address, pickup_extra, pickup_notes, pickup_window, phone';
 
   const { data: ficha } = await supabase
     .from('clients')
@@ -95,6 +96,7 @@ export default function ComercioPage() {
   const [tieneStock, setTieneStock] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [miCuenta, setMiCuenta] = useState(false);
 
   const aplicar = useCallback(
     (r: Carga) => {
@@ -155,6 +157,14 @@ export default function ComercioPage() {
                 <Warehouse size={14} /> Mi stock
               </Link>
             )}
+            {comercio && (
+              <button
+                onClick={() => setMiCuenta(true)}
+                className="inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-xs font-bold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
+              >
+                <UserCog size={14} /> Mi cuenta
+              </button>
+            )}
             <button
               onClick={salir}
               className="inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-xs font-bold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
@@ -213,7 +223,10 @@ export default function ComercioPage() {
           </a>
         </div>
       ) : (
-        <ResumenDelComercio comercio={comercio} sucursales={sucursales} />
+        <>
+          <ResumenDelComercio comercio={comercio} sucursales={sucursales} />
+          {miCuenta && <MiCuenta comercio={comercio} onCerrar={() => setMiCuenta(false)} />}
+        </>
       )}
     </div>
   );

@@ -85,6 +85,19 @@ function Contador({ label, valor, clase = '' }: { label: string; valor: number; 
 }
 
 /** Estados en los que ya existe una prueba de entrega para mirar */
+/**
+ * Un lugar al que hay que ir a retirar, con cuántos paquetes lo esperan.
+ *
+ * Lleva el id del comercio porque de ahí sale el punto del mapa: la ficha lo
+ * tiene verificado a mano y el envío no lo tiene en ningún lado.
+ */
+interface Lugar {
+  clientId: number | null;
+  direccion: string;
+  comercio: string;
+  cuantos: number;
+}
+
 const HAS_PROOF: ShipmentStatus[] = ['entregado', 'pendiente_entrega'];
 
 /** Ya no se mueven: no tiene sentido buscarles el punto ni marcarlos. */
@@ -643,15 +656,25 @@ export default function AdminPage() {
      * distintos a los que ir.
      */
     const elegidos = shipments.filter((s) => ids.includes(s.id));
-    const porComercio = new Map<string, { direccion: string; comercio: string; cuantos: number }>();
+    const porComercio = new Map<string, Lugar>();
 
     for (const s of elegidos) {
       const dir = (s.pickup_address ?? '').trim();
       if (!dir) continue;
-      const clave = dir.toLowerCase();
+
+      /*
+       * Se agrupa por COMERCIO, no por el texto de la dirección.
+       *
+       * El mismo local puede venir escrito de dos formas en dos envíos
+       * —"BELGRANO 2875" y "BELGRANO 2875 5A", porque al guardar se le pega el
+       * piso— y agrupando por texto salían dos colectas para el mismo lugar:
+       * el repartidor veía dos paradas donde hay una.
+       */
+      const clave = s.client_id != null ? `c${s.client_id}` : `d${dir.toLowerCase()}`;
       const previo = porComercio.get(clave);
       porComercio.set(clave, {
-        direccion: dir,
+        clientId: s.client_id ?? null,
+        direccion: previo?.direccion || dir,
         comercio: previo?.comercio || (s.client_name_raw ?? '').trim(),
         cuantos: (previo?.cuantos ?? 0) + 1,
       });
@@ -731,10 +754,7 @@ export default function AdminPage() {
    * Preasignar de a tandas es lo normal —van llegando etiquetas por WhatsApp— y
    * sin esto la app del repartidor se llenaría de cinco veces el mismo comercio.
    */
-  async function crearColectas(
-    driverId: string,
-    lugares: { direccion: string; comercio: string; cuantos: number }[],
-  ): Promise<string[]> {
+  async function crearColectas(driverId: string, lugares: Lugar[]): Promise<string[]> {
     if (!lugares.length) return [];
 
     const hoy = hoyLocal();
@@ -756,31 +776,55 @@ export default function AdminPage() {
     const { data: sesion } = await supabase.auth.getSession();
 
     /*
-     * El punto sale del comercio, que ya lo tiene buscado y verificado. Si el
-     * envío no está enganchado a ninguno, la colecta se crea sin punto: sirve
-     * igual, con el "cómo llegar" armado desde la dirección escrita.
+     * EL PUNTO SALE DE LA FICHA DEL COMERCIO, BUSCADA POR SU ID.
+     *
+     * Antes se buscaba comparando el TEXTO de la dirección del envío contra el
+     * de la ficha, y eso fallaba callado todo el tiempo: al guardar un envío se
+     * le pega el piso a la dirección de retiro, así que el envío dice
+     * "BELGRANO 2875 5A" y la ficha "BELGRANO 2875". No coinciden, la colecta
+     * nace sin punto, y en el mapa del repartidor no aparece la parada. El
+     * dato estaba —verificado a mano en el mapa, en la ficha— y no se usaba.
+     *
+     * Con el id no hay nada que comparar. Y la dirección de la colecta pasa a
+     * ser la de la ficha, que es la prolija: si el envío se cargó con la
+     * dirección cortada, el repartidor igual ve la buena.
+     *
+     * Sin comercio enganchado se sigue como antes: sin punto, con el "cómo
+     * llegar" armado desde el texto. Sirve igual, sólo que no se dibuja.
      */
-    const { data: comercios } = await supabase
-      .from('clients')
-      .select('pickup_address, lat, lng')
-      .not('lat', 'is', null);
+    const ids = [...new Set(nuevas.map((l) => l.clientId).filter((id): id is number => id != null))];
 
-    const punto = new Map<string, { lat: number; lng: number }>();
-    for (const c of (comercios ?? []) as { pickup_address: string; lat: number; lng: number }[]) {
-      if (c.pickup_address) punto.set(c.pickup_address.trim().toLowerCase(), { lat: c.lat, lng: c.lng });
+    const ficha = new Map<number, { direccion: string | null; lat: number | null; lng: number | null }>();
+    if (ids.length) {
+      const { data: comercios } = await supabase
+        .from('clients')
+        .select('id, pickup_address, lat, lng')
+        .in('id', ids);
+
+      for (const c of (comercios ?? []) as {
+        id: number;
+        pickup_address: string | null;
+        lat: number | null;
+        lng: number | null;
+      }[]) {
+        ficha.set(c.id, { direccion: c.pickup_address, lat: c.lat, lng: c.lng });
+      }
     }
 
     const { error: e } = await supabase.from('colectas').insert(
-      nuevas.map((l) => ({
-        driver_id: driverId,
-        direccion: l.direccion,
-        comercio: l.comercio || null,
-        nota: `${l.cuantos} paquete${l.cuantos > 1 ? 's' : ''}`,
-        lat: punto.get(l.direccion.toLowerCase())?.lat ?? null,
-        lng: punto.get(l.direccion.toLowerCase())?.lng ?? null,
-        fecha: hoy,
-        creada_por: sesion.session?.user?.id ?? null,
-      })),
+      nuevas.map((l) => {
+        const f = l.clientId != null ? ficha.get(l.clientId) : undefined;
+        return {
+          driver_id: driverId,
+          direccion: f?.direccion?.trim() || l.direccion,
+          comercio: l.comercio || null,
+          nota: `${l.cuantos} paquete${l.cuantos > 1 ? 's' : ''}`,
+          lat: f?.lat ?? null,
+          lng: f?.lng ?? null,
+          fecha: hoy,
+          creada_por: sesion.session?.user?.id ?? null,
+        };
+      }),
     );
 
     if (e) {

@@ -296,7 +296,24 @@ export default function MapaEnvios({
   }, [miUbicacion, listo]);
 
   return (
-    <div className="relative">
+    /*
+      `isolate` NO ES DECORACIÓN: es lo que mantiene el mapa adentro del mapa.
+
+      Leaflet apila lo suyo con números altos —las capas en 200 a 700, los
+      botones de zoom y el cartel de OpenStreetMap en 1000— y esos números sólo
+      quedan encerrados si algo arriba forma su propia pila. Sin eso compiten
+      con la página entera, y el menú del celular (que va en 50) quedaba abajo:
+      se abría el cajón y los botones del mapa seguían flotando encima.
+
+      `isolation: isolate` hace justamente eso y nada más: los 1000 pasan a ser
+      1000 adentro de esta caja, y la caja se ordena con el resto como lo que
+      es, un pedazo del contenido.
+
+      Vale para cualquier cosa que se abra sobre un mapa —el cajón, el
+      comprobante, el formulario de carga—, no sólo para el caso que lo
+      destapó.
+    */
+    <div className="relative isolate">
       <div
         ref={caja}
         className={`w-full overflow-hidden rounded-lg border border-[var(--edr-border)] ${alto}`}

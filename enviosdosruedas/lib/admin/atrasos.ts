@@ -99,6 +99,39 @@ function abierto(s: Shipment): boolean {
   return s.status !== 'entregado' && s.status !== 'cancelado';
 }
 
+/**
+ * Si el envío ya tiene un repartidor atrás, esté en su hoja de ruta o no.
+ *
+ * ASIGNADO Y PREASIGNADO SON DOS COSAS DISTINTAS —una lo mete en la hoja de
+ * ruta y la otra sólo dice de quién va a ser cuando lo retire— pero para los
+ * avisos son lo mismo: en los dos casos hay alguien que se va a hacer cargo, y
+ * al preasignar se le manda la colecta y le llega el aviso al celular.
+ *
+ * Vive en una función y no repetido en cada regla para que no vuelva a pasar
+ * lo que pasó: se arregló la regla de "sin asignar" y la de "sigue en el
+ * comercio" quedó con el criterio viejo, así que los preasignados dejaron de
+ * salir en una y nunca empezaron a salir en la otra.
+ */
+function tieneDueno(s: Shipment): boolean {
+  return Boolean(s.assigned_driver || s.preasignado_a);
+}
+
+/**
+ * Quién se hace cargo, para el renglón chico del aviso.
+ *
+ * El preasignado se dice CON LA ACLARACIÓN. "Agustín" a secas haría pensar que
+ * el paquete está en su hoja de ruta, y no: lo va a tener cuando lo escanee en
+ * el comercio. Si todavía no lo retiró, esa diferencia es justamente la que
+ * hay que mirar.
+ */
+function quienSeHaceCargo(s: Shipment): string {
+  if (s.driver?.full_name) return s.driver.full_name;
+  if (s.assigned_driver) return 'Asignado';
+  if (s.preasignado?.full_name) return `${s.preasignado.full_name} (preasignado)`;
+  if (s.preasignado_a) return 'Preasignado';
+  return 'Sin repartidor';
+}
+
 /** "13/08", del texto de la fecha y sin pasar por el calendario. */
 function fechaCorta(fechaISO: string): string {
   const [, mes, dia] = fechaISO.split('-');
@@ -157,10 +190,18 @@ export function buscarAtrasos({
   /** La hora del día en Mar del Plata, 14.5 = 14:30. La usan varias reglas. */
   const horaAhora = horaDelDiaAR(ahora);
 
-  // ---- 1. Nadie lo va a llevar --------------------------------------------
-  // Van juntos en un solo renglón a propósito: seis envíos sin repartidor son
-  // un problema solo —hay que repartirlos— y no seis problemas.
-  const sinAsignar = deHoy.filter((s) => !s.assigned_driver);
+  /* ---- 1. Nadie lo va a llevar --------------------------------------------
+   *
+   * Van juntos en un solo renglón a propósito: seis envíos sin repartidor son
+   * un problema solo —hay que repartirlos— y no seis problemas.
+   *
+   * PREASIGNADO CUENTA COMO ASIGNADO PARA ESTA REGLA. Miraba sólo
+   * `assigned_driver`, y un envío preasignado salía como "nadie lo va a
+   * llevar" cuando ya tiene dueño, ya se le mandó la colecta y ya le llegó el
+   * aviso al celular. El aviso pedía hacer algo que estaba hecho, y ésos son
+   * los que enseñan a ignorar el panel.
+   */
+  const sinAsignar = deHoy.filter((s) => !tieneDueno(s));
   if (sinAsignar.length) {
     const masViejo = sinAsignar.reduce((a, b) => (a.created_at <= b.created_at ? a : b));
     avisos.push({
@@ -283,7 +324,17 @@ export function buscarAtrasos({
    * corte general de las 15.
    */
   for (const s of deHoy) {
-    if (!s.assigned_driver) continue;
+    /*
+     * Acá también vale el preasignado, y por el mismo motivo que arriba: es un
+     * envío CON dueño que sigue en el comercio, que es exactamente de lo que
+     * habla esta regla.
+     *
+     * Si sólo se arreglara la regla 1, un preasignado se caería por el medio:
+     * la 1 lo saltearía por tener dueño y ésta por no estar asignado, y nadie
+     * avisaría de un paquete que se está quedando sin margen. Las dos reglas
+     * tienen que entender "dueño" igual.
+     */
+    if (!tieneDueno(s)) continue;
     if (s.status !== 'creado' && s.status !== 'pendiente_retiro') continue;
     // Ya lo dijo la regla del comercio, con una hora más concreta.
     if (avisadosPorElComercio.has(s.id)) continue;
@@ -312,7 +363,7 @@ export function buscarAtrasos({
       !vencida && cierre !== null && cierre - horaAhora < ALERTA_ANTES_DEL_CIERRE_HS;
 
     const falta = cierre !== null ? Math.round((cierre - horaAhora) * 60) : null;
-    const quien = s.driver?.full_name ?? 'Asignado';
+    const quien = quienSeHaceCargo(s);
 
     avisos.push({
       clave: `sin-retirar-${s.id}`,
@@ -355,7 +406,7 @@ export function buscarAtrasos({
     const falta = Math.round((cierre - horaAhora) * 60);
     if (falta >= ALERTA_ANTES_DEL_CIERRE_HS * 60) continue;
 
-    const quien = s.driver?.full_name ?? 'Repartidor';
+    const quien = quienSeHaceCargo(s);
 
     avisos.push({
       clave: `cierra-${s.id}`,

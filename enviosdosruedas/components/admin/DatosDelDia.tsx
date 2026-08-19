@@ -90,7 +90,7 @@ async function traer(hoy: string) {
       .from('shipments')
       // El horario de retiro sale del comercio salvo que el envío traiga el
       // suyo: sin esto, el aviso de "el comercio cierra" no tendría con qué.
-      .select('*, driver:assigned_driver(full_name), comercio:client_id(pickup_window)')
+      .select('*, driver:assigned_driver(full_name), preasignado:preasignado_a(full_name), comercio:client_id(pickup_window)')
       .eq('scheduled_date', hoy),
     // Los colgados no tienen fecha: justamente el problema es que quedaron
     // atrás. Se traen aparte y sin filtro de día.

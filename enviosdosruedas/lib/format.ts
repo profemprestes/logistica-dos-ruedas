@@ -73,6 +73,14 @@ export interface Shipment {
   reintento_de?: number | null;
   reprogramado_en?: number | null;
   driver?: { full_name: string } | null;
+  /**
+   * El nombre del que lo tiene preasignado, cuando la consulta lo pide.
+   *
+   * Va aparte de `driver` porque son dos cosas distintas: `driver` lo tiene en
+   * la hoja de ruta y éste todavía no. Los avisos del panel necesitan
+   * distinguirlos para no decir "asignado" de algo que no lo está.
+   */
+  preasignado?: { full_name: string } | null;
 }
 
 /**

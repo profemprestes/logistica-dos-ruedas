@@ -105,6 +105,36 @@ caso(
   [],
 );
 
+/*
+ * PREASIGNADO YA TIENE DUEÑO.
+ *
+ * El 19/08/2026 el panel avisaba "1 envío de hoy sin repartidor" de uno que
+ * estaba preasignado a Agustín, con su colecta mandada y el aviso ya en el
+ * celular. El aviso pedía hacer algo que estaba hecho.
+ *
+ * Los dos casos van juntos porque el arreglo se puede hacer mal: si sólo se
+ * corrige la regla de "sin asignar", el preasignado deja de salir ahí y no
+ * empieza a salir en la de "sigue en el comercio" —que miraba `assigned_driver`
+ * igual que la otra— y el envío se cae por el medio sin que nadie avise.
+ */
+caso(
+  'preasignado a las 10: ya tiene dueño, no es "sin asignar"',
+  tipos([envio({ preasignado_a: 'd1', created_at: `${HOY}T09:40:00` })], 10),
+  [],
+);
+
+caso(
+  'preasignado y sin retirar a las 16: avisa igual que un asignado',
+  tipos([envio({ preasignado_a: 'd1', created_at: `${HOY}T09:40:00` })], 16),
+  ['sin_retirar'],
+);
+
+caso(
+  'sin nadie atrás sigue saliendo como sin asignar',
+  tipos([envio({ created_at: `${HOY}T09:40:00` })], 10),
+  ['sin_asignar'],
+);
+
 caso(
   'asignado y sin retirar a las 16: pasó el corte',
   tipos([envio({ assigned_driver: 'd1', created_at: `${HOY}T15:40:00` })], 16),
@@ -572,7 +602,7 @@ async function contraLaBase() {
   const desdeHoy = new Date(`${hoy}T00:00:00`).toISOString();
 
   const [deHoy, colgados, movimientos] = await Promise.all([
-    db.from('shipments').select('*, driver:assigned_driver(full_name)').eq('scheduled_date', hoy),
+    db.from('shipments').select('*, driver:assigned_driver(full_name), preasignado:preasignado_a(full_name)').eq('scheduled_date', hoy),
     db
       .from('shipments')
       .select('*, driver:assigned_driver(full_name)')
@@ -625,9 +655,16 @@ async function contraLaBase() {
   const abiertos = (deHoy.data ?? []).filter(
     (s: { status: string }) => s.status !== 'entregado' && s.status !== 'cancelado',
   );
+  // La cuenta mira las DOS columnas, igual que la regla. Contando sólo
+  // `assigned_driver` la contracuenta decía "1 sin repartidor" de un envío
+  // preasignado, justo lo contrario de lo que el panel muestra arriba.
+  const conDueno = (s: { assigned_driver: string | null; preasignado_a?: string | null }) =>
+    Boolean(s.assigned_driver || s.preasignado_a);
+
   console.log(
     `Contracuenta: de ${deHoy.data?.length ?? 0} envíos de hoy, ${abiertos.length} abiertos, ` +
-      `${abiertos.filter((s: { assigned_driver: string | null }) => !s.assigned_driver).length} sin repartidor.`,
+      `${abiertos.filter((s: { assigned_driver: string | null }) => !conDueno(s)).length} sin nadie atrás ` +
+      `(${abiertos.filter((s: { assigned_driver: string | null; preasignado_a?: string | null }) => !s.assigned_driver && s.preasignado_a).length} preasignados).`,
   );
 }
 

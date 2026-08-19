@@ -64,6 +64,10 @@ export default function AccesoDelComercio({
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
+  /** Todavía no volvió el servidor con el nombre de usuario. */
+  const [buscando, setBuscando] = useState(false);
+  /** La ficha apunta a una cuenta que ya no existe. */
+  const [roto, setRoto] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -71,9 +75,12 @@ export default function AccesoDelComercio({
     const traer = async () => {
       if (!tieneAcceso) {
         setUsuario('');
+        setRoto(false);
         setNuevoUsuario(usuarioSugerido(nombre));
         return;
       }
+
+      setBuscando(true);
       const { data } = await supabase.auth.getSession();
       const res = await fetch(`/api/comercio-users?client_id=${clientId}`, {
         headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
@@ -82,8 +89,10 @@ export default function AccesoDelComercio({
       if (!vivo) return;
       if (res.ok) {
         setUsuario(json.usuario ?? '');
-        setNuevoUsuario(json.usuario ?? '');
+        setRoto(Boolean(json.roto));
+        setNuevoUsuario(json.usuario || usuarioSugerido(nombre));
       }
+      setBuscando(false);
     };
 
     void traer();
@@ -91,6 +100,17 @@ export default function AccesoDelComercio({
       vivo = false;
     };
   }, [clientId, nombre, tieneAcceso]);
+
+  /**
+   * Si de verdad hay una cuenta andando.
+   *
+   * NO ALCANZA con que la ficha tenga el enlace: puede apuntar a una cuenta
+   * borrada. Y al revés, mientras el servidor contesta no se sabe todavía, y
+   * en ese rato no se puede ofrecer "Crear acceso" —si se ofrece, se termina
+   * creando un segundo usuario para un comercio que ya tenía uno, y después
+   * nadie sabe con cuál entra—.
+   */
+  const yaTiene = tieneAcceso && !roto;
 
   async function llamar(method: 'POST' | 'PATCH' | 'DELETE', body: unknown) {
     const { data } = await supabase.auth.getSession();
@@ -122,9 +142,16 @@ export default function AccesoDelComercio({
 
   const crear = () =>
     hacer(async () => {
-      await llamar('POST', { client_id: clientId, username: nuevoUsuario, password: clave });
+      const r = await llamar('POST', {
+        client_id: clientId,
+        username: nuevoUsuario,
+        password: clave,
+      });
       setUsuario(nuevoUsuario.trim().toLowerCase());
-      return 'Acceso creado. Copiá los datos y mandáselos al comercio.';
+      setRoto(false);
+      return r.reconectado
+        ? 'Ese usuario ya existía y se volvió a asociar a este comercio. La contraseña sigue siendo la de antes: si no la tenés, cambiala acá abajo.'
+        : 'Acceso creado. Copiá los datos y mandáselos al comercio.';
     });
 
   const cambiarClave = () =>
@@ -176,18 +203,39 @@ export default function AccesoDelComercio({
       <h3 className="mb-1 flex items-center gap-2 font-black">
         <KeyRound size={16} /> Acceso al portal
       </h3>
-      <p className="mb-3 text-xs text-[var(--edr-muted)]">
-        {tieneAcceso ? (
-          <>
-            Entra como <strong className="edr-mono text-[var(--edr-acento)]">{usuario || '…'}</strong>{' '}
-            en {SITIO}/login y ve sus envíos. Sólo mirar: no puede cargar ni cambiar nada.
-          </>
-        ) : (
-          <>
-            Todavía no puede entrar. Creale un usuario y una contraseña, y pasáselos por WhatsApp.
-          </>
-        )}
-      </p>
+      {yaTiene ? (
+        <div className="mb-3 rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+          <p className="text-sm font-bold text-[var(--edr-verde-claro)]">
+            Ya tiene usuario creado
+            {usuario && (
+              <>
+                :{' '}
+                <span className="edr-mono text-[var(--edr-acento)]">{usuario}</span>
+              </>
+            )}
+            {buscando && !usuario && <span className="font-normal"> …</span>}
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--edr-muted)]">
+            Entra en {SITIO}/login y ve sus envíos. Sólo mirar: no puede cargar ni cambiar nada. Acá
+            se le puede cambiar la contraseña o el usuario, o sacarle el acceso.
+          </p>
+        </div>
+      ) : roto ? (
+        /* La ficha apuntaba a una cuenta borrada. Decirlo, porque si no la
+           pantalla mostraría "ya tiene" y el comercio no podría entrar. */
+        <div className="mb-3 rounded border border-orange-400/50 bg-orange-500/10 px-3 py-2">
+          <p className="text-sm font-bold text-[var(--edr-naranja-claro)]">
+            El usuario de este comercio ya no existe
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--edr-muted)]">
+            Alguien borró la cuenta. Creale una nueva acá abajo y pasásela.
+          </p>
+        </div>
+      ) : (
+        <p className="mb-3 text-xs text-[var(--edr-muted)]">
+          Todavía no puede entrar. Creale un usuario y una contraseña, y pasáselos por WhatsApp.
+        </p>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="flex-1">
@@ -202,7 +250,7 @@ export default function AccesoDelComercio({
           />
         </div>
         <div className="flex-1">
-          <label className={labelCls}>{tieneAcceso ? 'Contraseña nueva' : 'Contraseña'}</label>
+          <label className={labelCls}>{yaTiene ? 'Contraseña nueva' : 'Contraseña'}</label>
           <input
             className={campo}
             value={clave}
@@ -219,13 +267,15 @@ export default function AccesoDelComercio({
           para dictársela a otro. Taparla sólo serviría para escribirla mal. */}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {!tieneAcceso ? (
+        {!yaTiene ? (
           <button
             onClick={crear}
-            disabled={trabajando || !nuevoUsuario.trim() || clave.length < 6}
+            /* Mientras el servidor no conteste no se sabe si ya tiene cuenta,
+               y crear a ciegas deja dos usuarios para el mismo comercio. */
+            disabled={trabajando || buscando || !nuevoUsuario.trim() || clave.length < 6}
             className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] disabled:opacity-50"
           >
-            {trabajando ? 'Creando…' : 'Crear acceso'}
+            {trabajando ? 'Creando…' : buscando ? 'Cargando…' : 'Crear acceso'}
           </button>
         ) : (
           <>

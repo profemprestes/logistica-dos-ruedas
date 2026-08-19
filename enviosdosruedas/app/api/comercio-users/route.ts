@@ -64,6 +64,32 @@ async function requireAdmin(request: Request, admin: SupabaseClient) {
   return profile?.role === 'admin' ? data.user : null;
 }
 
+/**
+ * El id de un usuario de comercio que existe pero no es de nadie.
+ *
+ * Devuelve null si no existe, si no es un comercio, o si ya hay una ficha
+ * apuntándole. Sólo un usuario realmente huérfano se puede volver a atar.
+ */
+async function usuarioSuelto(admin: SupabaseClient, email: string): Promise<string | null> {
+  const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+  const user = data.users.find((u) => u.email === email);
+  if (!user) return null;
+
+  const { data: perfil } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (perfil?.role !== 'comercio') return null;
+
+  const { count } = await admin
+    .from('clients')
+    .select('id', { count: 'exact', head: true })
+    .eq('profile_id', user.id);
+
+  return (count ?? 0) === 0 ? user.id : null;
+}
+
 /* ------------------------------------------------- con qué usuario entra */
 /**
  * El nombre de usuario del comercio, para poder mostrarlo en el panel.
@@ -93,11 +119,19 @@ export async function GET(request: Request) {
   if (!comercio?.profile_id) return NextResponse.json({ usuario: null });
 
   const { data, error } = await admin.auth.admin.getUserById(comercio.profile_id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  /*
+   * La ficha apunta a un usuario que ya no existe.
+   *
+   * Pasa si alguien borró la cuenta desde Supabase. Sin avisar de esto, el
+   * panel diría "entra como …" para siempre y nadie entendería por qué el
+   * comercio no puede entrar. Se dice que está roto y se deja crear uno nuevo.
+   */
+  if (error || !data.user) return NextResponse.json({ usuario: null, roto: true });
 
   // Se devuelve sin el "@enviosdosruedas.local": eso es de adentro, y el
   // comercio escribe sólo la primera parte para entrar.
-  const email = data.user?.email ?? '';
+  const email = data.user.email ?? '';
   return NextResponse.json({
     usuario: email.endsWith(`@${DOMAIN}`) ? email.slice(0, -(DOMAIN.length + 1)) : email,
     email,
@@ -158,11 +192,42 @@ export async function POST(request: Request) {
   });
 
   if (authError) {
-    const already = /already|registered|exists/i.test(authError.message);
-    return NextResponse.json(
-      { error: already ? 'Ese usuario ya existe. Elegí otro.' : authError.message },
-      { status: 400 },
-    );
+    if (!/already|registered|exists/i.test(authError.message)) {
+      return NextResponse.json({ error: authError.message }, { status: 400 });
+    }
+
+    /*
+     * El usuario ya existe. Antes de rebotar hay que ver DE QUIÉN es.
+     *
+     * Si es una cuenta de comercio que no está atada a ninguna ficha, es este
+     * mismo comercio que se quedó sin el vínculo —pasa si alguien borra y
+     * vuelve a crear la ficha, o si el enlace se pierde—. Ahí lo que hace
+     * falta no es una cuenta nueva sino volver a atar la que hay: crear otra
+     * dejaría al comercio con dos usuarios y a nadie sabiendo cuál anda.
+     *
+     * Si en cambio es de otro comercio o de otra persona, se rebota: dos
+     * negocios distintos no pueden entrar con el mismo usuario.
+     */
+    const suelto = await usuarioSuelto(admin, toEmail(username));
+
+    if (!suelto) {
+      return NextResponse.json(
+        {
+          error:
+            'Ese nombre de usuario ya está tomado por otra cuenta. Elegí otro.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const { error: eAtar } = await admin
+      .from('clients')
+      .update({ profile_id: suelto })
+      .eq('id', client_id);
+
+    if (eAtar) return NextResponse.json({ error: eAtar.message }, { status: 400 });
+
+    return NextResponse.json({ id: suelto, email: toEmail(username), reconectado: true });
   }
 
   const { error: profileError } = await admin.from('profiles').upsert({

@@ -39,6 +39,54 @@ export function problemaDelComercio(): string | null {
 }
 
 /**
+ * El nombre de un comercio reducido a lo que lo identifica.
+ *
+ * Minúsculas, sin acentos y sin nada que no sea letra o número: "TOY PIOLA",
+ * "toypiola" y "Toy-Piola" dan los tres `toypiola`.
+ *
+ * ESTO NACIÓ DE UN ENVÍO PERDIDO. El 18/08/2026 se cargó uno como "TOYPIOLA"
+ * teniendo la ficha "TOY PIOLA", y como los nombres no coincidían quedó sin
+ * enganchar: no salía en el portal del comercio y el repartidor no veía el
+ * punto de retiro. Un espacio.
+ *
+ * Los acentos se CAMBIAN por su letra, no se borran: "OLAVARRÍA" y "OLAVARRIA"
+ * tienen que dar los dos `olavarria`. Borrando la í, el primero daría
+ * `olavarra` y serían dos comercios distintos otra vez.
+ *
+ * La regla de verdad vive en la base —columna `nombre_clave` e índice único,
+ * paso 50— y esto tiene que dar exactamente lo mismo. Si algún día se cambia
+ * una, hay que cambiar la otra.
+ */
+export function claveDeComercio(nombre: string): string {
+  return nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Busca la ficha de ese nombre, sin que un espacio de más la esconda.
+ *
+ * Si la columna `nombre_clave` todavía no existe —porque se publicó la app
+ * antes de correr el paso 50— vuelve a la búsqueda de antes en vez de fallar.
+ * Sin esta vuelta atrás, en esa ventana ningún envío se enlazaría, que es
+ * bastante peor que enlazar de más.
+ */
+async function buscarFicha(nombre: string) {
+  const porClave = await supabase
+    .from('clients')
+    .select('id, lat')
+    .eq('nombre_clave', claveDeComercio(nombre))
+    .maybeSingle();
+
+  if (!porClave.error) return porClave;
+  if (!/nombre_clave/.test(porClave.error.message)) return porClave;
+
+  return supabase.from('clients').select('id, lat').ilike('name', nombre).maybeSingle();
+}
+
+/**
  * Devuelve el id del comercio para ese nombre, creándolo si hace falta.
  * `null` si no se pudo — y ahí el envío se guarda sin comercio.
  */
@@ -68,17 +116,12 @@ export async function asegurarComercio(opciones: {
 
   try {
     /*
-     * Primero se busca por nombre, sin distinguir mayúsculas.
-     *
-     * Es la misma comparación que hace el índice único de la base (paso 40), y
-     * tiene que serlo: si acá se buscara distinto, escribir "toy piola" crearía
-     * uno nuevo que la base después rechazaría por repetido.
+     * Primero se busca por la clave del nombre: sin espacios, sin acentos y en
+     * minúscula. Es la misma comparación que hace el índice único de la base
+     * (paso 50), y tiene que serlo: si acá se buscara distinto, escribir
+     * "toypiola" crearía uno nuevo que la base después rechazaría por repetido.
      */
-    const { data: existente, error: eBuscar } = await supabase
-      .from('clients')
-      .select('id, lat')
-      .ilike('name', nombre)
-      .maybeSingle();
+    const { data: existente, error: eBuscar } = await buscarFicha(nombre);
 
     if (eBuscar) {
       ultimoProblema = `no se pudo buscar el comercio: ${eBuscar.message}`;
@@ -197,15 +240,16 @@ export async function asegurarComercio(opciones: {
 
     if (error) {
       /*
-       * La carrera: dos envíos del mismo comercio nuevo guardados a la vez.
-       * El segundo choca contra el índice único, y ahí el comercio YA EXISTE
-       * —lo creó el primero— así que se lo busca en vez de dar error.
+       * Dos motivos para chocar contra el índice único, y los dos terminan
+       * igual: el comercio ya existe, así que se lo busca en vez de dar error.
+       *
+       *  - La carrera: dos envíos del mismo comercio nuevo guardados a la vez.
+       *    Lo creó el primero.
+       *  - El mismo nombre escrito distinto: "TOYPIOLA" contra la ficha
+       *    "TOY PIOLA". Acá no debería llegar nunca —la búsqueda de arriba ya
+       *    lo encuentra— pero si llega, la base lo frena igual.
        */
-      const { data: reintento } = await supabase
-        .from('clients')
-        .select('id')
-        .ilike('name', nombre)
-        .maybeSingle();
+      const { data: reintento } = await buscarFicha(nombre);
 
       if (reintento) return (reintento as { id: number }).id;
 

@@ -66,9 +66,19 @@ const chipBase =
 
 export default function ResumenDelComercio({
   comercio,
+  sucursales = [],
   desdeLaOficina = false,
 }: {
   comercio: FichaComercio;
+  /**
+   * Los otros locales del mismo comercio, si tiene.
+   *
+   * Sus envíos entran en la misma lista: para el que mandó el paquete es un
+   * solo negocio, aunque salga de dos locales distintos. Cuando hay más de
+   * uno, cada envío dice de cuál salió — si no, la lista sería dos listas
+   * mezcladas sin forma de distinguirlas.
+   */
+  sucursales?: FichaComercio[];
   /**
    * Lo está mirando el admin y no el comercio.
    *
@@ -90,6 +100,21 @@ export default function ResumenDelComercio({
   const [comprobante, setComprobante] = useState<Shipment | null>(null);
   const [copiado, setCopiado] = useState('');
 
+  /** El comercio y sus locales, que para esta pantalla son uno solo. */
+  const ids = useMemo(
+    () => [comercio.id, ...sucursales.map((s) => s.id)],
+    [comercio.id, sucursales],
+  );
+
+  /** De qué local salió cada envío. Vacío cuando hay un solo local. */
+  const nombreDeLocal = useMemo(() => {
+    if (sucursales.length === 0) return new Map<number, string>();
+    return new Map<number, string>([
+      [comercio.id, comercio.name],
+      ...sucursales.map((s) => [s.id, s.name] as [number, string]),
+    ]);
+  }, [comercio, sucursales]);
+
   useEffect(() => {
     let vivo = true;
 
@@ -109,7 +134,7 @@ export default function ResumenDelComercio({
       } = await supabase
         .from('shipments')
         .select('*', { count: 'exact' })
-        .eq('client_id', comercio.id)
+        .in('client_id', ids)
         .order('created_at', { ascending: false })
         .limit(TOPE);
 
@@ -128,7 +153,7 @@ export default function ResumenDelComercio({
     return () => {
       vivo = false;
     };
-  }, [comercio.id, version]);
+  }, [ids, version]);
 
   const hoy = hoyAR();
 
@@ -252,6 +277,7 @@ export default function ResumenDelComercio({
               key={s.id}
               envio={s}
               hoy={hoy}
+              local={s.client_id != null ? (nombreDeLocal.get(s.client_id) ?? '') : ''}
               copiado={copiado === s.tracking_code}
               desdeLaOficina={desdeLaOficina}
               onCopiar={() => copiarLink(s)}
@@ -349,6 +375,7 @@ function plataDelEnvio(s: Shipment): string {
 function Tarjeta({
   envio: s,
   hoy,
+  local,
   copiado,
   desdeLaOficina,
   onCopiar,
@@ -356,6 +383,8 @@ function Tarjeta({
 }: {
   envio: Shipment;
   hoy: string;
+  /** De qué local salió. Vacío cuando el comercio tiene uno solo. */
+  local: string;
   copiado: boolean;
   desdeLaOficina: boolean;
   onCopiar: () => void;
@@ -369,6 +398,11 @@ function Tarjeta({
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <span className={`${chipBase} ${STATUS_CLASS[s.status]}`}>{ETIQUETA_ESTADO[s.status]}</span>
         <span className="edr-mono text-xs text-[var(--edr-muted)]">{s.tracking_code}</span>
+        {local && (
+          <span className="rounded bg-[var(--edr-surface-2)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-muted)]">
+            {local}
+          </span>
+        )}
         <span className="ml-auto text-xs text-[var(--edr-muted)]">{diaDelEnvio(s, hoy)}</span>
       </div>
 

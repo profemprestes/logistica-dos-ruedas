@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import VerificarPunto from '@/components/admin/VerificarPunto';
 
@@ -34,6 +34,16 @@ export interface Comercio {
   active: boolean;
   /** El usuario con el que entra al portal. Null si todavía no tiene acceso. */
   profile_id?: string | null;
+  /**
+   * De qué comercio es sucursal esta ficha. Null si es un comercio suelto o si
+   * es la casa central.
+   *
+   * Una sucursal es una ficha común: tiene su dirección, su punto en el mapa,
+   * su horario y sus notas, porque es otro local y abre distinto. Lo único que
+   * agrega esto es de quién es, y con eso el portal muestra los envíos de
+   * todos los locales juntos bajo un solo usuario. Ver el paso 50.
+   */
+  parent_id?: number | null;
 }
 
 export const VACIO: Omit<Comercio, 'id'> = {
@@ -115,9 +125,39 @@ export default function EditarComercio({
     lat: comercio.lat,
     lng: comercio.lng,
     active: comercio.active,
+    parent_id: comercio.parent_id ?? null,
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  /** Los que pueden ser casa central de éste. */
+  const [centrales, setCentrales] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    let vivo = true;
+
+    const traer = async () => {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, name, parent_id')
+        .order('name');
+      if (!vivo) return;
+
+      const propio = 'id' in comercio ? comercio.id : -1;
+      setCentrales(
+        (data ?? [])
+          // Una sucursal no puede ser casa central de otra: un solo nivel. Y
+          // un comercio no puede ser sucursal de sí mismo, que es la forma
+          // más rápida de que la ficha desaparezca de todos lados.
+          .filter((c) => c.id !== propio && c.parent_id == null)
+          .map((c) => ({ id: c.id, name: c.name })),
+      );
+    };
+
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [comercio]);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -138,14 +178,33 @@ export default function EditarComercio({
       lat: form.lat,
       lng: form.lng,
       active: form.active,
+      parent_id: form.parent_id,
     };
 
-    const { error: e } = esNuevo
-      ? await supabase.from('clients').insert(fila)
-      : await supabase
-          .from('clients')
-          .update(fila)
-          .eq('id', (comercio as Comercio).id);
+    const escribir = (datos: Record<string, unknown>) =>
+      esNuevo
+        ? supabase.from('clients').insert(datos)
+        : supabase
+            .from('clients')
+            .update(datos)
+            .eq('id', (comercio as Comercio).id);
+
+    let { error: e } = await escribir(fila);
+
+    /*
+     * Si todavía no se corrió el paso 50, la columna `parent_id` no existe y la
+     * base rechaza el guardado entero. Ahí se guarda sin ella.
+     *
+     * Es por la ventana entre publicar la app y correr el paso a mano: sin esto,
+     * en ese rato no se podría corregir NINGÚN comercio, ni la dirección ni el
+     * horario. Perder lo de sucursales un rato es molesto; no poder guardar es
+     * quedarse sin la pantalla.
+     */
+    if (e && /parent_id/.test(e.message)) {
+      const { parent_id, ...sinSucursal } = fila;
+      void parent_id;
+      ({ error: e } = await escribir(sinSucursal));
+    }
 
     setGuardando(false);
 
@@ -254,6 +313,36 @@ export default function EditarComercio({
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
             />
+          </div>
+
+          {/*
+            Sucursales.
+
+            Cada local es su propia ficha porque cada local tiene su dirección,
+            su punto en el mapa y su horario: son cosas distintas y el
+            repartidor las trata distinto. Lo que esto agrega es a quién
+            pertenece, y con eso el dueño entra una sola vez al portal y ve los
+            envíos de todos sus locales juntos.
+          */}
+          <div>
+            <label className={labelCls}>¿Es sucursal de otro comercio?</label>
+            <select
+              className={campo}
+              value={form.parent_id ?? ''}
+              onChange={(e) => set('parent_id', e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">No, es un comercio por su cuenta</option>
+              {centrales.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Sucursal de {c.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] leading-snug text-[var(--edr-muted)]">
+              Para los que tienen más de un local. Cada sucursal guarda su propia
+              dirección, su punto y su horario; el dueño entra una sola vez al portal y ve los
+              envíos de todos sus locales.
+            </p>
           </div>
 
           {/*

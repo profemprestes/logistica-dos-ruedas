@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, KeyRound, Pencil } from 'lucide-react';
+import { ArrowLeft, KeyRound, Pencil, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import AccesoDelComercio from '@/components/admin/AccesoDelComercio';
-import EditarComercio, { type Comercio } from '@/components/admin/EditarComercio';
+import EditarComercio, { VACIO, type Comercio } from '@/components/admin/EditarComercio';
 import ResumenDelComercio from '@/components/comercio/ResumenDelComercio';
 
 /**
@@ -33,9 +33,12 @@ export default function ComercioPage() {
   const id = Number(params?.id);
 
   const [comercio, setComercio] = useState<Comercio | null>(null);
+  const [sucursales, setSucursales] = useState<Comercio[]>([]);
+  const [central, setCentral] = useState<Comercio | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [editando, setEditando] = useState(false);
+  const [nuevaSucursal, setNuevaSucursal] = useState<Omit<Comercio, 'id'> | null>(null);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
@@ -43,16 +46,26 @@ export default function ComercioPage() {
     let vivo = true;
 
     const traer = async () => {
-      const { data, error: e } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      const [{ data, error: e }, { data: hijas }] = await Promise.all([
+        supabase.from('clients').select('*').eq('id', id).maybeSingle(),
+        supabase.from('clients').select('*').eq('parent_id', id).order('name'),
+      ]);
 
       if (!vivo) return;
       if (e) setError(e.message);
       else setComercio((data as Comercio) ?? null);
-      setCargando(false);
+      setSucursales((hijas ?? []) as Comercio[]);
+
+      // Si ESTE es una sucursal, hace falta saber de quién para poder volver.
+      const padre = (data as Comercio | null)?.parent_id;
+      if (padre) {
+        const { data: p } = await supabase.from('clients').select('*').eq('id', padre).maybeSingle();
+        if (vivo) setCentral((p as Comercio) ?? null);
+      } else if (vivo) {
+        setCentral(null);
+      }
+
+      if (vivo) setCargando(false);
     };
 
     void traer();
@@ -108,6 +121,14 @@ export default function ComercioPage() {
                         <KeyRound size={10} /> entra al portal
                       </span>
                     )}
+                    {central && (
+                      <Link
+                        href={`/admin/comercios/${central.id}`}
+                        className="rounded bg-[var(--edr-surface-2)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-acento)] hover:underline"
+                      >
+                        sucursal de {central.name}
+                      </Link>
+                    )}
                   </div>
 
                   <p className="mt-1 text-sm text-[var(--edr-muted)]">
@@ -128,6 +149,65 @@ export default function ComercioPage() {
               </div>
             </section>
 
+            {/* ---------------------------------------------- los locales */}
+            <section className="mb-4 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-4">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 font-black">
+                  <Store size={16} /> Locales de donde se retira
+                </h3>
+                {!comercio.parent_id && (
+                  <button
+                    onClick={() =>
+                      setNuevaSucursal({
+                        ...VACIO,
+                        // El nombre arranca con el del comercio: así las dos
+                        // fichas se ordenan juntas en la lista y se ve de una
+                        // que son el mismo negocio.
+                        name: `${comercio.name} `,
+                        parent_id: comercio.id,
+                        pickup_window: comercio.pickup_window,
+                        phone: comercio.phone,
+                      })
+                    }
+                    className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold hover:bg-[var(--edr-surface-2)]"
+                  >
+                    + Agregar sucursal
+                  </button>
+                )}
+              </div>
+
+              <ul className="text-sm">
+                <li className="text-[var(--edr-muted)]">
+                  <strong className="text-[var(--edr-text)]">{comercio.name}</strong> —{' '}
+                  {comercio.pickup_address || 'sin dirección'}
+                  {comercio.pickup_window ? ` · ${comercio.pickup_window}` : ''}
+                </li>
+                {sucursales.map((s) => (
+                  <li key={s.id} className="mt-1 text-[var(--edr-muted)]">
+                    <Link
+                      href={`/admin/comercios/${s.id}`}
+                      className="font-bold text-[var(--edr-acento)] hover:underline"
+                    >
+                      {s.name}
+                    </Link>{' '}
+                    — {s.pickup_address || 'sin dirección'}
+                    {s.pickup_window ? ` · ${s.pickup_window}` : ''}
+                    {s.lat == null && (
+                      <span className="ml-1 text-[var(--edr-naranja-claro)]">(sin ubicar)</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {sucursales.length === 0 && !comercio.parent_id && (
+                <p className="mt-2 text-[11px] leading-snug text-[var(--edr-muted)]">
+                  Si este comercio retira de más de una dirección, agregá cada local acá. Cada uno
+                  guarda su punto en el mapa y su horario, y el dueño entra una sola vez al portal y
+                  ve los envíos de todos.
+                </p>
+              )}
+            </section>
+
             {/* ------------------------------------------------ el acceso */}
             <div className="mb-4">
               <AccesoDelComercio
@@ -143,7 +223,7 @@ export default function ComercioPage() {
               Lo que ve el comercio
             </h3>
             <div className="-mx-3 sm:-mx-6">
-              <ResumenDelComercio comercio={comercio} desdeLaOficina />
+              <ResumenDelComercio comercio={comercio} sucursales={sucursales} desdeLaOficina />
             </div>
           </>
         )}
@@ -159,6 +239,17 @@ export default function ComercioPage() {
           }}
           /* Si lo borró, acá ya no hay nada que mirar: vuelve a la lista. */
           onBorrado={() => router.replace('/admin/comercios')}
+        />
+      )}
+
+      {nuevaSucursal && (
+        <EditarComercio
+          comercio={nuevaSucursal}
+          onCerrar={() => setNuevaSucursal(null)}
+          onGuardado={() => {
+            setNuevaSucursal(null);
+            recargar();
+          }}
         />
       )}
     </div>

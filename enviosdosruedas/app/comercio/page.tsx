@@ -32,7 +32,7 @@ import { supabase } from '@/lib/supabaseClient';
 /** Consulta suelta: devuelve a dónde hay que ir, o los datos ya listos. */
 type Carga =
   | { destino: '/login' | '/admin' | '/driver' | '/stock' }
-  | { comercio: FichaComercio | null; tieneStock: boolean };
+  | { comercio: FichaComercio | null; sucursales: FichaComercio[]; tieneStock: boolean };
 
 async function cargar(): Promise<Carga> {
   const { data } = await supabase.auth.getSession();
@@ -51,11 +51,24 @@ async function cargar(): Promise<Carga> {
   if (perfil?.role === 'admin') return { destino: '/admin' };
   if (perfil?.role === 'repartidor') return { destino: '/driver' };
 
+  const CAMPOS = 'id, name, pickup_address, pickup_extra, pickup_window, phone';
+
   const { data: ficha } = await supabase
     .from('clients')
-    .select('id, name, pickup_address, pickup_extra, pickup_window, phone')
+    .select(CAMPOS)
     .eq('profile_id', uid)
     .maybeSingle();
+
+  /*
+   * Los otros locales del mismo dueño, si tiene.
+   *
+   * Sus envíos van en la misma lista: el que mandó el paquete tiene un negocio,
+   * no dos, aunque salga de dos direcciones. Los permisos del paso 50 dejan ver
+   * las sucursales de la ficha propia y ninguna otra.
+   */
+  const { data: locales } = ficha
+    ? await supabase.from('clients').select(CAMPOS).eq('parent_id', ficha.id).order('name')
+    : { data: [] };
 
   /*
    * Un comercio puede tener stock guardado y no tener envíos, o al revés: son
@@ -68,12 +81,17 @@ async function cargar(): Promise<Carga> {
 
   if (!ficha && tieneStock) return { destino: '/stock' };
 
-  return { comercio: (ficha as FichaComercio) ?? null, tieneStock };
+  return {
+    comercio: (ficha as FichaComercio) ?? null,
+    sucursales: (locales ?? []) as FichaComercio[],
+    tieneStock,
+  };
 }
 
 export default function ComercioPage() {
   const router = useRouter();
   const [comercio, setComercio] = useState<FichaComercio | null>(null);
+  const [sucursales, setSucursales] = useState<FichaComercio[]>([]);
   const [tieneStock, setTieneStock] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -85,6 +103,7 @@ export default function ComercioPage() {
         return;
       }
       setComercio(r.comercio);
+      setSucursales(r.sucursales);
       setTieneStock(r.tieneStock);
       setCargando(false);
     },
@@ -149,10 +168,18 @@ export default function ComercioPage() {
           <div className="mx-auto max-w-4xl px-3 pb-3 text-xs text-[var(--edr-muted)] sm:px-6">
             Retiramos en <strong>{comercio.pickup_address}</strong>
             {comercio.pickup_extra ? ` (${comercio.pickup_extra})` : ''}
-            {comercio.pickup_window ? ` · ${comercio.pickup_window}` : ''}.{' '}
-            <span className="opacity-80">
-              Si algo de esto cambió, avisanos y lo corregimos.
-            </span>
+            {comercio.pickup_window ? ` · ${comercio.pickup_window}` : ''}
+            {/* Con más de un local hay que decir los dos: si no, el comercio
+                lee la dirección de uno solo y cree que del otro no retiramos. */}
+            {sucursales.map((s) => (
+              <span key={s.id}>
+                {' · '}
+                <strong>{s.pickup_address}</strong>
+                {s.pickup_window ? ` (${s.pickup_window})` : ''}
+              </span>
+            ))}
+            .{' '}
+            <span className="opacity-80">Si algo de esto cambió, avisanos y lo corregimos.</span>
           </div>
         )}
       </header>
@@ -186,7 +213,7 @@ export default function ComercioPage() {
           </a>
         </div>
       ) : (
-        <ResumenDelComercio comercio={comercio} />
+        <ResumenDelComercio comercio={comercio} sucursales={sucursales} />
       )}
     </div>
   );

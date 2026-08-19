@@ -95,6 +95,9 @@ export default function ComerciosPage() {
     return [...lista].sort((a, b) => (envios.get(b.id) ?? 0) - (envios.get(a.id) ?? 0));
   }, [comercios, busqueda, envios]);
 
+  /** Para poder decir "sucursal de X" y no "sucursal de 3". */
+  const nombres = useMemo(() => new Map(comercios.map((c) => [c.id, c.name])), [comercios]);
+
   const sinPunto = comercios.filter((c) => c.lat == null).length;
   const conAcceso = comercios.filter((c) => c.profile_id).length;
 
@@ -183,6 +186,11 @@ export default function ComerciosPage() {
                           className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-verde-claro)]"
                         >
                           <KeyRound size={10} /> entra
+                        </span>
+                      )}
+                      {c.parent_id && (
+                        <span className="rounded bg-[var(--edr-surface-2)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--edr-muted)]">
+                          sucursal de {nombres.get(c.parent_id) ?? '…'}
                         </span>
                       )}
                     </div>

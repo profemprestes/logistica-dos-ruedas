@@ -14,13 +14,48 @@ import { parseWhatsappText } from '@/lib/parseWhatsapp';
 interface Caso {
   titulo: string;
   texto: string;
-  espera: Partial<Record<'addressStreet' | 'addressExtra' | 'pickupAddress' | 'recipientName' | 'recipientPhone' | 'deliveryWindow' | 'notes', string>> & {
+  /** Qué fila mirar. Por defecto la primera; hay casos donde el bug está abajo. */
+  fila?: number;
+  /** Cuántas filas tiene que dar en total. Sirve para cazar filas fantasma. */
+  filas?: number;
+  espera: Partial<
+    Record<
+      | 'addressStreet'
+      | 'addressExtra'
+      | 'pickupAddress'
+      | 'recipientName'
+      | 'recipientPhone'
+      | 'deliveryWindow'
+      | 'notes'
+      | 'clientName',
+      string
+    >
+  > & {
     paymentMode?: string;
     shippingFee?: number;
+    merchandiseAmount?: number;
     amountToCollect?: number;
     isReminder?: boolean;
   };
 }
+
+/**
+ * La tanda del 19/08/2026, tal cual la mandó Matías. Tres cosas mal en un solo
+ * mensaje, y por eso está entera y no partida en pedacitos: los tres bugs
+ * salían de cómo se leen las líneas UNA DESPUÉS DE OTRA, y separados no pasan.
+ */
+const TANDA_19_08 = `CATALINA INDUMENTARIA
+RETIRA EN 1 MAYO 1632
+- 10 A 12HS CARLOS ALVEAR 2355. COBRAR ENVIO $4600 (Stefania 2235464845)
+
+DROPIX3D
+RETIRA EN MORENO 3676
+- ANTES 19HS CARLOS ALVEAR 3625. ENVIO $4000 (Josefina remon) (COBRAR AL RETIRAR) (FLEX)
+- 14 A 19HS ARANA Y GOIRI 6760. ENVIO $5300 (Juan Carlos Ferreyro) (COBRAR AL RETIRAR) (FLEX)
+
+EL CONDOR
+RETIRA EN GUEMES 2945
+- 11 A 12 30HS AV DORREGO 172 PLANTA YPF. ENVIO $5300 (NO COBRAR)`;
 
 const CASOS: Caso[] = [
   {
@@ -84,20 +119,64 @@ const CASOS: Caso[] = [
     texto: '[12/8, 09:14] Matias: STARCELL\n[12/8, 09:14] Matias: - BOLIVAR 4167. ENVIO $4000 (NO COBRAR)',
     espera: { addressStreet: 'BOLIVAR 4167', shippingFee: 4000 },
   },
+  {
+    titulo: 'un comercio con numero adentro del nombre es un comercio',
+    texto: TANDA_19_08,
+    fila: 1,
+    filas: 4,
+    espera: { clientName: 'DROPIX3D', pickupAddress: 'MORENO 3676', addressStreet: 'CARLOS ALVEAR 3625' },
+  },
+  {
+    titulo: 'y no se lleva puestos los envios que vienen abajo',
+    texto: TANDA_19_08,
+    fila: 2,
+    espera: { clientName: 'DROPIX3D', addressStreet: 'ARANA Y GOIRI 6760', paymentMode: 'cobrar_al_retirar' },
+  },
+  {
+    titulo: 'calle que empieza con numero: 1 MAYO 1632 no es "1"',
+    texto: TANDA_19_08,
+    fila: 0,
+    espera: { clientName: 'CATALINA INDUMENTARIA', pickupAddress: '1 MAYO 1632' },
+  },
+  {
+    titulo: 'COBRAR ENVIO: el envio ES lo que se cobra en la puerta',
+    texto: TANDA_19_08,
+    fila: 0,
+    espera: {
+      addressStreet: 'CARLOS ALVEAR 2355',
+      paymentMode: 'cobrar_destinatario',
+      shippingFee: 4600,
+      merchandiseAmount: 0,
+      amountToCollect: 4600,
+    },
+  },
+  {
+    titulo: 'COBRAR total con ENVIO aparte: se cobra el total, no el envio',
+    texto: 'STARCELL\nRETIRA EN COLON 2749\n- SAN JUAN 1773. COBRAR $55930. ENVIO $3000',
+    espera: {
+      paymentMode: 'cobrar_destinatario',
+      shippingFee: 3000,
+      merchandiseAmount: 55930,
+      amountToCollect: 55930,
+    },
+  },
 ];
 
 let fallos = 0;
 
 for (const c of CASOS) {
   const filas = parseWhatsappText(c.texto);
-  const r = filas[0];
+  const r = filas[c.fila ?? 0];
   if (!r) {
-    console.log(`✗ ${c.titulo}: NO PARSEO NINGUNA FILA`);
+    console.log(`✗ ${c.titulo}: NO PARSEO LA FILA ${c.fila ?? 0} (dio ${filas.length})`);
     fallos++;
     continue;
   }
 
   const malos: string[] = [];
+  if (c.filas !== undefined && filas.length !== c.filas) {
+    malos.push(`filas: esperaba ${c.filas} y dio ${filas.length}`);
+  }
   for (const [campo, esperado] of Object.entries(c.espera)) {
     const real = (r as unknown as Record<string, unknown>)[campo];
     const ok =

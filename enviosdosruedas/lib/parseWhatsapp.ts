@@ -147,8 +147,17 @@ const tieneTelefono = (texto: string) => sacarTelefono(texto).telefono !== '';
  * La barra contempla los departamentos dobles, comunes en los edificios
  * viejos: "BELGRANO 2875 5A/B" se partía en "BELGRANO 2875 5A" más una nota
  * suelta que decía "/B".
+ *
+ * EL PEDAZO DE LETRA DEL PRINCIPIO NO ES ADORNO. Antes se cortaba en el primer
+ * número que apareciera, y "1 MAYO 1632" quedaba como calle "1" con "MAYO
+ * 1632" tirado en las notas — la dirección de retiro de CATALINA INDUMENTARIA
+ * era, literalmente, "1". Acá hay un montón de calles que empiezan con número:
+ * 1 DE MAYO, 25 DE MAYO, 3 DE FEBRERO, 12 DE OCTUBRE. Pidiendo una letra antes
+ * de la altura, el primer número pasa a ser parte del nombre de la calle y la
+ * altura es la que viene después.
  */
-const RE_ADDR_HEAD = /^(.*?\d{1,5}(?:\s+\d{1,3}\s*[A-Za-z](?:\s*\/\s*[A-Za-z])?\b)?)/;
+const RE_ADDR_HEAD =
+  /^(.*?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ].*?\d{1,5}(?:\s+\d{1,3}\s*[A-Za-z](?:\s*\/\s*[A-Za-z])?\b)?)/;
 const RE_DEPTO_TAIL = /\s(\d{1,3}\s*[A-Za-z](?:\s*\/\s*[A-Za-z])?)$/;
 const RE_PISO_DTO = /\b((?:piso|p\.)\s*\w+(?:\s*(?:dto|dpto|depto)\.?\s*\w+)?|(?:dto|dpto|depto)\.?\s*\w+)\b/i;
 
@@ -236,9 +245,22 @@ export function parseWhatsappText(
   /** Para qué día es la tanda. Por defecto hoy. */
   scheduledDate = hoyLocal(),
 ): ParsedRow[] {
+  /*
+   * Las l\u00edneas se limpian TODAS DE UNA, antes de empezar a leerlas.
+   *
+   * Antes se limpiaba cada una en su turno, y as\u00ed no se pod\u00eda mirar la de
+   * abajo \u2014 que es lo que hace falta para saber si una l\u00ednea es el nombre de
+   * un comercio: la que sigue empieza con RETIRA.
+   *
+   * Se saca el formato de WhatsApp y el "[12/8, 09:14] Mat\u00edas: " que le pone
+   * adelante un chat exportado. Sin eso, el corchete se lee como parte de la
+   * direcci\u00f3n y el env\u00edo entra con "[12" de calle.
+   */
   const lines = text
     .split('\n')
     .map((l) => l.replace(/\u00a0/g, ' ').trim())
+    .filter(Boolean)
+    .map((l) => sinFormatoWhatsapp(l).replace(/^\[[^\]]+\]\s*[^:]{1,40}:\s*/, ''))
     .filter(Boolean);
 
   const rows: ParsedRow[] = [];
@@ -251,19 +273,39 @@ export function parseWhatsappText(
    */
   let flexDelComercio = false;
 
-  for (const crudo of lines) {
-    // El formato se saca ANTES de mirar si es viñeta: si no, el comercio en
-    // negrita (`*TOYPIOLA*`) pasa por línea de entrega y se pierde.
-    // Un chat exportado trae cada renglón con "[12/8, 09:14] Matías: " adelante.
-    // Sin sacarlo, el corchete se lee como parte de la dirección y el envío
-    // entra con "[12" de calle. El otro parser, el del resumen, ya lo hacía.
-    const original = sinFormatoWhatsapp(crudo).replace(/^\[[^\]]+\]\s*[^:]{1,40}:\s*/, '');
+  for (let i = 0; i < lines.length; i++) {
+    const original = lines[i];
+    const siguiente = lines[i + 1] ?? '';
 
     const isDeliveryLine = /^[-•*·]/.test(original);
     let line = original.replace(/^[-•*·]\s*/, '').trim();
 
-    // ---------- Nombre del comercio ----------
-    if (!isDeliveryLine && !/\bretira/i.test(line) && !/\d/.test(line) && line.length <= 40) {
+    /* ---------- Nombre del comercio ----------
+     *
+     * NO ALCANZA CON "no tiene números". Esa era la regla, y por eso DROPIX3D
+     * no se leía como comercio: el 3 del nombre lo descalificaba. Los dos
+     * envíos de abajo terminaron colgados de CATALINA INDUMENTARIA, que era el
+     * comercio anterior, y encima el nombre solo se guardó como un envío más
+     * con dirección "DROPIX3". Un mensaje, tres cosas mal.
+     *
+     * Lo que descalifica a una línea no es tener un dígito: es tener un NÚMERO
+     * SUELTO, que es lo que distingue una dirección ("1 MAYO 1632") de un
+     * nombre con un número pegado ("DROPIX3D", "3D LAB"). El \b de los dos
+     * lados es todo el truco.
+     *
+     * Y si la línea de abajo empieza con RETIRA, ésta es el comercio aunque
+     * tenga números sueltos: ninguna dirección de entrega viene seguida de un
+     * "RETIRA EN". Eso salva nombres como "MOTO 24".
+     */
+    const numeroSuelto = /\b\d{1,5}\b/.test(line);
+    const abajoDiceRetira = /^\s*retira/i.test(siguiente);
+
+    if (
+      !isDeliveryLine &&
+      !/\bretira/i.test(line) &&
+      line.length <= 40 &&
+      (!numeroSuelto || abajoDiceRetira)
+    ) {
       client = clean(line.replace(/[:()]/g, ''));
       const previous = [...rows].reverse().find(
         (r) => r.clientName.toLowerCase() === client.toLowerCase() && r.pickupAddress
@@ -439,8 +481,22 @@ export function parseWhatsappText(
         paymentMode: second ? 'no_cobrar' : paymentMode,
         shippingFee: second ? 0 : shippingFee,
         merchandiseAmount: second ? 0 : merchandiseAmount,
-        // Arranca igual a la mercadería; se edita a mano cuando el envío se suma aparte.
-        amountToCollect: second ? 0 : paymentMode === 'cobrar_destinatario' ? merchandiseAmount : 0,
+        /*
+         * Lo que el repartidor cobra en la puerta.
+         *
+         * Casi siempre es la mercadería —"COBRAR $55930" ya trae el envío
+         * adentro y se discrimina al rendir—, pero cuando el mensaje dice
+         * "COBRAR ENVIO $4600" no hay mercadería: lo que se cobra ES el envío.
+         *
+         * Antes esto miraba sólo la mercadería, así que esos envíos entraban
+         * con "a cobrar $0": el repartidor no sabía que tenía que cobrar y en
+         * el panel no aparecían en la columna de plata. El dato estaba escrito
+         * en el mensaje y se perdía en el camino.
+         */
+        amountToCollect:
+          second || paymentMode !== 'cobrar_destinatario'
+            ? 0
+            : merchandiseAmount || shippingFee,
         notes: [
           addr.rest,
           // Las instrucciones entre paréntesis: "volver a rendir al terminar",

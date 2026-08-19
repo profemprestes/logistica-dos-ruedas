@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
-import { tramosDeHorario } from '../lib/franja';
+import { horarioDeRetiro, tramosDeHorario } from '../lib/franja';
 import { summarizeLogs, type DeliveryLog } from '../lib/settlement';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
@@ -677,3 +677,40 @@ contraLaBase()
     console.log(fallas ? `\n${fallas} falla(s).\n` : '\nTodo bien.\n');
     process.exit(fallas ? 1 : 0);
   });
+
+/* ==========================================================================
+   EL HORARIO DE LOS SÁBADOS (paso 52)
+
+   Un local que de lunes a viernes cierra a las 18 y el sábado a las 13 hacía
+   saltar el aviso a las 17, con el comercio cerrado desde hacía cuatro horas.
+   Lo que sigue fija las tres reglas: manda el del envío, después el del
+   sábado, después el de siempre.
+   ========================================================================== */
+
+console.log('\n=== el horario de los sabados ===\n');
+
+{
+  const comercio = { pickup_window: '9 a 18 hs', pickup_window_sabado: '9 a 13 hs' };
+
+  // Mediodía del sábado 22/08/2026 en Mar del Plata. Se escribe en UTC porque
+  // es lo único que no cambia según dónde corra esto.
+  const sabado = new Date('2026-08-22T15:00:00Z');
+  const martes = new Date('2026-08-18T15:00:00Z');
+  // Las 23 del viernes: en el servidor ya son las 02 del sábado, y ahí estaba
+  // la trampa — el horario del sábado empezaría a regir seis horas antes.
+  const viernesALaNoche = new Date('2026-08-22T02:00:00Z');
+
+  caso('un martes manda el horario de siempre',
+    [horarioDeRetiro({ comercio }, martes) ?? ''], ['9 a 18 hs']);
+  caso('un sabado manda el del sabado',
+    [horarioDeRetiro({ comercio }, sabado) ?? ''], ['9 a 13 hs']);
+  caso('el viernes a las 23 todavia no es sabado',
+    [horarioDeRetiro({ comercio }, viernesALaNoche) ?? ''], ['9 a 18 hs']);
+  caso('sin sabado cargado, vale el de siempre',
+    [horarioDeRetiro({ comercio: { pickup_window: '9 a 18 hs' } }, sabado) ?? ''], ['9 a 18 hs']);
+  caso('el horario del ENVIO gana tambien un sabado',
+    [horarioDeRetiro({ pickup_window: 'antes de 11', comercio }, sabado) ?? ''], ['antes de 11']);
+  caso('"cerrado" no deja ninguna hora, asi que no hay cierre que avisar',
+    [String(limiteDeLaFranja(horarioDeRetiro({ comercio: { pickup_window: '9 a 18 hs', pickup_window_sabado: 'cerrado' } }, sabado)))],
+    ['null']);
+}

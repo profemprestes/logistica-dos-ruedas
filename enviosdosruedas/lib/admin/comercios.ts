@@ -87,6 +87,98 @@ async function buscarFicha(nombre: string) {
 }
 
 /**
+ * Palabras que aparecen en cualquier dirección y no distinguen nada.
+ *
+ * Sin sacarlas, "AV COLON 1234" y "AV GUEMES 2945" comparten "AV" y eso
+ * alcanzaría para elegir mal una sucursal.
+ */
+const PALABRAS_VACIAS = new Set([
+  'av', 'avda', 'avenida', 'calle', 'esq', 'esquina', 'y', 'de', 'del', 'la',
+  'el', 'los', 'las', 'san', 'entre', 'casi', 'altura', 'nro', 'n', 'piso',
+  'local', 'retira', 'en',
+]);
+
+/**
+ * Las palabras que de verdad distinguen una dirección de otra.
+ *
+ * NO se usa `claveDeComercio` acá aunque normalice parecido: esa borra TODO lo
+ * que no sea letra o número, espacios incluidos, y "COLON Y NEUQUEN" queda como
+ * una sola palabra pegada que no coincide con nada. Para un nombre de comercio
+ * eso está bien —es lo que hace que "TOYPIOLA" y "TOY PIOLA" sean el mismo—;
+ * para una dirección lo que hace falta es justo lo contrario.
+ *
+ * Se van también las alturas: "NEUQUEN 2200" y "COLON Y NEUQUEN" son el mismo
+ * lugar escrito de dos maneras, y el número es lo único que no comparten.
+ */
+function palabrasDeDireccion(texto: string): Set<string> {
+  return new Set(
+    texto
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .filter((p) => !PALABRAS_VACIAS.has(p) && !/^\d+$/.test(p)),
+  );
+}
+
+/**
+ * Con qué local del mismo dueño se corresponde la dirección de retiro escrita.
+ *
+ * EL PROBLEMA. EL CONDOR tiene dos: la casa central en Güemes 2945 y la
+ * sucursal de Neuquén 2200. Los dos mensajes empiezan igual, con "EL CONDOR", y
+ * la ficha se busca por el nombre — así que el envío de los viernes, que se
+ * retira en Neuquén, quedaba colgado de la ficha de Güemes. El repartidor veía
+ * en el mapa un punto de retiro a dos kilómetros y medio de donde tenía que ir.
+ *
+ * LO QUE SE MIRA es la dirección de retiro escrita en el mensaje contra la de
+ * cada local. Se comparan las palabras que valen —sin números de puerta, sin
+ * "av" ni "calle"—, así "RETIRA EN COLON Y NEUQUEN" también encuentra la de
+ * Neuquén 2200 aunque la altura no coincida.
+ *
+ * SI NO COINCIDE CON NINGUNA, NO SE CAMBIA NADA. Un retiro esporádico en otro
+ * lado —la gráfica adonde WAYFARER nos manda a buscar cosas de vez en cuando—
+ * no es una sucursal, y adivinar ahí sería peor que no hacer nada.
+ */
+async function elegirLocal(idEncontrado: number, direccion: string): Promise<number> {
+  const palabras = palabrasDeDireccion(direccion);
+  if (!palabras.size) return idEncontrado;
+
+  const { data: propia, error } = await supabase
+    .from('clients')
+    .select('id, parent_id, pickup_address')
+    .eq('id', idEncontrado)
+    .maybeSingle();
+
+  // Sin la columna del paso 50 no hay sucursales de las que hablar.
+  if (error || !propia) return idEncontrado;
+
+  const casaCentral = propia.parent_id ?? propia.id;
+
+  const { data: familia } = await supabase
+    .from('clients')
+    .select('id, pickup_address')
+    .or(`id.eq.${casaCentral},parent_id.eq.${casaCentral}`);
+
+  if (!familia || familia.length < 2) return idEncontrado;
+
+  let mejor = idEncontrado;
+  let mejorPuntaje = 0;
+
+  for (const local of familia as { id: number; pickup_address: string | null }[]) {
+    const suyas = palabrasDeDireccion(local.pickup_address ?? '');
+    const compartidas = [...palabras].filter((p) => suyas.has(p)).length;
+    if (compartidas > mejorPuntaje) {
+      mejorPuntaje = compartidas;
+      mejor = local.id;
+    }
+  }
+
+  return mejorPuntaje > 0 ? mejor : idEncontrado;
+}
+
+/**
  * Devuelve el id del comercio para ese nombre, creándolo si hace falta.
  * `null` si no se pudo — y ahí el envío se guarda sin comercio.
  */
@@ -129,7 +221,11 @@ export async function asegurarComercio(opciones: {
     }
 
     if (existente) {
-      const id = (existente as { id: number; lat: number | null }).id;
+      /*
+       * Con el nombre alcanza para dar con el dueño; para dar con el LOCAL hay
+       * que mirar dónde dice que se retira. Ver `elegirLocal`.
+       */
+      const id = await elegirLocal((existente as { id: number }).id, direccion);
 
       /*
        * Si el comercio ya estaba pero SIN punto, y vos lo verificaste en el
@@ -139,11 +235,26 @@ export async function asegurarComercio(opciones: {
        * revisó mirando el mapa, y el de acá puede ser el de un envío cargado a
        * las apuradas.
        */
-      if (opciones.punto && (existente as { lat: number | null }).lat == null) {
-        await supabase
+      if (opciones.punto) {
+        /*
+         * Se vuelve a preguntar si TIENE punto en vez de usar el que trajo la
+         * búsqueda. Si `elegirLocal` cambió de local —de la casa central a una
+         * sucursal—, el "no tiene punto" que se había averiguado es el de la
+         * otra ficha, y guardar con esa respuesta pisaría el punto bueno de la
+         * sucursal con el de un envío cargado a las apuradas.
+         */
+        const { data: local } = await supabase
           .from('clients')
-          .update({ lat: opciones.punto.lat, lng: opciones.punto.lng })
-          .eq('id', id);
+          .select('lat')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (local && local.lat == null) {
+          await supabase
+            .from('clients')
+            .update({ lat: opciones.punto.lat, lng: opciones.punto.lng })
+            .eq('id', id);
+        }
       }
 
       /*

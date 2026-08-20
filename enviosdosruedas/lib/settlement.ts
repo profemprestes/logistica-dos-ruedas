@@ -12,6 +12,7 @@ import type { PaymentMode } from '@/lib/format';
 // mismo sistema digan cosas distintas sobre la misma plata es peor que
 // cualquier error de cuenta.
 import { REGLAS, esShippy } from '@/lib/resumen';
+import { pidiendo } from '@/lib/columnaNueva';
 
 export interface LogShipment {
   id: number;
@@ -22,6 +23,16 @@ export interface LogShipment {
   payment_mode: PaymentMode;
   shipping_fee: number;
   client_name_raw: string | null;
+  /**
+   * Si esta entrega es una parada más de un envío con varias (paso 53).
+   *
+   * Importa para la plata: la primera entrega lleva el precio y las otras van
+   * en cero, así el comercio paga un envío aunque el repartidor haya hecho dos
+   * paradas. Sin esto, cada segunda entrega se contaba como "envío sin valor
+   * cargado" y le decía al repartidor que le faltaba cobrar algo que no
+   * existe.
+   */
+  parte_de?: number | null;
 }
 
 export interface DeliveryLog {
@@ -81,6 +92,21 @@ export function pagoDelEnvio(l: DeliveryLog): number {
   // Un envío normal sin valor suma cero a propósito: no hay nada acordado que
   // suponer, y que se note es mejor que inventar un precio.
   return Math.round(valor * (1 - REGLAS.comision));
+}
+
+/**
+ * Si a este entregado le falta el precio de verdad.
+ *
+ * Cero no siempre es olvido. Una entrega que es parada de un envío con varias
+ * (paso 53) vale cero POR DISEÑO: el precio entero está en la primera, porque
+ * el comercio paga un envío aunque el repartidor haya hecho dos paradas.
+ *
+ * Contarlas le decía al repartidor "te falta cargar un valor" de algo que no le
+ * falta, todos los viernes, hasta que el cartel deja de mirarse. Y ese es el
+ * día en que un envío sin precio de verdad pasa de largo.
+ */
+export function sinPrecio(l: DeliveryLog): boolean {
+  return !Number(l.shipment?.shipping_fee) && l.shipment?.parte_de == null;
 }
 
 export interface DaySummary {
@@ -153,7 +179,7 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
     (acc, l) => acc + Number(l.shipment?.shipping_fee ?? 0),
     0,
   );
-  const shippingMissing = delivered.filter((l) => !Number(l.shipment?.shipping_fee)).length;
+  const shippingMissing = delivered.filter(sinPrecio).length;
 
   /*
    * LO QUE HAY QUE PAGARLE, con las mismas reglas que los resúmenes.
@@ -252,10 +278,39 @@ export function weekRange(day: string) {
   };
 }
 
+const DEL_ENVIO =
+  'id, tracking_code, recipient_name, address_street, amount_to_collect, payment_mode, ' +
+  'shipping_fee, client_name_raw';
+
+const LOG_BASE = 'id, event, amount_collected, happened_at, failure_reason';
+
 /** Campos que hay que pedirle a `delivery_logs` para que las cuentas cierren. */
-export const LOG_SELECT =
-  'id, event, amount_collected, happened_at, failure_reason, ' +
-  'shipment:shipment_id(id, tracking_code, recipient_name, address_street, amount_to_collect, payment_mode, shipping_fee, client_name_raw)';
+export const LOG_SELECT = `${LOG_BASE}, shipment:shipment_id(${DEL_ENVIO}, parte_de)`;
+
+/** El mismo pedido sin `parte_de`, para antes de que se corra el paso 53. */
+export const LOG_SELECT_SIN_PARTES = `${LOG_BASE}, shipment:shipment_id(${DEL_ENVIO})`;
+
+/**
+ * Trae movimientos sin romperse si el paso 53 todavía no se corrió.
+ *
+ * Los pasos de SQL se corren a mano, así que hay un rato en que `parte_de` no
+ * existe. Y una consulta que nombra una columna inexistente NO devuelve la fila
+ * sin ese campo: falla entera. En estas cuatro consultas eso no es "falta un
+ * dato", es el cierre de caja en blanco — la pantalla donde se decide cuánta
+ * plata rinde el repartidor.
+ *
+ * Se le pasa el armado de la consulta, no la consulta hecha, porque hay que
+ * poder correrla dos veces con dos listas de campos distintas.
+ */
+export async function conLosMovimientos<T>(
+  armar: (select: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<{ data: T | null; error: { message: string } | null }> {
+  return pidiendo<T>(
+    'parte_de',
+    () => armar(LOG_SELECT),
+    () => armar(LOG_SELECT_SIN_PARTES),
+  );
+}
 
 /**
  * El día va de 00:00 a 23:59 en hora local, no en UTC: si no, las entregas de

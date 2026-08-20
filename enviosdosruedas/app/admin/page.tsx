@@ -13,6 +13,8 @@ import CerrarEnvio, { type Cierre } from '@/components/admin/CerrarEnvio';
 import ReprogramarEnvio from '@/components/admin/ReprogramarEnvio';
 import MandarColecta from '@/components/admin/MandarColecta';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
+import EntregasDelEnvio from '@/components/EntregasDelEnvio';
+import { conHermanos, separar, unir, type Puestos } from '@/lib/entregas';
 import { trackUrl } from '@/lib/trackUrl';
 import { armarZip } from '@/lib/zip';
 import { photoFileName, photoPaths, type ProofLog } from '@/lib/proof';
@@ -226,6 +228,9 @@ export default function AdminPage() {
   const [copiando, setCopiando] = useState(false);
   /** Cómo va la bajada de fotos: "12 de 30". Vacío cuando no está bajando. */
   const [bajandoFotos, setBajandoFotos] = useState('');
+  /** Qué envíos tienen más de una entrega (paso 53), y en qué puesto va cada uno. */
+  const [puestos, setPuestos] = useState<Puestos>(new Map());
+  const [uniendo, setUniendo] = useState(false);
   const [error, setError] = useState('');
 
   const applyShipments = useCallback(
@@ -236,6 +241,26 @@ export default function AdminPage() {
     },
     [],
   );
+
+  /*
+   * Los envíos que tienen más de una entrega (paso 53).
+   *
+   * Va en su propia consulta y no en la de arriba porque los hermanos pueden no
+   * estar en la lista: si una entrega no se pudo hacer y se reprogramó, quedan
+   * en días distintos. Mostrar una sin decir que hay otra es peor que no
+   * mostrarla: el que la mira cree que el envío está completo.
+   */
+  useEffect(() => {
+    let vivo = true;
+    const traer = async () => {
+      const p = await conHermanos(shipments);
+      if (vivo) setPuestos(p);
+    };
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [shipments]);
 
   /** Refresco a mano, después de guardar, borrar o cambiar un envío. */
   const load = useCallback(() => {
@@ -384,6 +409,82 @@ export default function AdminPage() {
       else s.add(id);
       return s;
     });
+
+  /**
+   * Ata las entregas tildadas en un solo envío (paso 53).
+   *
+   * EL CASO. EL CONDOR despacha los viernes dos paquetes que salen del mismo
+   * retiro y van a dos direcciones. Para el comercio es un envío y paga un
+   * precio; para la calle son dos entregas, cada una con su destinatario, su
+   * punto en el mapa, su foto y su estado.
+   *
+   * Se cargan como siempre —dos envíos, o dos renglones de un mensaje pegado—
+   * y después se tildan los dos y se atan acá. No se pide un formulario nuevo a
+   * propósito: la forma de cargar es la que él ya tiene en los dedos.
+   */
+  async function unirSeleccion() {
+    const elegidos = shipments.filter((s) => seleccion.has(s.id));
+    if (elegidos.length < 2) return;
+
+    const ordenadas = [...elegidos].sort((a, b) => a.id - b.id);
+    const precio = Math.max(...elegidos.map((s) => Number(s.shipping_fee) || 0));
+
+    /*
+     * Se confirma CON EL NÚMERO A LA VISTA. Unir mueve plata: el precio queda
+     * en una de las entregas y las otras pasan a cero. Hacerlo callado y que se
+     * entere en el cierre de caja sería la peor manera de enterarse.
+     */
+    const seguro = window.confirm(
+      `Van a quedar como UN solo envío de ${money(precio)}, con ${elegidos.length} entregas.
+
+` +
+        `El precio queda en ${ordenadas[0].tracking_code}; las otras pasan a $ 0 ` +
+        `para que el comercio pague un envío y no ${elegidos.length}.
+
+` +
+        'Cada entrega mantiene su seguimiento, su etiqueta y su comprobante.',
+    );
+    if (!seguro) return;
+
+    setUniendo(true);
+    setError('');
+    const r = await unir(elegidos);
+    setUniendo(false);
+
+    if (r.error) {
+      setError(r.error);
+      return;
+    }
+
+    setSeleccion(new Set());
+    await load();
+  }
+
+  /** Desata una entrega: vuelve a ser un envío suelto, en $ 0. */
+  async function separarUna(id: number) {
+    const codigo = shipments.find((s) => s.id === id)?.tracking_code ?? '';
+    const seguro = window.confirm(
+      `${codigo} vuelve a ser un envío suelto.
+
+` +
+        'Queda en $ 0: separarla no dice cuánto vale sola. Ponele el precio ' +
+        'antes de cerrar la caja — hasta entonces va a figurar como "sin valor cargado".',
+    );
+    if (!seguro) return;
+
+    setUniendo(true);
+    setError('');
+    const r = await separar(id);
+    setUniendo(false);
+
+    if (r.error) {
+      setError(r.error);
+      return;
+    }
+
+    setSeleccion(new Set());
+    await load();
+  }
 
   /**
    * Los seguimientos de todo lo tildado, listos para pegar en WhatsApp.
@@ -1347,6 +1448,40 @@ export default function AdminPage() {
               <span className="text-xs text-[var(--edr-muted)]">Preasignando…</span>
             )}
 
+            {/* Unir aparece sólo cuando hay más de uno tildado y ninguno está ya
+                atado: con uno solo no hay nada que unir, y con uno ya atado lo
+                que corresponde es separar, que está al lado. */}
+            {(() => {
+              const elegidos = shipments.filter((x) => seleccion.has(x.id));
+              const atados = elegidos.filter((x) => puestos.has(x.id));
+
+              if (elegidos.length === 1 && atados.length === 1) {
+                return (
+                  <button
+                    onClick={() => void separarUna(elegidos[0].id)}
+                    disabled={uniendo}
+                    title="Que esta entrega vuelva a ser un envío suelto"
+                    className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold hover:bg-[var(--edr-surface)] disabled:opacity-50"
+                  >
+                    {uniendo ? 'Separando…' : '✂ Separar del envío'}
+                  </button>
+                );
+              }
+
+              if (elegidos.length < 2 || atados.length > 0) return null;
+
+              return (
+                <button
+                  onClick={() => void unirSeleccion()}
+                  disabled={uniendo}
+                  title="Un solo envío con varias direcciones de entrega: el comercio paga uno"
+                  className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-xs font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface)] disabled:opacity-50"
+                >
+                  {uniendo ? 'Uniendo…' : `🔗 Unir en un envío (${elegidos.length} entregas)`}
+                </button>
+              );
+            })()}
+
             <button
               onClick={copiarSeguimientos}
               disabled={copiando}
@@ -1398,6 +1533,7 @@ export default function AdminPage() {
           {visible.map((s) => (
             <ShipmentMobileCard
               key={s.id}
+              puesto={puestos.get(s.id)}
               shipment={s}
               drivers={drivers}
               hasProof={HAS_PROOF.includes(s.status)}
@@ -1485,6 +1621,7 @@ export default function AdminPage() {
                   <td className="whitespace-nowrap px-3 py-2">
                     <span className="edr-mono text-xs font-semibold">{s.tracking_code}</span>
                     {s.is_flex && <FlexBadge />}
+                    <EntregasDelEnvio puesto={puestos.get(s.id)} id={s.id} className="mt-1" />
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-semibold">{s.recipient_name}</div>

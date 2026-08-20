@@ -10,6 +10,8 @@ import {
 } from '@/lib/format';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 import CopyTrackLink from '@/components/admin/CopyTrackLink';
+import EntregasDelEnvio from '@/components/EntregasDelEnvio';
+import type { Puesto } from '@/lib/entregas';
 
 /**
  * El mismo envío que muestra la tabla, pero apilado para el teléfono.
@@ -37,6 +39,7 @@ export default function ShipmentMobileCard({
   onReprogramar,
   seleccionado = false,
   onSeleccionar,
+  puesto,
 }: {
   shipment: Shipment;
   drivers: { id: string; full_name: string }[];
@@ -58,6 +61,8 @@ export default function ShipmentMobileCard({
   seleccionado?: boolean;
   /** Sin esto no aparece el tilde: la selección es cosa del listado. */
   onSeleccionar?: (id: number) => void;
+  /** Si este envío tiene más de una entrega, en qué puesto va (paso 53). */
+  puesto?: Puesto;
 }) {
   const cash = shipmentCash(shipment);
   const programado = esProgramado(shipment);
@@ -96,6 +101,8 @@ export default function ShipmentMobileCard({
           </span>
         )}
       </div>
+
+      <EntregasDelEnvio puesto={puesto} id={shipment.id} detalle className="mt-1.5" />
 
       <div className="mt-1 text-base font-bold leading-tight">
         {shipment.address_street}

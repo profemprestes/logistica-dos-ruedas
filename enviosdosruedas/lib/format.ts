@@ -72,6 +72,16 @@ export interface Shipment {
    */
   reintento_de?: number | null;
   reprogramado_en?: number | null;
+  /**
+   * Si esta entrega es una parada más de un envío con varias (paso 53), el id
+   * de la primera. Null en un envío común.
+   *
+   * La primera —la cabeza— es la que lleva el precio; las otras van en cero. Se
+   * usó eso y no un precio repartido porque el comercio paga UN envío: si cada
+   * parada tuviera su parte, la suma del día contaría dos y el cierre de caja
+   * cobraría de más. Ver `lib/entregas.ts`.
+   */
+  parte_de?: number | null;
   driver?: { full_name: string } | null;
   /**
    * El nombre del que lo tiene preasignado, cuando la consulta lo pide.

@@ -8,7 +8,7 @@ import { money } from '@/lib/format';
 import {
   customRange,
   dayShift,
-  LOG_SELECT,
+  conLosMovimientos,
   summarizeLogs,
   today,
   type DeliveryLog,
@@ -111,11 +111,13 @@ export default function CajaAdminPage() {
           .select('id, full_name')
           .eq('role', 'repartidor')
           .order('full_name'),
-        supabase
-          .from('delivery_logs')
-          .select(`${LOG_SELECT}, driver_id`)
-          .gte('happened_at', from)
-          .lte('happened_at', to),
+        conLosMovimientos<(DeliveryLog & { driver_id: string })[]>((select) =>
+          supabase
+            .from('delivery_logs')
+            .select(`${select}, driver_id`)
+            .gte('happened_at', from)
+            .lte('happened_at', to),
+        ),
         supabase
           .from('settlements')
           .select('driver_id, day, actual_amount')
@@ -131,8 +133,7 @@ export default function CajaAdminPage() {
         return;
       }
 
-      type ConDriver = DeliveryLog & { driver_id: string };
-      const todos = (logs.data ?? []) as unknown as ConDriver[];
+      const todos = logs.data ?? [];
 
       // Cuántos días del período tuvo movimiento cada uno, para poder decir
       // cuántos quedaron sin cerrar: un saldo viejo sin cerrar es lo que hay que

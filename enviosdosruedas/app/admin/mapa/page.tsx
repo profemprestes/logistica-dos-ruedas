@@ -15,6 +15,7 @@ import {
   type ShipmentStatus,
 } from '@/lib/format';
 import type { PuntoMapa } from '@/components/MapaEnvios';
+import { comoSeLlama, conHermanos, type Puestos } from '@/lib/entregas';
 
 /** Leaflet toca `window` al cargar: nunca en el servidor. */
 const MapaEnvios = dynamic(() => import('@/components/MapaEnvios'), {
@@ -123,6 +124,8 @@ export default function MapaAdminPage() {
   const [soloPendientes, setSoloPendientes] = useState(false);
 
   const [envios, setEnvios] = useState<Shipment[]>([]);
+  /** Los que son una de varias entregas del mismo envío (paso 53). */
+  const [puestos, setPuestos] = useState<Puestos>(new Map());
   const [enCalle, setEnCalle] = useState<Repartidor[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -511,6 +514,19 @@ export default function MapaAdminPage() {
     };
   };
 
+  /* Cuáles de estos envíos son entregas del mismo viaje (paso 53). */
+  useEffect(() => {
+    let vivo = true;
+    const traer = async () => {
+      const p = await conHermanos(envios);
+      if (vivo) setPuestos(p);
+    };
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [envios]);
+
   const puntosYGrupos = useMemo(() => {
     /*
      * UN SOLO PUNTO POR COMERCIO, con cuántos paquetes hay.
@@ -546,7 +562,10 @@ export default function MapaAdminPage() {
         titulo: s.address_street,
         detalle:
           `${nombreDelDestinatario(s)} · ${STATUS_LABEL[s.status]}` +
-          (s.client_name_raw ? ` · ${s.client_name_raw}` : ''),
+          (s.client_name_raw ? ` · ${s.client_name_raw}` : '') +
+          // Dos pins del mismo envío se ven como dos envíos. Decirlo acá es lo
+          // que hace que el mapa cuente la verdad: un viaje, dos paradas.
+          (puestos.has(s.id) ? ` · 🔗 ${comoSeLlama(puestos.get(s.id)!)}` : ''),
       });
     }
 
@@ -580,7 +599,7 @@ export default function MapaAdminPage() {
     }));
 
     return { puntos: [...envios, ...repartidores], grupos };
-  }, [conPunto, motos]);
+  }, [conPunto, motos, puestos]);
 
   const puntos = puntosYGrupos.puntos;
   const gruposDeRetiro = puntosYGrupos.grupos;

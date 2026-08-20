@@ -4,7 +4,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import { esShippy, type Ajustes, type Totales } from '@/lib/resumen';
 import type { PedidoPegado } from '@/lib/resumenParse';
-import { customRange, logCash, LOG_SELECT, type DeliveryLog } from '@/lib/settlement';
+import { customRange, logCash, conLosMovimientos, type DeliveryLog } from '@/lib/settlement';
 
 export type Origen = 'pegado' | 'sistema' | 'mixto';
 
@@ -67,18 +67,20 @@ export async function traerDelSistema(
 ): Promise<PedidoPegado[]> {
   const { from, to } = customRange(desde, hasta);
 
-  const { data, error } = await supabase
-    .from('delivery_logs')
-    .select(LOG_SELECT)
-    .eq('driver_id', driverId)
-    .in('event', ['entregado', 'retirado', 'no_entregado'])
-    .gte('happened_at', from)
-    .lte('happened_at', to)
-    .order('happened_at');
+  const { data, error } = await conLosMovimientos<DeliveryLog[]>((select) =>
+    supabase
+      .from('delivery_logs')
+      .select(select)
+      .eq('driver_id', driverId)
+      .in('event', ['entregado', 'retirado', 'no_entregado'])
+      .gte('happened_at', from)
+      .lte('happened_at', to)
+      .order('happened_at'),
+  );
 
   if (error) throw new Error(error.message);
 
-  const logs = ((data ?? []) as unknown as DeliveryLog[]).filter((l) => l.shipment);
+  const logs = (data ?? []).filter((l) => l.shipment);
 
   // Lo cobrado al retirar, por envío.
   const alRetirar = new Map<number, { monto: number; log: DeliveryLog }>();

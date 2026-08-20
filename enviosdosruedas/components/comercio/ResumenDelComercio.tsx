@@ -16,6 +16,8 @@ import {
 } from '@/lib/format';
 import { cuandoSeHace } from '@/lib/scheduled';
 import { trackUrl } from '@/lib/trackUrl';
+import EntregasDelEnvio from '@/components/EntregasDelEnvio';
+import { conHermanos, type Puesto, type Puestos } from '@/lib/entregas';
 import {
   NOMBRE_GRUPO,
   NOMBRE_PERIODO,
@@ -98,6 +100,8 @@ export default function ResumenDelComercio({
   desdeLaOficina?: boolean;
 }) {
   const [envios, setEnvios] = useState<Shipment[]>([]);
+  /** Cuáles son entregas de un mismo envío, para no cobrarle dos (paso 53). */
+  const [puestos, setPuestos] = useState<Puestos>(new Map());
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -174,6 +178,24 @@ export default function ResumenDelComercio({
       vivo = false;
     };
   }, [ids, version]);
+
+  /*
+   * Cuáles de estos envíos tienen más de una entrega.
+   *
+   * Importa acá porque una de esas entregas figura en $ 0: sin el cartel, el
+   * comercio lee "envío gratis" y después la factura no le cierra.
+   */
+  useEffect(() => {
+    let vivo = true;
+    const traer = async () => {
+      const p = await conHermanos(envios);
+      if (vivo) setPuestos(p);
+    };
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [envios]);
 
   const hoy = hoyAR();
 
@@ -418,6 +440,7 @@ export default function ResumenDelComercio({
               copiado={copiado === s.tracking_code}
               etiquetando={etiquetando === s.tracking_code}
               desdeLaOficina={desdeLaOficina}
+              puesto={puestos.get(s.id)}
               onCopiar={() => copiarLink(s)}
               onEtiqueta={() => imprimirEtiqueta(s)}
               onComprobante={() => setComprobante(s)}
@@ -528,7 +551,7 @@ function diaDelEnvio(s: Shipment, hoy: string): string {
  * sale el envío. Lo demás —quién rinde qué, la comisión— es de la caja, y la
  * caja no es asunto del comercio.
  */
-function plataDelEnvio(s: Shipment): string {
+function plataDelEnvio(s: Shipment, puesto?: Puesto): string {
   const partes: string[] = [];
 
   if (s.payment_mode === 'cobrar_destinatario' && Number(s.amount_to_collect) > 0) {
@@ -537,7 +560,16 @@ function plataDelEnvio(s: Shipment): string {
     partes.push(PAYMENT_LABEL[s.payment_mode]);
   }
 
-  if (Number(s.shipping_fee) > 0) partes.push(`envío ${money(s.shipping_fee)}`);
+  if (Number(s.shipping_fee) > 0) {
+    partes.push(`envío ${money(s.shipping_fee)}`);
+  } else if (puesto && !puesto.esCabeza) {
+    /*
+     * Una entrega de un envío con varias figura en cero porque el precio está
+     * entero en la primera. Sin decirlo, el comercio lee "envío gratis" y
+     * después le llega una factura que no coincide con lo que vio acá.
+     */
+    partes.push('sin cargo aparte: va en la primera entrega');
+  }
 
   return partes.join(' · ');
 }
@@ -549,6 +581,7 @@ function Tarjeta({
   copiado,
   etiquetando,
   desdeLaOficina,
+  puesto,
   onCopiar,
   onEtiqueta,
   onComprobante,
@@ -561,6 +594,8 @@ function Tarjeta({
   /** Mientras el servidor firma el link de la etiqueta de ESTE envío. */
   etiquetando: boolean;
   desdeLaOficina: boolean;
+  /** Si es una de varias entregas del mismo envío (paso 53). */
+  puesto?: Puesto;
   onCopiar: () => void;
   onEtiqueta: () => void;
   onComprobante: () => void;
@@ -581,6 +616,8 @@ function Tarjeta({
         <span className="ml-auto text-xs text-[var(--edr-muted)]">{diaDelEnvio(s, hoy)}</span>
       </div>
 
+      <EntregasDelEnvio puesto={puesto} id={s.id} detalle className="mb-1.5" />
+
       <div className="font-bold leading-tight">{nombreDelDestinatario(s)}</div>
       <div className="text-sm text-[var(--edr-muted)]">
         {s.address_street}
@@ -596,7 +633,9 @@ function Tarjeta({
         </div>
       )}
 
-      <div className="mt-1 text-xs font-semibold text-[var(--edr-acento)]">{plataDelEnvio(s)}</div>
+      <div className="mt-1 text-xs font-semibold text-[var(--edr-acento)]">
+        {plataDelEnvio(s, puesto)}
+      </div>
 
       <div className="mt-2.5 flex flex-wrap gap-2">
         {cerrado ? (

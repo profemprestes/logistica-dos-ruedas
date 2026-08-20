@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import ResolveDeliveryModal from '@/components/driver/ResolveDeliveryModal';
 import ShipmentCard from '@/components/driver/ShipmentCard';
+import { conHermanos, type Puestos } from '@/lib/entregas';
 import ShipmentSheet from '@/components/driver/ShipmentSheet';
 import { useToast } from '@/components/driver/Toast';
 import {
@@ -139,6 +140,8 @@ export default function DriverDashboardPage() {
 
   const [driver, setDriver] = useState<{ id: string; name: string } | null>(null);
   const [route, setRoute] = useState<Shipment[]>([]);
+  /** Los envíos con más de una entrega, para avisarle antes de cargar la moto. */
+  const [puestos, setPuestos] = useState<Puestos>(new Map());
   /**
    * Si arrancó la jornada. Sin esto no se ve la ruta ni se registra posición.
    *
@@ -309,6 +312,27 @@ export default function DriverDashboardPage() {
       cancelled = true;
     };
   }, [driver]);
+
+  /*
+   * Cuáles de estos paquetes son parte de un envío con varias entregas.
+   *
+   * Se calcula sobre la hoja ya cargada —que sale del caché cuando no hay
+   * señal—, así que el aviso aparece igual en el sótano de un local. La
+   * consulta que hace adentro sólo agrega los casos raros: una entrega que se
+   * reprogramó a otro día, o un envío repartido entre dos motos. Si no sale,
+   * queda lo que se pudo saber con lo que está en el teléfono.
+   */
+  useEffect(() => {
+    let vivo = true;
+    const traer = async () => {
+      const p = await conHermanos(route);
+      if (vivo) setPuestos(p);
+    };
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [route]);
 
   /** Vuelve a pedir la hoja de ruta sin recargar la página. */
   const recargar = useCallback(() => {
@@ -856,6 +880,7 @@ export default function DriverDashboardPage() {
             <ShipmentCard
               key={s.id}
               shipment={s}
+              puesto={puestos.get(s.id)}
               onOpen={setSelected}
               onEstado={cambiarEstado}
               onCerrarEntrega={(x) => {
@@ -925,7 +950,13 @@ export default function DriverDashboardPage() {
               PRÓXIMOS DÍAS · {proximos.length}
             </h2>
             {proximos.map((s) => (
-              <ShipmentCard key={s.id} shipment={s} onOpen={setSelected} onEstado={cambiarEstado} />
+              <ShipmentCard
+                key={s.id}
+                shipment={s}
+                puesto={puestos.get(s.id)}
+                onOpen={setSelected}
+                onEstado={cambiarEstado}
+              />
             ))}
           </>
         )}

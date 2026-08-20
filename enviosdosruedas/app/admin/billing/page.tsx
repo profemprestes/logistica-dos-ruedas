@@ -10,7 +10,8 @@ import {
   logCash,
   summarizeLogs,
   today,
-  LOG_SELECT,
+  conLosMovimientos,
+  sinPrecio,
   type DeliveryLog,
 } from '@/lib/settlement';
 
@@ -42,13 +43,15 @@ async function fetchDay(driverId: string, day: string) {
   const { from, to } = dayRange(day);
 
   const [logsRes, settlementRes] = await Promise.all([
-    supabase
-      .from('delivery_logs')
-      .select(LOG_SELECT)
-      .eq('driver_id', driverId)
-      .gte('happened_at', from)
-      .lte('happened_at', to)
-      .order('happened_at'),
+    conLosMovimientos<DeliveryLog[]>((select) =>
+      supabase
+        .from('delivery_logs')
+        .select(select)
+        .eq('driver_id', driverId)
+        .gte('happened_at', from)
+        .lte('happened_at', to)
+        .order('happened_at'),
+    ),
     supabase
       .from('settlements')
       .select('*')
@@ -100,7 +103,7 @@ export default function BillingPage() {
     }
 
     const saved = (settlementRes.data ?? null) as Settlement | null;
-    const rows = (logsRes.data ?? []) as unknown as DeliveryLog[];
+    const rows = logsRes.data ?? [];
 
     setLogs(rows);
     setSettlement(saved);
@@ -188,7 +191,7 @@ export default function BillingPage() {
    * dato; tres códigos con su comercio y su dirección es algo que se puede
    * arreglar en dos minutos antes de cerrar el día.
    */
-  const sinValor = delivered.filter((l) => !Number(l.shipment?.shipping_fee));
+  const sinValor = delivered.filter(sinPrecio);
 
   /* -------------------------------------------------------------- acciones */
   async function settle() {

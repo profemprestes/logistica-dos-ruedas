@@ -4,6 +4,7 @@ import { Bike, Camera, Check, Navigation, Package, PackageCheck, Phone } from 'l
 import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
+import { lasOtras, type Puesto } from '@/lib/entregas';
 
 /**
  * Tarjeta de la hoja de ruta.
@@ -28,6 +29,7 @@ export default function ShipmentCard({
   onOpen,
   onEstado,
   onCerrarEntrega,
+  puesto,
 }: {
   shipment: Shipment;
   onOpen: (shipment: Shipment) => void;
@@ -35,6 +37,15 @@ export default function ShipmentCard({
   onEstado: (shipment: Shipment, estado: 'retirado' | 'en_camino') => void;
   /** Abrir el cierre de entrega. Sin esto, el botón lleva al detalle. */
   onCerrarEntrega?: (shipment: Shipment) => void;
+  /**
+   * Si este paquete es una de varias entregas del mismo envío (paso 53).
+   *
+   * Va en la tarjeta y no adentro del envío porque el momento en que hace
+   * falta es parado en el mostrador del comercio, mirando la lista: ahí se
+   * decide si se lleva uno o dos, y adentro del envío no entra nadie antes de
+   * cargar la moto.
+   */
+  puesto?: Puesto;
 }) {
   const programado = esProgramado(shipment);
   const cash = shipmentCash(shipment);
@@ -129,6 +140,23 @@ export default function ShipmentCard({
         {/* Durante meses un FLEX se cerró sin foto. El aviso va acá, en la hoja
             de ruta, y no sólo adentro del envío: la costumbre vieja se corta
             cuando el repartidor lee el cambio antes de tocar nada. */}
+        {/* SON DOS PAQUETES. Es el aviso que evita el error caro de este
+            envío: irse del comercio con uno solo y tener que volver. Por eso
+            está en amarillo y arriba de la plata. */}
+        {puesto && (
+          <span className="flex flex-col gap-0.5 rounded-xl bg-[var(--edr-yellow)] px-3 py-2.5 text-[var(--edr-blue)]">
+            <span className="flex items-center gap-2 font-bebas text-[15px] tracking-[.05em]">
+              <Package size={16} strokeWidth={2} className="shrink-0" />
+              ENTREGA {puesto.numero} DE {puesto.total} · SON {puesto.total} PAQUETES
+            </span>
+            <span className="text-[13px] font-semibold leading-tight">
+              {lasOtras(puesto, shipment.id)
+                .map((e) => e.address_street)
+                .join(' · ')}
+            </span>
+          </span>
+        )}
+
         {flex && (
           <span className="flex items-center gap-2 rounded-xl bg-[var(--edr-blue-soft)] px-3 py-2.5 font-bebas text-[15px] tracking-[.05em] text-[var(--edr-blue-dark)]">
             <Camera size={16} strokeWidth={2} className="shrink-0" />

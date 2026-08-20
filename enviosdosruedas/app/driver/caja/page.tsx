@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import {
   customRange,
   dayShift,
-  LOG_SELECT,
+  conLosMovimientos,
   monthRange,
   pagoDelEnvio,
   summarizeLogs,
@@ -126,22 +126,23 @@ export default function CajaPage() {
 
     const { from, to } = customRange(desde, hasta);
 
-    supabase
-      .from('delivery_logs')
-      .select(LOG_SELECT)
-      .eq('driver_id', driverId)
-      .gte('happened_at', from)
-      .lte('happened_at', to)
-      .order('happened_at')
-      .then(({ data, error: dbError }) => {
-        if (!vivo) return;
-        if (dbError) {
-          setError('No se pudo traer la caja. Probá de nuevo cuando tengas señal.');
-          return;
-        }
-        setError('');
-        setResumen(summarizeLogs((data ?? []) as unknown as DeliveryLog[]));
-      });
+    void conLosMovimientos<DeliveryLog[]>((select) =>
+      supabase
+        .from('delivery_logs')
+        .select(select)
+        .eq('driver_id', driverId)
+        .gte('happened_at', from)
+        .lte('happened_at', to)
+        .order('happened_at'),
+    ).then(({ data, error: dbError }) => {
+      if (!vivo) return;
+      if (dbError) {
+        setError('No se pudo traer la caja. Probá de nuevo cuando tengas señal.');
+        return;
+      }
+      setError('');
+      setResumen(summarizeLogs(data ?? []));
+    });
 
     /*
      * El cierre de la oficina sólo tiene sentido para un día suelto.

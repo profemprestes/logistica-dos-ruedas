@@ -55,9 +55,16 @@ const ITEMS: Item[] = [
   { href: '/admin/panel', label: 'Panel del día', Icono: LayoutDashboard, corto: 'PANEL' },
   { href: '/admin', label: 'Envíos', Icono: Package, corto: 'ENVÍOS' },
   { href: '/admin/mapa', label: 'Mapa en vivo', Icono: MapIcon, corto: 'MAPA' },
-  { href: '/admin/drivers', label: 'Repartidores', Icono: Users },
-  // Va al lado de Repartidores: las dos son las listas de con quién se
-  // trabaja, una del lado de adentro y otra del de afuera.
+  /*
+   * "Usuarios" y no "Repartidores": la lista muestra TODAS las cuentas que
+   * pueden entrar al sistema —la oficina, las motos y los comercios—, y
+   * llamarla por uno solo de los tres hacía que las otras dos parecieran un
+   * error de la pantalla.
+   */
+  { href: '/admin/drivers', label: 'Usuarios', Icono: Users },
+  // Va al lado de Usuarios: una lista es quién puede ENTRAR y la otra a quién
+  // se le trabaja. Un comercio aparece en las dos y no es lo mismo: acá está
+  // su cuenta, allá su ficha, su dirección y sus horarios.
   { href: '/admin/comercios', label: 'Comercios', Icono: Store },
   { href: '/admin/billing', label: 'Cierre de caja', Icono: Wallet, corto: 'CAJA' },
   // Va pegada al cierre y no con las estadísticas: son la misma plata mirada

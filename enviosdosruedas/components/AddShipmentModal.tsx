@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
-import { PAYMENT_LABEL, cashBreakdown, money, type PaymentMode, type Shipment } from '@/lib/format';
+import {
+  PAYMENT_LABEL,
+  cashBreakdown,
+  money,
+  NOMBRE_EN_EL_PAQUETE,
+  NOMBRE_FLEX,
+  type PaymentMode,
+  type Shipment,
+} from '@/lib/format';
 import VerificarPunto from '@/components/admin/VerificarPunto';
 import ElegirComercio from '@/components/admin/ElegirComercio';
 import { asegurarComercio, problemaDelComercio } from '@/lib/admin/comercios';
@@ -371,8 +379,18 @@ function ShipmentForm({
   };
 
   async function saveManual() {
-    if (!form.recipient_name.trim() || !form.address_street.trim()) {
-      setError('El destinatario y la dirección son obligatorios.');
+    /*
+     * La dirección sí es obligatoria; el nombre no.
+     *
+     * Muchos envíos llegan sin nombre y así se trabaja: el dato está escrito en
+     * el sobre. Exigirlo hacía que el que carga escribiera "Sin nombre" para
+     * poder guardar, y ese relleno terminaba impreso en la etiqueta y en el
+     * comprobante, donde ya no había forma de distinguirlo del nombre de
+     * alguien. Vacío, cada pantalla dice lo que corresponde
+     * (`nombreDelDestinatario`).
+     */
+    if (!form.address_street.trim()) {
+      setError('La dirección de entrega es obligatoria.');
       return;
     }
     setSaving(true);
@@ -1133,7 +1151,14 @@ function ShipmentForm({
                               </Field>
 
                               <Field label="Destinatario">
-                                <input className={field} value={r.recipientName} onChange={(e) => updateRow(r.tempId, { recipientName: e.target.value })} />
+                                {/* Vacío se puede dejar: el aviso de abajo dice
+                                    qué va a salir impreso en su lugar. */}
+                                <input
+                                  className={field}
+                                  value={r.recipientName}
+                                  placeholder={r.isReminder ? NOMBRE_FLEX : NOMBRE_EN_EL_PAQUETE}
+                                  onChange={(e) => updateRow(r.tempId, { recipientName: e.target.value })}
+                                />
                               </Field>
                               <Field label="Teléfono">
                                 <input className={field} value={r.recipientPhone} onChange={(e) => updateRow(r.tempId, { recipientPhone: e.target.value })} />

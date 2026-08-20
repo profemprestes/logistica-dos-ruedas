@@ -3,7 +3,7 @@
 import QRCode from 'react-qr-code';
 import LabelLogo from '@/components/LabelLogo';
 import type { Shipment } from '@/lib/format';
-import { money } from '@/lib/format';
+import { money, nombreDelDestinatario } from '@/lib/format';
 
 /**
  * Etiqueta de 100mm x 150mm para impresora térmica.
@@ -122,7 +122,7 @@ export default function ShippingLabel({ shipment }: { shipment: Shipment }) {
         <div style={{ fontSize: '2.6mm', letterSpacing: '0.5mm' }}>ENTREGAR A</div>
 
         <div style={{ fontSize: '4.6mm', fontWeight: 800, lineHeight: 1.15 }}>
-          {shipment.recipient_name}
+          {nombreDelDestinatario(shipment)}
         </div>
 
         <div style={{ fontSize: '6mm', fontWeight: 900, lineHeight: 1.1, marginTop: '1mm' }}>

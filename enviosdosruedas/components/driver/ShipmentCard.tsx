@@ -1,7 +1,13 @@
 'use client';
 
 import { Bike, Camera, Check, Navigation, Package, PackageCheck, Phone } from 'lucide-react';
-import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
+import {
+  money,
+  nombreDelDestinatario,
+  shipmentCash,
+  STATUS_LABEL,
+  type Shipment,
+} from '@/lib/format';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 import { lasOtras, type Puesto } from '@/lib/entregas';
@@ -134,7 +140,9 @@ export default function ShipmentCard({
         )}
 
         <span className="text-[15px] font-medium text-[var(--edr-muted)]">
-          {[shipment.recipient_name, shipment.delivery_window].filter(Boolean).join(' · ')}
+          {[nombreDelDestinatario(shipment), shipment.delivery_window]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
 
         {/* Durante meses un FLEX se cerró sin foto. El aviso va acá, en la hoja

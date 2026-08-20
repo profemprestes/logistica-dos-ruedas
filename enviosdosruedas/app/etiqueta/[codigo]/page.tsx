@@ -5,7 +5,7 @@ import Logo from '@/components/Logo';
 import EtiquetaImprimible from '@/components/EtiquetaImprimible';
 import { etiquetaFirmada } from '@/lib/etiquetaFirma';
 import { CODE_RE } from '@/lib/trackServer';
-import type { Shipment } from '@/lib/format';
+import { nombreDelDestinatario, type Shipment } from '@/lib/format';
 
 /**
  * La etiqueta de un envío, para que la imprima el comercio.
@@ -99,7 +99,7 @@ export default async function EtiquetaPage({
               <div className="edr-mono text-xs text-[var(--edr-muted)]">{envio.tracking_code}</div>
               <div className="text-lg font-bold">{envio.address_street}</div>
               <div className="text-sm text-[var(--edr-muted)]">
-                {envio.recipient_name} · {envio.city}
+                {nombreDelDestinatario(envio)} · {envio.city}
               </div>
             </div>
 

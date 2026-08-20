@@ -16,7 +16,7 @@ import {
   type DeliveryKind,
 } from '@/lib/driver/db';
 import { flushPending } from '@/lib/driver/sync';
-import { money, shipmentCash, type Shipment } from '@/lib/format';
+import { money, nombreDelDestinatario, shipmentCash, type Shipment } from '@/lib/format';
 
 /** Los cinco motivos que se repiten en la calle. */
 export const FAILURE_REASONS = [
@@ -337,7 +337,7 @@ export default function ResolveDeliveryModal({
         )}
 
         <div className="rounded-xl border-2 border-[var(--edr-border)] bg-[var(--edr-surface)] px-4 py-3">
-          <div className="text-lg font-bold">{shipment.recipient_name}</div>
+          <div className="text-lg font-bold">{nombreDelDestinatario(shipment)}</div>
           <div className="text-base">{shipment.address_street}</div>
         </div>
 

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { TrackResult } from '@/components/ProofOfDelivery';
 import { aproximarPunto, estimarLlegada, RADIO_APROX_M } from '@/lib/eta';
+import { nombreDelDestinatario } from '@/lib/format';
 
 /**
  * Búsqueda del seguimiento público, del lado del servidor.
@@ -180,7 +181,10 @@ export async function buscarEnvio(codigo: string): Promise<TrackLookup> {
       courier,
       status: shipment.status as TrackResult['status'],
       isFlex: Boolean(shipment.is_flex),
-      recipient: shipment.recipient_name,
+      // El que espera el paquete también tiene que leer algo que se
+      // entienda. 'Sin nombre' en la pantalla de seguimiento se lee como un
+      // error del sistema justo cuando alguien está esperando su envío.
+      recipient: nombreDelDestinatario(shipment),
       address: [shipment.address_street, shipment.address_extra].filter(Boolean).join(' — '),
       city: shipment.city,
       window: shipment.delivery_window,

@@ -23,6 +23,8 @@ export interface LogShipment {
   payment_mode: PaymentMode;
   shipping_fee: number;
   client_name_raw: string | null;
+  /** Hace falta para saber qué decir cuando el envío no trae nombre. */
+  is_flex?: boolean | null;
   /**
    * Si esta entrega es una parada más de un envío con varias (paso 53).
    *
@@ -280,7 +282,7 @@ export function weekRange(day: string) {
 
 const DEL_ENVIO =
   'id, tracking_code, recipient_name, address_street, amount_to_collect, payment_mode, ' +
-  'shipping_fee, client_name_raw';
+  'shipping_fee, client_name_raw, is_flex';
 
 const LOG_BASE = 'id, event, amount_collected, happened_at, failure_reason';
 

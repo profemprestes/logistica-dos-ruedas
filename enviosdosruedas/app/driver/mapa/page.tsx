@@ -225,7 +225,7 @@ export default function MapaRepartidorPage() {
           color: marca.color,
           colorTexto: marca.colorTexto,
           titulo: u.envio.address_street,
-          detalle: `${u.envio.recipient_name} · ${STATUS_LABEL[u.envio.status]}`,
+          detalle: `${nombreDelDestinatario(u.envio)} · ${STATUS_LABEL[u.envio.status]}`,
         });
         continue;
       }

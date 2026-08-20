@@ -2,6 +2,7 @@
 
 import {
   money,
+  nombreDelDestinatario,
   shipmentCash,
   STATUS_CLASS,
   ETIQUETA_ESTADO,
@@ -119,7 +120,7 @@ export default function ShipmentMobileCard({
         </button>
       )}
       <div className="text-sm text-[var(--edr-muted)]">
-        {shipment.recipient_name} · {shipment.city}
+        {nombreDelDestinatario(shipment)} · {shipment.city}
         {shipment.delivery_window ? ` · ${shipment.delivery_window}` : ''}
         {mostrarFecha && (
           <span className="edr-mono ml-1 text-[var(--edr-acento)]">

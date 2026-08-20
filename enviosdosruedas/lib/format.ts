@@ -217,7 +217,23 @@ export function money(value: number | null | undefined): string {
  * reconoce para que la columna se lea igual en todas las filas y no queden
  * tres formas de decir lo mismo.
  */
-const SIN_NOMBRE = /^\s*(sin nombre|sin datos|s\/n|-{1,3}|lo dice el (sobre|papel)(\/(sobre|papel))?)\s*$/i;
+/**
+ * Lo que se escribió alguna vez en el lugar del nombre sin ser un nombre.
+ *
+ * Dos familias. Los rellenos de "acá no hay dato" —"Sin nombre", "s/n", un
+ * guión— y las frases que dicen dónde está el dato de verdad: "lo dice el
+ * paquete", "está en el sobre". Las segundas las escribió una persona a mano,
+ * cada vez con palabras distintas, y todas quieren decir lo mismo.
+ *
+ * Se reconocen para poder mostrar SIEMPRE el mismo cartel, sin importar cómo se
+ * escribió ese día. Y se reconocen al MOSTRAR, no al guardar: las filas viejas
+ * ya tienen el texto adentro y no se van a reescribir.
+ *
+ * Un nombre que empieza parecido —"Sin Nombre Apellido"— no entra: la expresión
+ * exige que el renglón sea ESO y nada más.
+ */
+const SIN_NOMBRE =
+  /^\s*(sin (nombre|datos|nada)|s\/n|n\/a|-{1,3}|(lo\s+)?(dice|est[áa]|va|figura)\s+(en\s+)?(el|la|lo)?\s*(sobre|papel|paquete|bolsa|caja)(\s*\/\s*(sobre|papel|paquete|bolsa|caja))*)\s*$/i;
 
 export const NOMBRE_FLEX = 'Datos de entrega en la aplicación Envíos Flex';
 export const NOMBRE_EN_EL_PAQUETE = 'Lo dice el sobre/papel';

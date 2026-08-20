@@ -18,7 +18,12 @@ import { summarizeLogs, type DeliveryLog } from '../lib/settlement';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
-import type { Shipment } from '../lib/format';
+import {
+  nombreDelDestinatario,
+  NOMBRE_EN_EL_PAQUETE,
+  NOMBRE_FLEX,
+  type Shipment,
+} from '../lib/format';
 
 // ---------------------------------------------------------------- casos armados
 
@@ -713,4 +718,70 @@ console.log('\n=== el horario de los sabados ===\n');
   caso('"cerrado" no deja ninguna hora, asi que no hay cierre que avisar',
     [String(limiteDeLaFranja(horarioDeRetiro({ comercio: { pickup_window: '9 a 18 hs', pickup_window_sabado: 'cerrado' } }, sabado)))],
     ['null']);
+}
+
+/* ==========================================================================
+   EL NOMBRE DEL DESTINATARIO
+
+   Muchos envíos llegan sin nombre: el dato está escrito en el sobre. Lo que
+   NO puede pasar es que alguien lea "Sin nombre" en la etiqueta, en el
+   comprobante o en el seguimiento — se lee como un error del sistema justo
+   cuando hay alguien esperando un paquete.
+
+   Se prueba acá y no en la pantalla porque son quince pantallas: si la regla
+   vive en un solo lugar, alcanza con probar ese lugar.
+   ========================================================================== */
+
+console.log('\n=== el nombre del destinatario ===\n');
+
+{
+  const quien = (recipient_name: string, is_flex = false) =>
+    nombreDelDestinatario({ recipient_name, is_flex });
+
+  caso('con nombre, va el nombre', [quien('Josefina Remon')], ['Josefina Remon']);
+  caso('en un flex CON nombre, tambien va el nombre',
+    [quien('Josefina Remon', true)], ['Josefina Remon']);
+
+  caso('sin nombre, lo dice el sobre', [quien('')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('un flex sin nombre manda a su app', [quien('', true)], [NOMBRE_FLEX]);
+
+  // Los rellenos que quedaron guardados en la base de antes. Son 40 de 71
+  // envíos al 20/08/2026: si no se limpiaran al mostrarlos, seguirían saliendo
+  // impresos aunque el parser ya no los escriba.
+  caso('"Sin nombre" guardado no se muestra', [quien('Sin nombre')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('tampoco con mayusculas raras', [quien('SIN NOMBRE')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('ni "sin datos"', [quien('sin datos')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('ni "s/n"', [quien(' s/n ')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('ni un guion solo', [quien('-')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('un flex con "Sin nombre" guardado manda a su app',
+    [quien('Sin nombre', true)], [NOMBRE_FLEX]);
+
+  // Y el cartel guardado por error tampoco se repite ni se anida.
+  caso('el propio cartel guardado no se muestra como nombre',
+    [quien('Lo dice el sobre/papel')], [NOMBRE_EN_EL_PAQUETE]);
+
+  /*
+   * Las frases escritas a mano. Cada una la tecleó alguien un día distinto y
+   * todas quieren decir lo mismo; el 20/08/2026 había envíos cargados con "Lo
+   * dice el paquete", que hasta entonces se mostraba tal cual y encima
+   * distinto del resto.
+   */
+  caso('"Lo dice el paquete"', [quien('Lo dice el paquete')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"lo dice el sobre"', [quien('lo dice el sobre')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"Dice el papel"', [quien('Dice el papel')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"esta en el sobre"', [quien('esta en el sobre')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"Está en la caja"', [quien('Está en la caja')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"va en la bolsa"', [quien('va en la bolsa')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"n/a"', [quien('n/a')], [NOMBRE_EN_EL_PAQUETE]);
+  caso('"sin nada"', [quien('sin nada')], [NOMBRE_EN_EL_PAQUETE]);
+
+  // Y lo que SÍ es un nombre sigue siéndolo, aunque tenga alguna de esas
+  // palabras adentro.
+  caso('"Sobrero" es un apellido', [quien('Sobrero')], ['Sobrero']);
+  caso('"Paula Dice" es un nombre', [quien('Paula Dice')], ['Paula Dice']);
+  caso('"Kiosco El Paquete" es un local', [quien('Kiosco El Paquete')], ['Kiosco El Paquete']);
+
+  // Un nombre que EMPIEZA parecido sí es un nombre.
+  caso('"Sin Nombre Apellido" es un nombre de verdad',
+    [quien('Sin Nombre Apellido')], ['Sin Nombre Apellido']);
 }

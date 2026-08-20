@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy, PackageSearch, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { ETIQUETA_ESTADO, type Shipment } from '@/lib/format';
+import { ETIQUETA_ESTADO, nombreDelDestinatario, type Shipment } from '@/lib/format';
 import { estimarLlegada, type Estimacion } from '@/lib/eta';
 import { HITOS, hastaDonde, respuestaParaElCliente } from '@/lib/admin/respuesta';
 import { ES_CODIGO, colaDelTelefono, esTelefono, palabrasUtiles } from '@/lib/admin/busqueda';
@@ -293,7 +293,7 @@ export default function BuscarPaquete({ verPrueba }: { verPrueba: (s: Shipment) 
           <div className="edr-mono text-[13px] font-bold text-[var(--edr-yellow)]">
             {s.tracking_code}
           </div>
-          <div className="text-[13.5px] text-white">{s.recipient_name}</div>
+          <div className="text-[13.5px] text-white">{nombreDelDestinatario(s)}</div>
           <div className="text-xs text-[#b7cbff]">
             {s.address_street} · {ETIQUETA_ESTADO[s.status]}
           </div>
@@ -330,7 +330,7 @@ function Resultado({
           {envio.address_street}
         </div>
         <div className="text-[13px] text-[#b7cbff]">
-          {envio.recipient_name} · {envio.city}
+          {nombreDelDestinatario(envio)} · {envio.city}
           {envio.driver?.full_name ? ` · ${envio.driver.full_name}` : ''}
         </div>
       </div>

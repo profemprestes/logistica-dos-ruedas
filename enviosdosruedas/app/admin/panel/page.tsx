@@ -13,7 +13,13 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useAdminGuard } from '@/lib/adminGuard';
-import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
+import {
+  ETIQUETA_ESTADO,
+  money,
+  nombreDelDestinatario,
+  shipmentCash,
+  type Shipment,
+} from '@/lib/format';
 import { useDatosDelDia, type Repartidor } from '@/components/admin/DatosDelDia';
 import BuscarPaquete from '@/components/admin/BuscarPaquete';
 import ColectasPendientes from '@/components/admin/ColectasPendientes';
@@ -351,7 +357,7 @@ function RutaDelRepartidor({
                 </div>
 
                 <div className="text-[12.5px] text-[var(--edr-text-4)]">
-                  {s.recipient_name}
+                  {nombreDelDestinatario(s)}
                   {s.client_name_raw ? ` · de ${s.client_name_raw}` : ''}
                   {s.delivery_window ? ` · ${s.delivery_window}` : ''}
                 </div>

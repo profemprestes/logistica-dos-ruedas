@@ -522,7 +522,11 @@ export function parseWhatsappText(
         clientName: client,
         pickupAddress,
         pickupNotes,
-        recipientName: recipientName || 'Sin nombre',
+        // Vacío y no 'Sin nombre': el cartel se elige al MOSTRARLO, según si
+        // es Flex o no (`nombreDelDestinatario`). Guardado en la fila, el
+        // texto viajaba a la etiqueta impresa y al comprobante, y ahí ya no
+        // había forma de saber que era un relleno y no el nombre de alguien.
+        recipientName,
         recipientPhone,
         addressStreet: stop,
         addressExtra: second ? '' : addr.extra,

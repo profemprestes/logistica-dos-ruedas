@@ -39,7 +39,13 @@ import {
 import { errorText } from '@/lib/driver/errors';
 import { marcarEstado, type EstadoIntermedio } from '@/lib/driver/status';
 import { flushPending } from '@/lib/driver/sync';
-import { ETIQUETA_ESTADO, money, shipmentCash, type Shipment } from '@/lib/format';
+import {
+  ETIQUETA_ESTADO,
+  money,
+  nombreDelDestinatario,
+  shipmentCash,
+  type Shipment,
+} from '@/lib/format';
 import { aplicarOrden, moverEncima, moverUno } from '@/lib/driver/orden';
 import { hoyLocal, partirRuta } from '@/lib/scheduled';
 import {
@@ -934,7 +940,7 @@ export default function DriverDashboardPage() {
                       {s.address_street}
                     </span>
                     <span className="block truncate text-xs text-[var(--edr-muted)]">
-                      {s.recipient_name} · {ETIQUETA_ESTADO[s.status]}
+                      {nombreDelDestinatario(s)} · {ETIQUETA_ESTADO[s.status]}
                     </span>
                   </span>
                 </button>

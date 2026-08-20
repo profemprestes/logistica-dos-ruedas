@@ -22,6 +22,7 @@ import { hoyLocal } from '@/lib/scheduled';
 import { dayShift } from '@/lib/settlement';
 import {
   money,
+  nombreDelDestinatario,
   shipmentCash,
   STATUS_CLASS,
   ETIQUETA_ESTADO,
@@ -1624,7 +1625,7 @@ export default function AdminPage() {
                     <EntregasDelEnvio puesto={puestos.get(s.id)} id={s.id} className="mt-1" />
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-semibold">{s.recipient_name}</div>
+                    <div className="font-semibold">{nombreDelDestinatario(s)}</div>
                     <div className="text-xs text-[var(--edr-muted)]">{s.client_name_raw}</div>
                   </td>
                   <td className="px-3 py-2">

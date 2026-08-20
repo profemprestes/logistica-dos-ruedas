@@ -887,7 +887,7 @@ function Ficha({ envio, onCerrar }: { envio: Shipment; onCerrar: () => void }) {
           <div className="edr-mono text-xs text-[var(--edr-muted)]">{envio.tracking_code}</div>
           <div className="text-lg font-bold">{envio.address_street}</div>
           <div className="text-sm">
-            {envio.recipient_name}
+            {nombreDelDestinatario(envio)}
             {envio.client_name_raw ? ` · ${envio.client_name_raw}` : ''}
           </div>
           <div className="mt-1 text-sm text-[var(--edr-muted)]">

@@ -1,6 +1,7 @@
 'use client';
 
-import { money, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
+import { money,
+  nombreDelDestinatario, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
 import type { DeliveryKind } from '@/lib/driver/db';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
@@ -171,7 +172,7 @@ export default function ShipmentSheet({
         )}
 
         <div className="grid grid-cols-2 gap-2.5">
-          <Dato label="DESTINATARIO" value={shipment.recipient_name} />
+          <Dato label="DESTINATARIO" value={nombreDelDestinatario(shipment)} />
           <Dato label="VENTANA" value={shipment.delivery_window || 'Sin ventana'} />
         </div>
 

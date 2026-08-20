@@ -12,7 +12,6 @@ import type { PaymentMode } from '@/lib/format';
 // mismo sistema digan cosas distintas sobre la misma plata es peor que
 // cualquier error de cuenta.
 import { REGLAS, esShippy } from '@/lib/resumen';
-import { pidiendo } from '@/lib/columnaNueva';
 
 export interface LogShipment {
   id: number;
@@ -45,6 +44,17 @@ export interface DeliveryLog {
   happened_at: string;
   failure_reason: string | null;
   shipment: LogShipment | null;
+  /**
+   * Lo que se cobró DE VERDAD, si no fue lo que cargó el repartidor (paso 54).
+   *
+   * Va al lado y no encima de `amount_collected` a propósito: ese es el número
+   * que él cargó al cerrar, a esa hora y con esa foto, y es un hecho. Pisarlo
+   * dejaría la corrección indistinguible de haber cargado bien desde el
+   * principio, y el día que haya una discusión de plata no quedaría rastro de
+   * quién dijo qué.
+   */
+  cobrado_corregido?: number | null;
+  correccion_nota?: string | null;
 }
 
 /**
@@ -56,6 +66,16 @@ export interface DeliveryLog {
  * comercio al retirar nunca aparecía en la rendición y el día cerraba corto.
  */
 export function logCash(l: DeliveryLog): number {
+  /*
+   * La corrección de la oficina manda sobre todo lo demás.
+   *
+   * El 20/08/2026 un envío salió con $ 65.230 a cobrar y en la puerta se
+   * cobraron $ 36.900. El repartidor cerró con el monto que traía el envío, así
+   * que la caja le pedía rendir $ 28.330 que nunca tuvo en la mano. Ver el
+   * paso 54.
+   */
+  if (l.cobrado_corregido != null) return Number(l.cobrado_corregido);
+
   if (l.event === 'entregado') {
     return Number(l.amount_collected ?? l.shipment?.amount_to_collect ?? 0);
   }
@@ -68,6 +88,11 @@ export function logCash(l: DeliveryLog): number {
   }
 
   return 0; // no entregado: no cobró nada
+}
+
+/** Si a este movimiento la oficina le corrigió lo cobrado. */
+export function fueCorregido(l: DeliveryLog): boolean {
+  return l.cobrado_corregido != null;
 }
 
 /**
@@ -285,11 +310,12 @@ const DEL_ENVIO =
   'shipping_fee, client_name_raw, is_flex';
 
 const LOG_BASE = 'id, event, amount_collected, happened_at, failure_reason';
+const CORRECCION = 'cobrado_corregido, correccion_nota';
 
 /** Campos que hay que pedirle a `delivery_logs` para que las cuentas cierren. */
-export const LOG_SELECT = `${LOG_BASE}, shipment:shipment_id(${DEL_ENVIO}, parte_de)`;
+export const LOG_SELECT = `${LOG_BASE}, ${CORRECCION}, shipment:shipment_id(${DEL_ENVIO}, parte_de)`;
 
-/** El mismo pedido sin `parte_de`, para antes de que se corra el paso 53. */
+/** El mismo pedido sin lo que agregan los pasos 53 y 54, por si no se corrieron. */
 export const LOG_SELECT_SIN_PARTES = `${LOG_BASE}, shipment:shipment_id(${DEL_ENVIO})`;
 
 /**
@@ -307,11 +333,16 @@ export const LOG_SELECT_SIN_PARTES = `${LOG_BASE}, shipment:shipment_id(${DEL_EN
 export async function conLosMovimientos<T>(
   armar: (select: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
 ): Promise<{ data: T | null; error: { message: string } | null }> {
-  return pidiendo<T>(
-    'parte_de',
-    () => armar(LOG_SELECT),
-    () => armar(LOG_SELECT_SIN_PARTES),
-  );
+  const r = await armar(LOG_SELECT);
+
+  // Falla entera si le falta CUALQUIERA de las columnas nuevas —`parte_de` del
+  // paso 53, `cobrado_corregido` del 54—, así que se mira por las dos.
+  const faltaAlguna =
+    r.error != null && /parte_de|cobrado_corregido|correccion_nota/.test(r.error.message);
+
+  const buena = faltaAlguna ? await armar(LOG_SELECT_SIN_PARTES) : r;
+
+  return { data: (buena.data ?? null) as T | null, error: buena.error };
 }
 
 /**

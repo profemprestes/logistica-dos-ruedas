@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { horarioDeRetiro, tramosDeHorario } from '../lib/franja';
-import { summarizeLogs, type DeliveryLog } from '../lib/settlement';
+import { fueCorregido, logCash, summarizeLogs, type DeliveryLog } from '../lib/settlement';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
@@ -784,4 +784,63 @@ console.log('\n=== el nombre del destinatario ===\n');
   // Un nombre que EMPIEZA parecido sí es un nombre.
   caso('"Sin Nombre Apellido" es un nombre de verdad',
     [quien('Sin Nombre Apellido')], ['Sin Nombre Apellido']);
+}
+
+/* ==========================================================================
+   CORREGIR LO QUE SE COBRO DE VERDAD (paso 54)
+
+   El 20/08/2026 EDR00001147MDQ salio con $ 65.230 a cobrar y en la puerta se
+   cobraron $ 36.900. El repartidor cerro con el monto que traia el envio, asi
+   que la caja le pedia rendir $ 28.330 que nunca tuvo en la mano.
+
+   Corregir el monto en la FICHA DEL ENVIO no arregla eso, y esta bien que no lo
+   arregle: la caja cuenta lo que se cobro, no lo que se esperaba cobrar. Lo que
+   manda es la correccion de la oficina.
+   ========================================================================== */
+
+console.log('\n=== corregir lo cobrado ===\n');
+
+{
+  const mov = (p: Partial<DeliveryLog> & { cobra?: number }): DeliveryLog => ({
+    id: 'log-1',
+    event: 'entregado',
+    amount_collected: null,
+    happened_at: '2026-08-20T06:33:04Z',
+    failure_reason: null,
+    shipment: {
+      id: 1147,
+      tracking_code: 'EDR00001147MDQ',
+      recipient_name: 'María',
+      address_street: 'ROLDAN 421',
+      amount_to_collect: p.cobra ?? 0,
+      payment_mode: 'cobrar_destinatario',
+      shipping_fee: 3000,
+      client_name_raw: 'KILLARI',
+    },
+    ...p,
+  });
+
+  casoNumero('sin correccion manda lo que cargo el repartidor',
+    logCash(mov({ amount_collected: 65230, cobra: 36900 })), 65230);
+
+  casoNumero('con correccion manda la correccion',
+    logCash(mov({ amount_collected: 65230, cobra: 36900, cobrado_corregido: 36900 })), 36900);
+
+  casoNumero('corregir a cero es valido: no cobro nada',
+    logCash(mov({ amount_collected: 65230, cobrado_corregido: 0 })), 0);
+
+  casoNumero('tambien corrige un retiro cobrado al comercio',
+    logCash(mov({ event: 'retirado', amount_collected: 4600, cobrado_corregido: 4000 })), 4000);
+
+  caso('la correccion se puede reconocer para mostrarla',
+    [String(fueCorregido(mov({ amount_collected: 65230 }))),
+     String(fueCorregido(mov({ amount_collected: 65230, cobrado_corregido: 36900 })))],
+    ['false', 'true']);
+
+  // Y el dia entero: lo que tiene que rendir sale corregido.
+  const dia = summarizeLogs([
+    mov({ id: 'a', amount_collected: 36900 }),
+    mov({ id: 'b', amount_collected: 65230, cobrado_corregido: 36900 }),
+  ]);
+  casoNumero('el total a rendir del dia usa la correccion', dia.cashTotal, 73800);
 }

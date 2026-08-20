@@ -11,9 +11,15 @@ import {
   summarizeLogs,
   today,
   conLosMovimientos,
+  fueCorregido,
   sinPrecio,
   type DeliveryLog,
 } from '@/lib/settlement';
+
+const field =
+  'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--edr-acento)] focus:ring-2 focus:ring-[var(--edr-yellow)]/10';
+const labelCls =
+  'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
 interface Driver {
   id: string;
@@ -78,6 +84,11 @@ export default function BillingPage() {
   const [earnings, setEarnings] = useState('');
   const [cobrado, setCobrado] = useState('');
   const [envios, setEnvios] = useState('');
+  /** El movimiento al que se le está corrigiendo lo cobrado (paso 54). */
+  const [corrigiendo, setCorrigiendo] = useState<DeliveryLog | null>(null);
+  const [montoReal, setMontoReal] = useState('');
+  const [notaCorreccion, setNotaCorreccion] = useState('');
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -194,6 +205,53 @@ export default function BillingPage() {
   const sinValor = delivered.filter(sinPrecio);
 
   /* -------------------------------------------------------------- acciones */
+
+  /**
+   * Corrige lo que se cobró de verdad en un movimiento ya cerrado.
+   *
+   * EL CASO. El 20/08/2026 un envío salió con $ 65.230 a cobrar y en la puerta
+   * se terminó cobrando $ 36.900. El repartidor cerró con el monto que traía el
+   * envío, así que la caja le pedía rendir $ 28.330 que nunca tuvo en la mano.
+   *
+   * No se toca el número que él cargó: la corrección se guarda al lado, con
+   * quién la hizo y por qué (paso 54). El día que haya una discusión de plata,
+   * tiene que quedar rastro de quién dijo qué.
+   */
+  async function guardarCorreccion() {
+    if (!corrigiendo) return;
+
+    const monto = Number(montoReal);
+    if (!Number.isFinite(monto) || monto < 0) {
+      setError('Poné cuánto se cobró de verdad, en números.');
+      return;
+    }
+
+    setGuardandoCorreccion(true);
+    setError('');
+
+    const { error: e } = await supabase.rpc('corregir_cobrado', {
+      p_log: corrigiendo.id,
+      p_monto: monto,
+      p_nota: notaCorreccion.trim() || null,
+    });
+
+    setGuardandoCorreccion(false);
+
+    if (e) {
+      setError(
+        /corregir_cobrado/.test(e.message)
+          ? 'Falta correr el paso 54 en la base. Hasta entonces no se puede corregir lo cobrado.'
+          : e.message === 'SOLO_ADMIN'
+            ? 'Sólo la oficina puede corregir lo cobrado.'
+            : e.message,
+      );
+      return;
+    }
+
+    setCorrigiendo(null);
+    await reload();
+  }
+
   async function settle() {
     if (!driverId) return;
     setError('');
@@ -595,6 +653,7 @@ export default function BillingPage() {
                 <th className="px-3 py-2">Destinatario</th>
                 <th className="px-3 py-2">Movimiento</th>
                 <th className="px-3 py-2 text-right">Efectivo</th>
+                <th className="px-3 py-2 text-right"></th>
               </tr>
             </thead>
             <tbody>
@@ -651,6 +710,34 @@ export default function BillingPage() {
                     </td>
                     <td className="edr-mono px-3 py-2 text-right font-semibold">
                       {cash > 0 ? money(cash) : <span className="text-[var(--edr-muted)]">—</span>}
+                      {/* Lo que el repartidor cargó, tachado, cuando se
+                          corrigió. Sin esto la corrección es invisible y el
+                          número nuevo parece salido de la nada. */}
+                      {fueCorregido(l) && (
+                        <div
+                          className="text-[10px] font-normal text-[var(--edr-muted)]"
+                          title={l.correccion_nota ?? 'Corregido desde la oficina'}
+                        >
+                          <s>{money(Number(l.amount_collected ?? 0))}</s> corregido
+                        </div>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                      {/* Sólo donde pudo entrar plata: en un "no entregado" no
+                          se cobró nada y no hay nada que corregir. */}
+                      {(l.event === 'entregado' || l.event === 'retirado') && (
+                        <button
+                          onClick={() => {
+                            setCorrigiendo(l);
+                            setMontoReal(String(cash));
+                            setNotaCorreccion(l.correccion_nota ?? '');
+                          }}
+                          title="Si en la puerta se cobró otra cosa, corregilo acá"
+                          className="rounded border border-[var(--edr-border)] px-2 py-1 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
+                        >
+                          Corregir
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -659,6 +746,89 @@ export default function BillingPage() {
           </table>
         </div>
       </main>
+
+      {/* Corregir lo cobrado (paso 54) */}
+      {corrigiendo && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-10 w-full max-w-md rounded-lg bg-[var(--edr-surface)] shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--edr-border)] px-5 py-4">
+              <h2 className="text-lg font-bold">¿Cuánto se cobró de verdad?</h2>
+              <button
+                onClick={() => setCorrigiendo(null)}
+                className="rounded px-2 py-1 text-2xl leading-none text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid gap-3 px-5 py-5">
+              <p className="text-sm text-[var(--edr-muted)]">
+                <span className="edr-mono">{corrigiendo.shipment?.tracking_code}</span> ·{' '}
+                {corrigiendo.shipment ? nombreDelDestinatario(corrigiendo.shipment) : ''} ·{' '}
+                {corrigiendo.shipment?.address_street}
+              </p>
+
+              <p className="text-sm">
+                El repartidor cargó{' '}
+                <strong className="edr-mono">{money(Number(corrigiendo.amount_collected ?? 0))}</strong>
+                {Number(corrigiendo.shipment?.amount_to_collect) > 0 && (
+                  <>
+                    {' '}y el envío decía{' '}
+                    <span className="edr-mono">
+                      {money(Number(corrigiendo.shipment?.amount_to_collect))}
+                    </span>
+                  </>
+                )}
+                .
+              </p>
+
+              <div>
+                <label className={labelCls}>Se cobró de verdad</label>
+                <input
+                  className={field}
+                  inputMode="numeric"
+                  value={montoReal}
+                  onChange={(e) => setMontoReal(e.target.value)}
+                  placeholder="36900"
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Por qué (opcional)</label>
+                <input
+                  className={field}
+                  value={notaCorreccion}
+                  onChange={(e) => setNotaCorreccion(e.target.value)}
+                  placeholder="pagó una parte, el resto lo arregla el comercio"
+                />
+              </div>
+
+              {/* Qué va a pasar con la plata, antes de tocar nada. Corregir
+                  mueve lo que el repartidor tiene que rendir. */}
+              <p className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-3 py-2 text-xs text-[var(--edr-muted)]">
+                Con esto cambia lo que tiene que rendir del día. El número que cargó el repartidor
+                no se borra: queda guardado al lado, con tu nombre y la fecha.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-[var(--edr-border)] px-5 py-4">
+              <button
+                onClick={() => setCorrigiendo(null)}
+                className="rounded border border-[var(--edr-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarCorreccion}
+                disabled={guardandoCorreccion}
+                className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
+              >
+                {guardandoCorreccion ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

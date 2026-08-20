@@ -106,23 +106,52 @@ async function atarLasParadas(filas: ParsedRow[], guardados: { id: number }[]) {
   }
 }
 
-/**
- * Los campos de asignación que van con el envío al guardarlo.
- *
- * `pendiente_retiro` y no `creado`: asignado quiere decir que ya tiene dueño y
- * está esperando que lo pase a buscar. Es el mismo salto que hace el
- * desplegable de la tabla, escrito una sola vez para que no se separen.
- */
-function camposDeAsignacion(driverId: string): {
-  assigned_driver?: string;
-  assigned_at?: string;
+/** Los campos de asignación que van con el envío al guardarlo. */
+function camposDeAsignacion(
+  driverId: string,
+  /** El envío que se está editando. Sin esto, es uno nuevo. */
+  editando?: Shipment | null,
+): {
+  assigned_driver?: string | null;
+  assigned_at?: string | null;
   status?: string;
 } {
-  if (!driverId) return {};
+  /*
+   * UN ENVÍO NUEVO. Asignado quiere decir que ya tiene dueño y está esperando
+   * que lo pase a buscar. Es el mismo salto que hace el desplegable de la
+   * tabla, escrito una sola vez para que no se separen.
+   */
+  if (!editando) {
+    return driverId
+      ? { assigned_driver: driverId, assigned_at: new Date().toISOString(), status: 'pendiente_retiro' }
+      : {};
+  }
+
+  // Editando y sin tocar el repartidor: no hay nada que escribir.
+  if (driverId === (editando.assigned_driver ?? '')) return {};
+
+  // Le sacaron el repartidor: se lo saca de verdad. Antes esto no hacía nada y
+  // elegir "Nadie" en el desplegable era un botón que no hacía nada.
+  if (!driverId) return { assigned_driver: null, assigned_at: null };
+
+  /*
+   * LE CAMBIARON EL REPARTIDOR A UN ENVÍO QUE YA EXISTÍA.
+   *
+   * Se re-asigna, pero EL ESTADO SÓLO VUELVE ATRÁS SI TODAVÍA NO SE MOVIÓ.
+   *
+   * El 20/08/2026 se editó un envío YA ENTREGADO —para corregirle el monto— y
+   * al guardar volvió a "pendiente de retiro": el campo de asignación escribía
+   * ese estado siempre, sin mirar en qué andaba el envío. La entrega no se
+   * perdió, quedó en los movimientos con su foto y su firma, pero en el panel
+   * el envío figuraba sin salir del comercio. Una corrección de un número
+   * borraba el trabajo del día.
+   */
+  const sinMoverse = editando.status === 'creado' || editando.status === 'pendiente_retiro';
+
   return {
     assigned_driver: driverId,
     assigned_at: new Date().toISOString(),
-    status: 'pendiente_retiro',
+    ...(sinMoverse ? { status: 'pendiente_retiro' } : {}),
   };
 }
 
@@ -464,7 +493,9 @@ function ShipmentForm({
       pickup_address: [form.pickup_address.trim(), pickup_extra.trim()]
         .filter(Boolean)
         .join(' '),
-      ...camposDeAsignacion(asignarA),
+      // `editing` va SIEMPRE: es lo que distingue "asignar un envío nuevo" de
+      // "corregirle un dato a uno que ya salió a la calle".
+      ...camposDeAsignacion(asignarA, editing),
       shipping_fee: Number(form.shipping_fee) || 0,
       merchandise_amount: Number(form.merchandise_amount) || 0,
       amount_to_collect:

@@ -7,6 +7,8 @@ import {
   customRange,
   dayShift,
   conLosMovimientos,
+  fueCorregido,
+  logCash,
   monthRange,
   pagoDelEnvio,
   summarizeLogs,
@@ -404,6 +406,15 @@ export default function CajaPage() {
                         {l.shipment?.client_name_raw ?? ''}
                         {valor > 0 ? ` · envío ${money(valor)}` : ''}
                       </div>
+                      {/* Si la oficina corrigió lo cobrado, que lo vea acá y no
+                          se entere al final del día porque la cuenta no le da.
+                          Se dice el número y el motivo. */}
+                      {fueCorregido(l) && (
+                        <div className="mt-0.5 text-[11.5px] font-semibold text-[var(--edr-naranja-claro)]">
+                          Cobrado corregido a {money(logCash(l))}
+                          {l.correccion_nota ? ` · ${l.correccion_nota}` : ''}
+                        </div>
+                      )}
                     </div>
 
                     {sinCargar ? (

@@ -18,6 +18,7 @@ import {
   type DeliveryLog,
 } from '@/lib/settlement';
 import { money } from '@/lib/format';
+import { ARRANCA, NOMBRE_TIPO, traerBilleteras, type Billetera } from '@/lib/billetera';
 
 /**
  * La caja del día del repartidor.
@@ -87,6 +88,8 @@ export default function CajaPage() {
   const [hastaElegido, setHastaElegido] = useState(() => today());
   const [resumen, setResumen] = useState<DaySummary | null>(null);
   const [cierre, setCierre] = useState<Cierre | null>(null);
+  /** Su cuenta con la oficina, sin períodos: lo que debe y lo que le deben. */
+  const [billetera, setBilletera] = useState<Billetera | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -121,6 +124,24 @@ export default function CajaPage() {
         : periodo.tipo === 'mes'
           ? monthRange(today())
           : { desde: desdeElegido, hasta: hastaElegido };
+
+  /*
+   * Su cuenta corriente. No depende del período que esté mirando: un saldo es
+   * lo que hay AHORA, y recortarlo a "hoy" daría un número que no le sirve para
+   * saber cuánta plata tiene que llevar a la oficina.
+   */
+  useEffect(() => {
+    if (!driverId) return;
+    let vivo = true;
+    const traer = async () => {
+      const cuentas = await traerBilleteras([driverId]);
+      if (vivo) setBilletera(cuentas.get(driverId) ?? null);
+    };
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, [driverId]);
 
   useEffect(() => {
     if (!driverId) return;
@@ -274,6 +295,72 @@ export default function CajaPage() {
         <p className="py-10 text-center text-base font-semibold text-[var(--edr-muted)]">
           Sacando la cuenta…
         </p>
+      )}
+
+      {/*
+        TU CUENTA CON LA OFICINA. Va arriba de todo y sin período.
+
+        El cartel de abajo contesta "cómo me fue hoy"; éste contesta la que
+        importa antes de pasar por la oficina: cuánta plata tengo que llevar.
+        Son distintas porque la plata no se entrega el mismo día que se cobra —
+        se junta y se entrega cuando se pasa.
+      */}
+      {billetera && (billetera.debeRendir !== 0 || billetera.leDebemos !== 0) && (
+        <section className="rounded-3xl border border-white/10 bg-[var(--edr-blue)] p-4 shadow-[var(--edr-sombra)]">
+          <div className="font-bebas text-[15px] tracking-[.1em] text-[var(--edr-yellow)]">
+            TU CUENTA · DESDE EL {ARRANCA.split('-').reverse().slice(0, 2).join('/')}
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase text-[var(--edr-muted)]">
+                Tenés que rendir
+              </div>
+              <div
+                className="edr-mono text-[30px] font-extrabold leading-none"
+                style={{ color: billetera.debeRendir > 0 ? 'var(--edr-naranja-claro)' : '#fff' }}
+              >
+                {money(Math.max(0, billetera.debeRendir))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase text-[var(--edr-muted)]">
+                Te tenemos que pagar
+              </div>
+              <div
+                className="edr-mono text-[30px] font-extrabold leading-none"
+                style={{ color: billetera.leDebemos > 0 ? 'var(--edr-verde)' : '#fff' }}
+              >
+                {money(Math.max(0, billetera.leDebemos))}
+              </div>
+            </div>
+          </div>
+
+          {/* Lo que ya se anotó, para que pueda controlarlo. Sin esto tendría
+              que creerle al número de arriba sin poder revisarlo. */}
+          {billetera.movimientos.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-1 border-t border-white/10 pt-2">
+              {billetera.movimientos.slice(0, 6).map((m) => (
+                <li key={m.id} className="flex items-center gap-2 text-[12.5px]">
+                  <span className="edr-mono text-[var(--edr-muted)]">
+                    {m.fecha.split('-').reverse().slice(0, 2).join('/')}
+                  </span>
+                  <span className="font-semibold text-white">{NOMBRE_TIPO[m.tipo]}</span>
+                  {m.nota && (
+                    <span className="truncate text-[var(--edr-muted)]">{m.nota}</span>
+                  )}
+                  <span className="edr-mono ml-auto font-bold text-[var(--edr-yellow)]">
+                    {money(Number(m.monto))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="mt-2 text-[11.5px] text-[var(--edr-muted)]">
+            Lo anota la oficina cuando le entregás la plata. Si algo no coincide, avisá.
+          </p>
+        </section>
       )}
 
       {resumen && (

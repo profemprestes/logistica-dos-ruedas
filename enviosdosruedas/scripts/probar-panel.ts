@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { horarioDeRetiro, tramosDeHorario } from '../lib/franja';
 import { fueCorregido, logCash, summarizeLogs, type DeliveryLog } from '../lib/settlement';
+import { armarBilletera } from '../lib/billetera';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
@@ -843,4 +844,88 @@ console.log('\n=== corregir lo cobrado ===\n');
     mov({ id: 'b', amount_collected: 65230, cobrado_corregido: 36900 }),
   ]);
   casoNumero('el total a rendir del dia usa la correccion', dia.cashTotal, 73800);
+}
+
+/* ==========================================================================
+   LA BILLETERA DEL REPARTIDOR (paso 55)
+
+   Hasta el paso 55, lo rendido vivia adentro del cierre de UN DIA. Pero la
+   plata no se entrega por dia: el repartidor junta lo de varias jornadas y un
+   martes deja un monto que cubre todo. El 12/08/2026 quedo escrito "cobro
+   $ 9.900, rindio $ 55.000" — cierto, pero pegado a un dia al que no pertenece.
+
+   Acá el saldo sale de sumar todo, sin ventanas de tiempo.
+   ========================================================================== */
+
+console.log('\n=== la billetera ===\n');
+
+{
+  const entrega = (id: string, cobra: number, envio: number): DeliveryLog => ({
+    id,
+    event: 'entregado',
+    amount_collected: cobra,
+    happened_at: '2026-08-18T15:00:00Z',
+    failure_reason: null,
+    shipment: {
+      id: 1,
+      tracking_code: 'EDR1',
+      recipient_name: 'X',
+      address_street: 'CALLE 1',
+      amount_to_collect: cobra,
+      payment_mode: 'cobrar_destinatario',
+      shipping_fee: envio,
+      client_name_raw: 'STARCELL',
+    },
+  });
+
+  const anotado = (id: number, tipo: 'rendicion' | 'pago' | 'ajuste', monto: number) => ({
+    id,
+    driver_id: 'moto',
+    fecha: '2026-08-19',
+    tipo,
+    monto,
+    nota: null,
+    cargado_por: null,
+    created_at: '2026-08-19T12:00:00Z',
+  });
+
+  // Un dia de trabajo, sin rendir nada todavia.
+  const solo = armarBilletera('moto', [entrega('a', 10000, 4000), entrega('b', 5000, 4000)], []);
+  casoNumero('cobro lo de los dos envios', solo.cobrado, 15000);
+  casoNumero('debe rendir todo lo que cobro', solo.debeRendir, 15000);
+  casoNumero('le tocan el 70% de los dos envios', solo.leDebemos, Math.round(8000 * 0.7));
+
+  // Entrega una parte.
+  const aMedias = armarBilletera('moto', [entrega('a', 10000, 4000)], [anotado(1, 'rendicion', 4000)]);
+  casoNumero('rindiendo una parte, debe el resto', aMedias.debeRendir, 6000);
+
+  // Entrega MAS de lo que cobro ese dia: es plata de dias anteriores, y el
+  // saldo tiene que poder quedar en negativo en vez de trabarse en cero.
+  const deMas = armarBilletera('moto', [entrega('a', 9900, 4000)], [anotado(1, 'rendicion', 55000)]);
+  casoNumero('puede rendir mas de lo que cobro (plata vieja)', deMas.debeRendir, -45100);
+
+  // Le pagamos lo suyo.
+  const pagado = armarBilletera('moto', [entrega('a', 0, 10000)], [anotado(1, 'pago', 7000)]);
+  casoNumero('pagandole todo, no se le debe nada', pagado.leDebemos, 0);
+
+  // Las dos platas van separadas aunque el saldo las netee.
+  const mixto = armarBilletera('moto', [entrega('a', 20000, 10000)], []);
+  casoNumero('debe rendir lo cobrado', mixto.debeRendir, 20000);
+  casoNumero('y por separado se le debe lo suyo', mixto.leDebemos, 7000);
+  casoNumero('el saldo es la resta', mixto.saldo, 13000);
+
+  // Un ajuste mueve el saldo y puede ir en negativo.
+  const conAjuste = armarBilletera('moto', [entrega('a', 20000, 10000)], [anotado(1, 'ajuste', -3000)]);
+  casoNumero('el ajuste negativo baja el saldo', conAjuste.saldo, 10000);
+
+  // Un retiro cobrado al comercio suma a lo que debe, pero NO le paga a el.
+  const retiro: DeliveryLog = { ...entrega('r', 0, 5300), event: 'retirado', amount_collected: 5300 };
+  const conRetiro = armarBilletera('moto', [retiro], []);
+  casoNumero('un retiro cobrado suma a lo que debe rendir', conRetiro.debeRendir, 5300);
+  casoNumero('pero un retiro no le paga nada a el', conRetiro.leDebemos, 0);
+
+  // Sin nada, todo en cero: la pantalla no puede mostrar un saldo inventado.
+  const vacia = armarBilletera('moto', [], []);
+  casoNumero('sin movimientos, no debe nada', vacia.debeRendir, 0);
+  casoNumero('ni se le debe nada', vacia.leDebemos, 0);
 }

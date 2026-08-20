@@ -48,7 +48,7 @@ interface Settlement {
 async function fetchDay(driverId: string, day: string) {
   const { from, to } = dayRange(day);
 
-  const [logsRes, settlementRes] = await Promise.all([
+  const [logsRes, settlementRes, rendicionesRes] = await Promise.all([
     conLosMovimientos<DeliveryLog[]>((select) =>
       supabase
         .from('delivery_logs')
@@ -64,9 +64,22 @@ async function fetchDay(driverId: string, day: string) {
       .eq('driver_id', driverId)
       .eq('day', day)
       .maybeSingle(),
+    /*
+     * Lo que entregó ESE día, según la billetera (paso 55).
+     *
+     * Puede ser cero aunque haya cobrado mucho: lo normal es que junte varios
+     * días y entregue todo junto otro día. El saldo de verdad está en la
+     * Billetera; acá sólo se muestra lo de la jornada.
+     */
+    supabase
+      .from('movimientos_caja')
+      .select('monto')
+      .eq('driver_id', driverId)
+      .eq('fecha', day)
+      .eq('tipo', 'rendicion'),
   ]);
 
-  return { logsRes, settlementRes };
+  return { logsRes, settlementRes, rendicionesRes };
 }
 
 export default function BillingPage() {
@@ -80,7 +93,8 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notes, setNotes] = useState('');
-  const [actual, setActual] = useState('');
+  /** Lo que entregó ese día según la billetera. Acá no se edita. */
+  const [rendidoEnLaBilletera, setRendido] = useState(0);
   const [earnings, setEarnings] = useState('');
   const [cobrado, setCobrado] = useState('');
   const [envios, setEnvios] = useState('');
@@ -105,7 +119,8 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  const apply = useCallback(({ logsRes, settlementRes }: Awaited<ReturnType<typeof fetchDay>>) => {
+  const apply = useCallback(
+    ({ logsRes, settlementRes, rendicionesRes }: Awaited<ReturnType<typeof fetchDay>>) => {
     if (logsRes.error) {
       console.error('[liquidación] no se pudieron traer los movimientos', logsRes.error);
       setError(logsRes.error.message);
@@ -132,7 +147,9 @@ export default function BillingPage() {
      *
      * Un día ya cerrado conserva lo que se guardó: esto es sólo el arranque.
      */
-    setActual(String(saved?.actual_amount ?? 0));
+    setRendido(
+      (rendicionesRes.data ?? []).reduce((acc, m) => acc + Number(m.monto), 0),
+    );
     /*
      * Lo que le toca al repartidor arranca CALCULADO, no vacío.
      *
@@ -151,7 +168,9 @@ export default function BillingPage() {
     setCobrado(String(saved?.cash_total ?? calc.cashTotal));
     setEnvios(String(saved?.shipping_total ?? calc.shippingTotal));
     setLoading(false);
-  }, []);
+    },
+    [],
+  );
 
   /** Recarga a mano, después de liquidar o reabrir. */
   const reload = useCallback(() => {
@@ -190,7 +209,6 @@ export default function BillingPage() {
 
   // Todos los renglones son editables: mandan los valores del formulario, y al
   // lado se muestra lo que había calculado el sistema para poder comparar.
-  const declared = Number(actual) || 0;
   const cobradoNum = Number(cobrado) || 0;
   const enviosNum = Number(envios) || 0;
   const gananciaNum = Number(earnings) || 0;
@@ -281,7 +299,7 @@ export default function BillingPage() {
         delivered_count: delivered.length,
         failed_count: failed.length,
         cash_total: cobradoNum,
-        actual_amount: declared,
+        actual_amount: rendidoEnLaBilletera,
         shipping_total: enviosNum,
         earnings: earnings.trim() === '' ? null : gananciaNum,
         notes: notes || null,
@@ -304,7 +322,7 @@ export default function BillingPage() {
       return;
     }
 
-    const saldo = cobradoNum - declared - gananciaNum;
+    const saldo = cobradoNum - rendidoEnLaBilletera - gananciaNum;
     void notificarRepartidor({
       driverId,
       title: 'Se cerró tu caja del día',
@@ -494,16 +512,23 @@ export default function BillingPage() {
                   }
                 />
 
+                {/*
+                  LO RENDIDO YA NO SE ESCRIBE ACÁ.
+                  
+                  Era un campo del cierre de UN DÍA, y la plata no se entrega
+                  por día: el repartidor junta lo de varias jornadas y deja un
+                  monto que cubre todo. Escrito acá, ese número quedaba pegado a
+                  un día al que no pertenece — el 12/08/2026 quedó "cobró
+                  $ 9.900, rindió $ 55.000".
+                  
+                  Ahora las entregas de plata viven en la Billetera, con su
+                  propia fecha. Este renglón muestra lo anotado y manda para
+                  allá.
+                */}
                 <Renglon
-                  label="Efectivo rendido / pagado"
-                  input={
-                    <input
-                      type="number"
-                      value={actual}
-                      onChange={(e) => setActual(e.target.value)}
-                      className="edr-mono w-40 rounded border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-3 py-1.5 text-right text-lg font-black outline-none"
-                    />
-                  }
+                  label="Efectivo rendido"
+                  value={money(rendidoEnLaBilletera)}
+                  hint="se anota en la Billetera, con la fecha en que te lo entregó"
                 />
 
                 <Renglon
@@ -582,7 +607,7 @@ export default function BillingPage() {
 
                 <div className="border-t-2 border-[var(--edr-yellow)] pt-3">
                   {(() => {
-                    const saldo = cobradoNum - declared - gananciaNum;
+                    const saldo = cobradoNum - rendidoEnLaBilletera - gananciaNum;
                     const debe = saldo >= 0;
                     return (
                       <div
@@ -619,10 +644,9 @@ export default function BillingPage() {
                   onClick={() => {
                     setCobrado(String(cashTotal));
                     setEnvios(String(shippingTotal));
-                    // Rehacer las cuentas del sistema no puede inventar una
-                    // rendición que no pasó: vuelve a cero, como al abrir.
-                    setActual('0');
                     setEarnings(String(driverEarnings));
+                    // Lo rendido no se toca: no es una cuenta del sistema sino
+                    // un hecho anotado en la Billetera.
                   }}
                   className="rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
                 >

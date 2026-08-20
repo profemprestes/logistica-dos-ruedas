@@ -18,6 +18,7 @@ import {
   Store,
   Users,
   PiggyBank,
+  HandCoins,
   Wallet,
   Warehouse,
   X,
@@ -70,6 +71,12 @@ const ITEMS: Item[] = [
   // Va pegada al cierre y no con las estadísticas: son la misma plata mirada
   // de cerca y de lejos, y quien cierra un día es el que quiere ver el total.
   { href: '/admin/caja', label: 'Caja y ganancia', Icono: PiggyBank },
+  /*
+   * La billetera va al lado de las otras dos platas, y contesta lo que ninguna
+   * contestaba: cuanto debe cada uno AHORA. El cierre es de un dia y la caja es
+   * de un periodo; un saldo no es de un periodo.
+   */
+  { href: '/admin/billetera', label: 'Billetera', Icono: HandCoins },
   { href: '/admin/resumenes', label: 'Resúmenes', Icono: MessageCircle },
   { href: '/admin/stats', label: 'Estadísticas', Icono: BarChart3 },
   { href: '/admin/stock', label: 'Stock', Icono: Warehouse },

@@ -105,7 +105,7 @@ export default function CajaAdminPage() {
       const { from, to } = customRange(desde, hasta);
       const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
 
-      const [drivers, logs, cierres] = await Promise.all([
+      const [drivers, logs, cierres, rendiciones] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, full_name')
@@ -120,9 +120,25 @@ export default function CajaAdminPage() {
         ),
         supabase
           .from('settlements')
-          .select('driver_id, day, actual_amount')
+          .select('driver_id, day')
           .gte('day', a)
           .lte('day', b),
+        /*
+         * Lo rendido sale de la BILLETERA (paso 55), no del cierre del día.
+         *
+         * Antes salía de `settlements.actual_amount`, que ata la entrega de
+         * plata al cierre de un día. Pero la plata no se entrega por día: el
+         * repartidor junta lo de varias jornadas y deja un monto que cubre
+         * todo. Desde el paso 55 esas entregas tienen su propia fecha, y si acá
+         * se siguiera leyendo el cierre, todo lo que se anote de ahora en más
+         * no aparecería y el saldo diría que nadie rindió nada.
+         */
+        supabase
+          .from('movimientos_caja')
+          .select('driver_id, monto, tipo')
+          .eq('tipo', 'rendicion')
+          .gte('fecha', a)
+          .lte('fecha', b),
       ]);
 
       if (!vivo) return;
@@ -147,15 +163,17 @@ export default function CajaAdminPage() {
       }
 
       const cerrados = new Map<string, Set<string>>();
-      const rendidoPor = new Map<string, number>();
       for (const c of cierres.data ?? []) {
         const s = cerrados.get(c.driver_id) ?? new Set<string>();
         s.add(c.day);
         cerrados.set(c.driver_id, s);
-        rendidoPor.set(
-          c.driver_id,
-          (rendidoPor.get(c.driver_id) ?? 0) + Number(c.actual_amount ?? 0),
-        );
+      }
+
+      // Si el paso 55 todavía no se corrió, esta consulta falla y lo rendido
+      // queda en cero. Se ve incompleto, no roto.
+      const rendidoPor = new Map<string, number>();
+      for (const m of rendiciones.data ?? []) {
+        rendidoPor.set(m.driver_id, (rendidoPor.get(m.driver_id) ?? 0) + Number(m.monto));
       }
 
       const armadas: Fila[] = [];
@@ -380,12 +398,16 @@ export default function CajaAdminPage() {
 
           <p className="mt-3 text-xs text-[var(--edr-muted)]">
             El saldo sale de lo cobrado menos lo rendido menos lo que le toca, dentro del período
-            elegido. Un día sin cerrar cuenta como no rendido, que es la verdad: mientras nadie lo
-            cerró, la plata la sigue teniendo el repartidor.
+            elegido, y por eso en una ventana de días mezcla: alguien puede rendir el martes plata
+            que cobró la semana pasada.
             <br />
-            <strong>Para saber cuánto te debe cada uno de verdad, usá &quot;Acumulado&quot;</strong>
-            : en una ventana de días el saldo mezcla períodos, porque alguien puede rendir el martes
-            plata que cobró la semana pasada.
+            <strong>
+              Para saber cuánto te debe cada uno de verdad, mirá{' '}
+              <Link href="/admin/billetera" className="underline underline-offset-2">
+                la Billetera
+              </Link>
+            </strong>
+            : ahí el saldo va desde el principio y no hay períodos que mezclar.
           </p>
         </>
       )}

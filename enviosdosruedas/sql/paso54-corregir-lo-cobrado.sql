@@ -1,6 +1,7 @@
--- ============================================================
--- PASO 54 · CORREGIR LO QUE SE COBRÓ DE VERDAD
--- ============================================================
+-- PASO 54: CORREGIR LO QUE SE COBRO DE VERDAD
+--
+-- Se pega entero en Supabase -> SQL Editor -> Run. Se puede correr mas de una
+-- vez sin romper nada.
 --
 -- EL CASO. El 20/08/2026, EDR00001147MDQ salió con $ 65.230 a cobrar. En la
 -- puerta se terminó cobrando $ 36.900. El repartidor cerró la entrega con el

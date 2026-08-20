@@ -53,6 +53,16 @@ export interface ParsedRow {
    */
   lat: number | null;
   lng: number | null;
+  /**
+   * Si esta fila es la segunda parada de una línea con dos direcciones, el
+   * `tempId` de la primera.
+   *
+   * Lo usa el cuadro de carga para atarlas al guardar (paso 53): quedan como UN
+   * envío con dos entregas, que es lo que son. Sin esto había que tildarlas y
+   * unirlas a mano cada viernes, y la segunda quedaba en $ 0 sin explicación —
+   * el cierre de caja la marcaba como envío sin precio.
+   */
+  parteDeTempId?: string;
 }
 
 /* ------------------------------------------------------------------ utils */
@@ -105,9 +115,22 @@ const RE_BEFORE = /\bantes\s+(?:de\s+las\s+)?(\d{1,2})(?:[:.\s](\d{2}))?\s*(?:hs
 const RE_AFTER =
   /\b(?:desde|despu[eé]s\s+de(?:\s+las)?|a\s+partir\s+de(?:\s+las)?)\s+(\d{1,2})(?:[:.\s](\d{2}))?\s*(?:hs|hrs|h)?\b/i;
 
-const RE_COBRAR_ENVIO = /\bcobrar\s+env[ií]os?\s*:?\s*\$\s*([\d.,]+)/i;
-const RE_ENVIO = /\benv[ií]os?\s*:?\s*\$\s*([\d.,]+)/i;
-const RE_COBRAR = /\bcobrar\s*:?\s*\$\s*([\d.,]+)/i;
+/*
+ * Entre la palabra y el monto puede haber cualquier signo de puntuación.
+ *
+ * Antes se aceptaban dos puntos y nada más. "COBRAR. $65230." —así, con el
+ * punto, como lo escribió KILLARI el 21/08/2026— no entraba: el envío quedaba
+ * en "no cobrar" con $ 0 y el repartidor llegaba a la puerta sin saber que
+ * tenía que cobrar sesenta y cinco mil pesos.
+ */
+const SEPARADOR = String.raw`\s*[.:,;-]?\s*`;
+
+const RE_COBRAR_ENVIO = new RegExp(
+  String.raw`\bcobrar\s+env[ií]os?${SEPARADOR}\$\s*([\d.,]+)`,
+  'i',
+);
+const RE_ENVIO = new RegExp(String.raw`\benv[ií]os?${SEPARADOR}\$\s*([\d.,]+)`, 'i');
+const RE_COBRAR = new RegExp(String.raw`\bcobrar${SEPARADOR}\$\s*([\d.,]+)`, 'i');
 
 const RE_FLAG_NO_COBRAR = /\bno\s+cobrar\b|\bsin\s+cobro\b/i;
 const RE_FLAG_AL_RETIRAR = /\bcobrar\s+al\s+retirar\b|\bcobra\s+al\s+retirar\b/i;
@@ -228,6 +251,44 @@ function takeWindow(text: string): { window: string; rest: string } {
 }
 
 /** Separa "ESPAÑA 2155 5B DR LOZA, RECETAS..." en dirección / depto / resto. */
+/**
+ * Una cantidad escrita como la escribe el que despacha: "nad x1", "2 x remera".
+ *
+ * No alcanza con "tiene un número": un nombre puede traerlo ("Ana 2do piso") y
+ * mandarlo al producto sería perder el nombre del destinatario, que es peor que
+ * perder el detalle de la mercadería.
+ */
+const RE_CANTIDAD = /\bx\s*\d+\b|\b\d+\s*x\b/i;
+
+/**
+ * Separa el producto del nombre adentro del paréntesis.
+ *
+ * KILLARI escribe "(nad x1, Julia 542233489609)": producto, nombre y teléfono,
+ * separados por comas. El teléfono ya salió antes; lo que queda se parte por la
+ * coma y el pedazo con cantidad es la mercadería.
+ *
+ * SI NO HAY DOS PEDAZOS, TODO ES NOMBRE. La duda se resuelve siempre para el
+ * lado del nombre: es el dato que se lee en la puerta, y una etiqueta que dice
+ * "nad x1" en vez de "Julia" no sirve para tocar un timbre.
+ */
+function separarProducto(texto: string): { producto: string; nombre: string } {
+  const partes = texto
+    .split(/[,;]/)
+    .map(clean)
+    .filter(Boolean);
+
+  const producto = partes.filter((p) => RE_CANTIDAD.test(p));
+  const nombre = partes.filter((p) => !RE_CANTIDAD.test(p));
+
+  // Con uno solo de los dos lados no hay nada que separar: si viniera sólo
+  // "nad x1" y se lo mandara al producto, el envío quedaría sin destinatario.
+  if (!producto.length || !nombre.length) {
+    return { producto: '', nombre: clean(texto.replace(/[,;]/g, ' ')) };
+  }
+
+  return { producto: producto.join(', '), nombre: nombre.join(' ') };
+}
+
 function takeAddress(segment: string): { street: string; extra: string; rest: string } {
   const source = clean(segment);
   let extra = '';
@@ -258,6 +319,32 @@ function takeAddress(segment: string): { street: string; extra: string; rest: st
     const esquina = rest.match(/^(?:y|esq\.?|esquina)\s+(.+)$/i);
     if (esquina && esquina[1].length <= 40 && /^[\wáéíóúñ\s.°º]+$/i.test(esquina[1])) {
       street = `${street} y ${clean(esquina[1])}`;
+      rest = '';
+    }
+
+    /*
+     * Dos entregas escritas con una barra: "LIBERTAD 5140/GUIDO 1178".
+     *
+     * Es como escribe EL CONDOR el envío de los viernes: un retiro y dos
+     * direcciones. La altura de la primera cortaba acá y la barra con todo lo
+     * que seguía se iba al sobrante, así que la segunda entrega no existía y
+     * nadie la iba a hacer.
+     *
+     * Se vuelve a pegar para que el corte por barra de más abajo la parta en
+     * dos paradas. La segunda tiene que ser OTRA DIRECCIÓN —empezar con letra
+     * y traer una altura—; así "SAN JUAN 1773/5B", que es un departamento, no
+     * se confunde con un segundo destino.
+     */
+    const otraParada = rest.match(/^\/\s*(.+)$/);
+    const segunda = otraParada ? clean(otraParada[1]) : '';
+    if (
+      segunda &&
+      segunda.length <= 40 &&
+      /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(segunda) &&
+      /\d/.test(segunda) &&
+      /^[\wáéíóúñÁÉÍÓÚÑ\s.°º]+$/i.test(segunda)
+    ) {
+      street = `${street}/${segunda}`;
       rest = '';
     }
   } else {
@@ -416,14 +503,16 @@ export function parseWhatsappText(
     // Contacto del destinatario: el paréntesis que trae un teléfono.
     let recipientName = '';
     let recipientPhone = '';
-    const productDetail = '';
+    let productDetail = '';
 
     if (contactos.length) {
       const { telefono, resto } = sacarTelefono(contactos[0]);
       recipientPhone = telefono;
-      // Lo que queda al sacarle el teléfono es el nombre, sin la coma que a
-      // veces los separa: "Noelia, 223 634-6427".
-      recipientName = clean(resto.replace(/[,;]/g, ' '));
+      // Lo que queda al sacarle el teléfono puede traer el producto adelante:
+      // "nad x1, Julia". Ver `separarProducto`.
+      const partido = separarProducto(resto);
+      productDetail = partido.producto;
+      recipientName = partido.nombre;
       // Sin teléfono, que sea un nombre es una corazonada: se avisa para que
       // se vea antes de guardar, que es cuando todavía se puede corregir.
       if (!telefono && recipientName) {
@@ -514,10 +603,17 @@ export function parseWhatsappText(
       ? addr.street.split('/').map(clean).filter(Boolean)
       : [addr.street];
 
+    // El id de la primera parada, para que las otras se le cuelguen al guardar.
+    let cabezaTempId = '';
+
     stops.forEach((stop, index) => {
       const second = index > 0;
+      const tempId = nextId();
+      if (!second) cabezaTempId = tempId;
+
       rows.push({
-        tempId: nextId(),
+        tempId,
+        parteDeTempId: second ? cabezaTempId : undefined,
         isReminder,
         clientName: client,
         pickupAddress,

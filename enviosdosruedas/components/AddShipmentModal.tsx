@@ -75,6 +75,38 @@ async function ubicarEnElMapa(ids: number[]) {
 }
 
 /**
+ * Ata las líneas que traían dos direcciones, para que sean UN envío.
+ *
+ * "LIBERTAD 5140/GUIDO 1178" se guarda como dos envíos —lo son: dos paquetes,
+ * dos destinatarios, dos comprobantes— pero el comercio paga uno solo. El
+ * parser deja marcada cuál es la segunda; acá se les pone `parte_de` (paso 53)
+ * para que el precio se cobre una vez y el repartidor vea "son 2 paquetes".
+ *
+ * SE APOYA EN EL ORDEN. PostgREST devuelve las filas insertadas en el mismo
+ * orden en que se mandaron, así que el índice alcanza para saber qué id le tocó
+ * a cada renglón. Si algún día dejara de cumplirse, esto ataría mal: por eso se
+ * corta si las cantidades no coinciden.
+ *
+ * Si falla, no se dice nada y no se rompe nada: los envíos ya están guardados y
+ * quedan sueltos, que es exactamente como estaban antes de que esto existiera.
+ * Se pueden unir a mano desde la lista.
+ */
+async function atarLasParadas(filas: ParsedRow[], guardados: { id: number }[]) {
+  if (filas.length !== guardados.length) return;
+
+  const idDe = new Map<string, number>();
+  filas.forEach((r, i) => idDe.set(r.tempId, guardados[i].id));
+
+  const atados = filas
+    .map((r, i) => ({ id: guardados[i].id, cabeza: r.parteDeTempId ? idDe.get(r.parteDeTempId) : undefined }))
+    .filter((x): x is { id: number; cabeza: number } => x.cabeza != null);
+
+  for (const { id, cabeza } of atados) {
+    await supabase.from('shipments').update({ parte_de: cabeza }).eq('id', id);
+  }
+}
+
+/**
  * Los campos de asignación que van con el envío al guardarlo.
  *
  * `pendiente_retiro` y no `creado`: asignado quiere decir que ya tiene dueño y
@@ -578,6 +610,8 @@ function ShipmentForm({
 
     setSaving(false);
     if (dbError) return setError(dbError.message);
+
+    await atarLasParadas(toSave, guardados ?? []);
 
     // Igual que en el formulario manual: si algún comercio no se pudo enlazar,
     // decirlo. Los envíos quedaron guardados; lo que falta es el punto.

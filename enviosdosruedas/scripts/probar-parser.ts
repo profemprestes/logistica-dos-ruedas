@@ -18,6 +18,15 @@ interface Caso {
   fila?: number;
   /** Cuántas filas tiene que dar en total. Sirve para cazar filas fantasma. */
   filas?: number;
+  /**
+   * Campos que se comparan EXACTOS y no por "contiene".
+   *
+   * Por defecto alcanza con que el texto esperado aparezca adentro, que es lo
+   * que sirve para las notas. Pero para el nombre del destinatario eso deja
+   * pasar el bug: si el parser devuelve "nad x1 Julia", esperar "Julia" da por
+   * bueno justamente lo que está mal.
+   */
+  exactos?: string[];
   espera: Partial<
     Record<
       | 'addressStreet'
@@ -27,6 +36,7 @@ interface Caso {
       | 'recipientPhone'
       | 'deliveryWindow'
       | 'notes'
+      | 'productDetail'
       | 'clientName',
       string
     >
@@ -190,6 +200,87 @@ const CASOS: Caso[] = [
       'STARCELL\nRETIRA EN COLON 2749\n- SAN JUAN 1773. ENVIO $4000 (NO COBRAR) (volver a rendir al terminar)',
     espera: { notes: 'volver a rendir al terminar' },
   },
+
+  /*
+   * EL CONDOR, 21/08/2026. Un retiro y DOS entregas escritas con una barra.
+   * Daba una sola fila con "LIBERTAD 5140" y "/GUIDO 1178" tirado en las notas:
+   * la segunda entrega no existía, así que nadie la iba a hacer.
+   *
+   * El parser ya sabía partir en dos por la barra, pero nunca le llegaba: el
+   * detector de direcciones cortaba en la altura de la primera y la barra con
+   * todo lo que seguía se iba al sobrante.
+   */
+  {
+    titulo: 'dos entregas con barra: la primera',
+    texto:
+      '*EL CONDOR*\nRETIRA EN NEUQUEN 2200\n\n* ANTES 9HS LIBERTAD 5140/GUIDO 1178. ENVIO $5800 (NO COBRAR)',
+    filas: 2,
+    espera: { addressStreet: 'LIBERTAD 5140', pickupAddress: 'NEUQUEN 2200', shippingFee: 5800 },
+  },
+  {
+    titulo: 'dos entregas con barra: la segunda, con el mismo retiro',
+    texto:
+      '*EL CONDOR*\nRETIRA EN NEUQUEN 2200\n\n* ANTES 9HS LIBERTAD 5140/GUIDO 1178. ENVIO $5800 (NO COBRAR)',
+    fila: 1,
+    filas: 2,
+    // Va en cero: el comercio paga UN envío. Las dos quedan atadas al guardar.
+    espera: { addressStreet: 'GUIDO 1178', pickupAddress: 'NEUQUEN 2200', shippingFee: 0 },
+  },
+  {
+    titulo: 'el retiro puede ser una esquina',
+    texto:
+      '*EL CONDOR*\nRETIRA EN COLON Y NEUQUEN\n\n* ANTES 9HS LIBERTAD 5140/GUIDO 1178. ENVIO $5800 (NO COBRAR)',
+    filas: 2,
+    espera: { pickupAddress: 'COLON Y NEUQUEN' },
+  },
+
+  /*
+   * KILLARI, 21/08/2026. Dos cosas en el mismo mensaje.
+   *
+   * En ROLDAN el monto no entraba: estaba escrito "COBRAR. $65230." y el
+   * detector pedía que después de COBRAR viniera el "$" o dos puntos, nunca un
+   * punto. El envío entró como "no cobrar" con $ 0, y el repartidor no se
+   * enteraba de que tenía que cobrar sesenta y cinco mil pesos en la puerta.
+   *
+   * Y en las dos, el producto se leía como el nombre del destinatario:
+   * "(nad x1, Julia 542233489609)" daba "nad x1 Julia".
+   */
+  {
+    titulo: 'COBRAR con punto: BERUTTI',
+    texto:
+      'KILLARI\nRETIRA EN BASE\n- 15 A 19HS BERUTTI 8664. COBRAR $36900 (nad x1, Julia 542233489609)\n- 15 A 19HS ROLDAN 421. COBRAR. $65230. (Nad x2, María 542236787626)',
+    filas: 2,
+    exactos: ['recipientName', 'productDetail'],
+    espera: {
+      addressStreet: 'BERUTTI 8664',
+      recipientName: 'Julia',
+      recipientPhone: '542233489609',
+      productDetail: 'nad x1',
+      paymentMode: 'cobrar_destinatario',
+      amountToCollect: 36900,
+    },
+  },
+  {
+    titulo: 'COBRAR con punto: ROLDAN, que era la que fallaba',
+    texto:
+      'KILLARI\nRETIRA EN BASE\n- 15 A 19HS BERUTTI 8664. COBRAR $36900 (nad x1, Julia 542233489609)\n- 15 A 19HS ROLDAN 421. COBRAR. $65230. (Nad x2, María 542236787626)',
+    fila: 1,
+    filas: 2,
+    exactos: ['recipientName', 'productDetail'],
+    espera: {
+      addressStreet: 'ROLDAN 421',
+      recipientName: 'María',
+      recipientPhone: '542236787626',
+      productDetail: 'Nad x2',
+      paymentMode: 'cobrar_destinatario',
+      amountToCollect: 65230,
+    },
+  },
+  {
+    titulo: 'un nombre solo en el parentesis sigue siendo el nombre',
+    texto: 'KILLARI\nRETIRA EN BASE\n- ROLDAN 421. COBRAR $1000 (Julia 542233489609)',
+    espera: { recipientName: 'Julia', recipientPhone: '542233489609', productDetail: '' },
+  },
 ];
 
 let fallos = 0;
@@ -211,7 +302,9 @@ for (const c of CASOS) {
     const real = (r as unknown as Record<string, unknown>)[campo];
     const ok =
       typeof esperado === 'string'
-        ? String(real ?? '').toUpperCase().includes(esperado.toUpperCase())
+        ? c.exactos?.includes(campo)
+          ? String(real ?? '') === esperado
+          : String(real ?? '').toUpperCase().includes(esperado.toUpperCase())
         : real === esperado;
     if (!ok) malos.push(`${campo}: esperaba "${esperado}" y vino "${real}"`);
   }

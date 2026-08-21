@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { mensajeDeBienvenida, SITIO } from '@/lib/admin/mensajeComercio';
 
 /**
  * El usuario y la contraseña con los que entra un comercio.
@@ -17,11 +18,6 @@ import { supabase } from '@/lib/supabaseClient';
  * en la tabla de cuentas —que no se lee desde el navegador— se pide al
  * servidor, que es lo único que tiene la clave para leerla.
  */
-
-const SITIO = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.logisticadosruedas.com').replace(
-  /\/+$/,
-  '',
-);
 
 const campo =
   'w-full rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]';
@@ -151,7 +147,7 @@ export default function AccesoDelComercio({
       setRoto(false);
       return r.reconectado
         ? 'Ese usuario ya existía y se volvió a asociar a este comercio. La contraseña sigue siendo la de antes: si no la tenés, cambiala acá abajo.'
-        : 'Acceso creado. Copiá los datos y mandáselos al comercio.';
+        : 'Acceso creado. Tocá "Copiar para WhatsApp": el mensaje sale con el usuario y la contraseña puestos.';
     });
 
   const cambiarClave = () =>
@@ -182,17 +178,29 @@ export default function AccesoDelComercio({
     });
   };
 
-  /** El mensaje listo para pegar en el WhatsApp del comercio. */
+  /**
+   * El mensaje de bienvenida listo para pegar en el WhatsApp del comercio.
+   *
+   * SIN LA CONTRASEÑA NO SE COPIA NADA. Antes, cuando el campo estaba vacío,
+   * el mensaje salía igual diciendo "(la que te pasamos)". Ese texto se manda
+   * sin releerlo, y del otro lado queda un comercio que no puede entrar y una
+   * llamada preguntando cuál era la contraseña. Como una contraseña ya puesta
+   * no se puede leer —Supabase guarda un resumen, no la contraseña—, el único
+   * camino honesto es ponerle una nueva y mandar esa.
+   */
   async function copiarDatos() {
-    const texto =
-      `Ya podés ver tus envíos online:\n${SITIO}/login\n\n` +
-      `Usuario: ${usuario}\n` +
-      `Contraseña: ${clave || '(la que te pasamos)'}\n\n` +
-      `Ahí vas a ver todos tus envíos, el link de seguimiento para mandarle a tu cliente ` +
-      `y el comprobante de entrega con foto.`;
+    if (clave.length < 6) {
+      setAviso('');
+      setError(
+        'Escribí la contraseña arriba para que entre en el mensaje. Si ya tenía una y no la tenés anotada, no se puede leer: poné una nueva, tocá "Cambiar contraseña" y después copiá.',
+      );
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(texto);
-      setAviso('Mensaje copiado: pegalo en el WhatsApp del comercio.');
+      await navigator.clipboard.writeText(mensajeDeBienvenida(usuario, clave));
+      setError('');
+      setAviso('Mensaje copiado con el usuario y la contraseña. Pegalo en el WhatsApp del comercio.');
     } catch {
       setError('El navegador no dejó copiar.');
     }

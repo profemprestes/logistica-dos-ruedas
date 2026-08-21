@@ -17,6 +17,7 @@ import { horarioDeRetiro, tramosDeHorario } from '../lib/franja';
 import { fueCorregido, logCash, summarizeLogs, type DeliveryLog } from '../lib/settlement';
 import { armarBilletera, porDia, resumenDelRango } from '../lib/billetera';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
+import { mensajeDeBienvenida } from '../lib/admin/mensajeComercio';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
 import {
@@ -1035,4 +1036,50 @@ console.log('\n=== dia por dia ===\n');
 
   // Sin nada, la lista esta vacia: no se inventan dias en cero.
   casoNumero('sin movimientos no hay dias', porDia(armarBilletera('moto', [], [])).length, 0);
+}
+
+/* ==========================================================================
+   EL MENSAJE DE BIENVENIDA DEL COMERCIO
+
+   Lleva adentro el usuario y la contrasena de un cliente y se manda sin
+   releerlo. Un renglon que sale mal no se descubre mirando la pantalla: se
+   descubre cuando el comercio llama diciendo que no puede entrar.
+   ========================================================================== */
+
+console.log('\n=== el mensaje del comercio ===\n');
+
+{
+  const m = mensajeDeBienvenida('tiendaganas', 'ganas2941');
+
+  const tiene = (que: string) => (m.includes(que) ? [que] : [`FALTA: ${que}`]);
+
+  caso('pone el usuario donde va', tiene('👤 Usuario: tiendaganas'), ['👤 Usuario: tiendaganas']);
+  caso('pone la contrasena donde va', tiene('🔑 Contraseña: ganas2941'), [
+    '🔑 Contraseña: ganas2941',
+  ]);
+  caso('lleva el link directo al ingreso de comercios',
+    tiene('https://www.logisticadosruedas.com/login?como=comercio'),
+    ['https://www.logisticadosruedas.com/login?como=comercio']);
+  caso('nombra el sitio sin el https adelante, como se dice hablando',
+    tiene('Entrá a www.logisticadosruedas.com (opción "Ingreso Comercios")'),
+    ['Entrá a www.logisticadosruedas.com (opción "Ingreso Comercios")']);
+
+  // WhatsApp NO entiende [texto](url): se veria literal y sin poder tocarlo.
+  caso('no mete links de markdown, que WhatsApp muestra rotos',
+    m.includes('](') ? ['HAY UN LINK DE MARKDOWN'] : ['limpio'], ['limpio']);
+
+  // La negrita y la cursiva de WhatsApp si van, y son estas.
+  caso('deja la negrita de WhatsApp en los datos de acceso',
+    tiene('*Tus datos de acceso:*'), ['*Tus datos de acceso:*']);
+  caso('y la cursiva del cierre', tiene('_Podés cambiar la contraseña desde la sección "Mi cuenta"_'),
+    ['_Podés cambiar la contraseña desde la sección "Mi cuenta"_']);
+
+  // Las tres cosas que puede hacer tienen que quedar una por renglon.
+  casoNumero('las tres cosas que puede hacer van en renglones separados',
+    m.split('\n').filter((l) => l.startsWith('✔️')).length, 3);
+
+  // Un usuario con espacios de mas no puede ensuciar el renglon.
+  caso('el usuario va sin espacios pegados', 
+    mensajeDeBienvenida('  toypiola  ', 'x').includes('👤 Usuario: toypiola\n') ? ['ok'] : ['MAL'],
+    ['ok']);
 }

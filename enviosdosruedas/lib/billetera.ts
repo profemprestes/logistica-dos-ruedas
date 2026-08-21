@@ -225,6 +225,62 @@ export function porDia(c: Billetera): DiaDeCaja[] {
   return enOrden.reverse();
 }
 
+/** Lo que pasó entre dos fechas, sumado del día por día. */
+export interface ResumenDeRango {
+  cobrado: number;
+  suParte: number;
+  /** Lo que quedó a rendir por esos días: la suma de "A rendir" de cada uno. */
+  aRendir: number;
+  rendido: number;
+  pagado: number;
+  ajustes: number;
+  entregas: number;
+  /** Cómo quedó la cuenta ENTERA al cierre del último día del rango. */
+  saldoAlCierre: number;
+  /** Cuántos días con movimiento caen adentro. */
+  dias: number;
+}
+
+/**
+ * El resumen de un rango de fechas (las dos puntas van incluidas).
+ *
+ * OJO CON LO QUE ES Y LO QUE NO ES. Las sumas son de lo que PASÓ esos días;
+ * `saldoAlCierre` es la cuenta entera arrastrada desde el principio, no la del
+ * rango. Un rango no tiene saldo propio: recortar la cuenta a una ventana
+ * daría un número que no coincide con ninguna plata real — exactamente el
+ * error que esta billetera vino a sacar.
+ */
+export function resumenDelRango(c: Billetera, desde: string, hasta: string): ResumenDeRango {
+  const r: ResumenDeRango = {
+    cobrado: 0,
+    suParte: 0,
+    aRendir: 0,
+    rendido: 0,
+    pagado: 0,
+    ajustes: 0,
+    entregas: 0,
+    saldoAlCierre: 0,
+    dias: 0,
+  };
+
+  // porDia viene del más nuevo al más viejo: el primero que entra al rango es
+  // su cierre.
+  for (const d of porDia(c)) {
+    if (d.fecha < desde || d.fecha > hasta) continue;
+    if (r.dias === 0) r.saldoAlCierre = d.saldo;
+    r.dias += 1;
+    r.cobrado += d.cobrado;
+    r.suParte += d.suParte;
+    r.aRendir += d.delDia;
+    r.rendido += d.rendido;
+    r.pagado += d.pagado;
+    r.ajustes += d.ajustes;
+    r.entregas += d.entregas;
+  }
+
+  return r;
+}
+
 /**
  * La billetera de uno o de todos, desde que arranca la cuenta hasta hoy.
  *

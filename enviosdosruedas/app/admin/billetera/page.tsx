@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import { diaAR, money, nombreDelDestinatario } from '@/lib/format';
+import { diaAR, hoyAR, money, nombreDelDestinatario } from '@/lib/format';
 import { logCash, pagoDelEnvio } from '@/lib/settlement';
 import {
   anotar,
@@ -13,6 +13,7 @@ import {
   hoyEnCasa,
   NOMBRE_TIPO,
   porDia,
+  resumenDelRango,
   traerBilleteras,
   type Billetera,
   type TipoMovimiento,
@@ -57,6 +58,14 @@ export default function BilleteraPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [abierto, setAbierto] = useState<string | null>(null);
+
+  /**
+   * El recorte de fechas. Recorta lo que se MUESTRA —el renglón de cada uno,
+   * el día por día, lo anotado, la calle— pero nunca el saldo grande: el
+   * saldo es lo que hay hoy, y un rango no tiene saldo propio.
+   */
+  const [desde, setDesde] = useState(ARRANCA);
+  const [hasta, setHasta] = useState(hoyEnCasa());
 
   /** El cuadro de anotar: a quién y de qué tipo. */
   const [anotando, setAnotando] = useState<{ driver: Repartidor; tipo: TipoMovimiento } | null>(
@@ -155,6 +164,17 @@ export default function BilleteraPage() {
     // Primero el que más debe: es a quien hay que llamar.
     .sort((a, b) => b.c.saldo - a.c.saldo);
 
+  // Las dos puntas en orden, escriba lo que escriba en los campos.
+  const [lo, hi] = desde <= hasta ? [desde, hasta] : [hasta, desde];
+  const filtrado = lo !== ARRANCA || hi < hoyEnCasa();
+
+  /** Un día de hace `n` días, en fecha de acá. */
+  const haceDias = (n: number) => {
+    const d = new Date(`${hoyEnCasa()}T12:00:00`);
+    d.setDate(d.getDate() - n);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  };
+
   // Cada uno cae de un solo lado según el signo de SU saldo: el que tiene que
   // rendir suma a la izquierda, el que hay que pagarle suma a la derecha.
   const totalDeben = conCuenta.reduce((acc, x) => acc + Math.max(0, x.c.saldo), 0);
@@ -162,11 +182,56 @@ export default function BilleteraPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-black">Billetera</h1>
         <p className="text-xs text-[var(--edr-muted)]">
-          Desde el {ARRANCA.split('-').reverse().join('/')} · sin filtro de fechas: es el saldo de
-          hoy
+          Desde el {ARRANCA.split('-').reverse().join('/')}
+        </p>
+      </div>
+
+      {/* Las fechas recortan lo que se mira, no lo que se debe: el saldo
+          grande de cada uno sigue siendo el de hoy con cualquier rango. */}
+      <div className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2">
+        <div className="w-36">
+          <label className={labelCls}>Desde</label>
+          <input
+            type="date"
+            className={campo}
+            min={ARRANCA}
+            value={desde}
+            onChange={(e) => setDesde(e.target.value || ARRANCA)}
+          />
+        </div>
+        <div className="w-36">
+          <label className={labelCls}>Hasta</label>
+          <input
+            type="date"
+            className={campo}
+            min={ARRANCA}
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value || hoyEnCasa())}
+          />
+        </div>
+        {(
+          [
+            ['Hoy', hoyEnCasa(), hoyEnCasa()],
+            ['Últimos 7 días', haceDias(6), hoyEnCasa()],
+            ['Todo', ARRANCA, hoyEnCasa()],
+          ] as const
+        ).map(([texto, d, h]) => (
+          <button
+            key={texto}
+            onClick={() => {
+              setDesde(d);
+              setHasta(h);
+            }}
+            className="rounded border border-[var(--edr-border)] px-2.5 py-1.5 text-xs font-semibold hover:bg-[var(--edr-surface-2)]"
+          >
+            {texto}
+          </button>
+        ))}
+        <p className="text-[11px] text-[var(--edr-muted)]">
+          Recorta el detalle de cada uno. El saldo grande no cambia: es el de hoy.
         </p>
       </div>
 
@@ -204,11 +269,36 @@ export default function BilleteraPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-[var(--edr-muted)]">
-                    cobró {money(c.cobrado)} · su parte {money(c.suParte)} · rindió{' '}
-                    {money(c.rendido)}
-                    {c.pagado > 0 && <> · le pagamos {money(c.pagado)}</>}
-                  </div>
+                  {/* Con fechas elegidas, el renglón cuenta lo de ESOS días;
+                      sin filtro, la cuenta entera. El saldo de la derecha no
+                      cambia nunca con las fechas. */}
+                  {(() => {
+                    if (!filtrado) {
+                      return (
+                        <div className="text-[11px] text-[var(--edr-muted)]">
+                          cobró {money(c.cobrado)} · su parte {money(c.suParte)} · rindió{' '}
+                          {money(c.rendido)}
+                          {c.pagado > 0 && <> · le pagamos {money(c.pagado)}</>}
+                        </div>
+                      );
+                    }
+                    const en = resumenDelRango(c, lo, hi);
+                    if (en.dias === 0) {
+                      return (
+                        <div className="text-[11px] text-[var(--edr-muted)]">
+                          sin movimientos en esas fechas
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="text-[11px] text-[var(--edr-muted)]">
+                        en esas fechas: cobró {money(en.cobrado)} · su parte {money(en.suParte)} ·
+                        a rendir <strong>{money(en.aRendir)}</strong> · rindió{' '}
+                        {money(en.rendido)}
+                        {en.pagado > 0 && <> · le pagamos {money(en.pagado)}</>}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="ml-auto">
@@ -241,7 +331,7 @@ export default function BilleteraPage() {
                 </Link>
               </div>
 
-              {abierto === r.id && <Detalle cuenta={c} onBorrar={borrar} />}
+              {abierto === r.id && <Detalle cuenta={c} desde={lo} hasta={hi} onBorrar={borrar} />}
             </section>
           ))}
         </div>
@@ -417,12 +507,25 @@ function Saldo({
  */
 function Detalle({
   cuenta,
+  desde,
+  hasta,
   onBorrar,
 }: {
   cuenta: Billetera;
+  desde: string;
+  hasta: string;
   onBorrar: (id: number, texto: string) => void;
 }) {
-  const conPlata = cuenta.logs.filter((l) => logCash(l) > 0 || l.event === 'entregado');
+  // Todo el detalle respeta el rango elegido arriba. El día por día se
+  // calcula ENTERO y se recorta después: así la columna "Saldo" sigue
+  // arrastrando desde el principio y no miente aunque se mire una semana.
+  const enRango = (fecha: string) => fecha >= desde && fecha <= hasta;
+
+  const anotados = cuenta.movimientos.filter((m) => enRango(m.fecha));
+  const dias = porDia(cuenta).filter((d) => enRango(d.fecha));
+  const conPlata = cuenta.logs.filter(
+    (l) => (logCash(l) > 0 || l.event === 'entregado') && enRango(hoyAR(new Date(l.happened_at))),
+  );
 
   return (
     <div className="border-t border-[var(--edr-border)] px-4 py-3">
@@ -430,13 +533,15 @@ function Detalle({
         Lo anotado
       </h3>
 
-      {cuenta.movimientos.length === 0 ? (
+      {anotados.length === 0 ? (
         <p className="text-sm text-[var(--edr-muted)]">
-          Todavía no hay ninguna entrega de plata anotada.
+          {cuenta.movimientos.length > 0
+            ? 'Nada anotado entre esas fechas.'
+            : 'Todavía no hay ninguna entrega de plata anotada.'}
         </p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {cuenta.movimientos.map((m) => (
+          {anotados.map((m) => (
             <li
               key={m.id}
               className="flex items-center gap-3 rounded bg-[var(--edr-surface-2)] px-3 py-1.5 text-sm"
@@ -476,7 +581,11 @@ function Detalle({
         Día por día
       </h3>
 
-      <div className="overflow-x-auto rounded border border-[var(--edr-border)]">
+      {dias.length === 0 && (
+        <p className="text-sm text-[var(--edr-muted)]">Sin días con movimiento entre esas fechas.</p>
+      )}
+
+      <div className={dias.length === 0 ? 'hidden' : 'overflow-x-auto rounded border border-[var(--edr-border)]'}>
         <table className="w-full text-xs">
           <thead className="bg-[var(--edr-surface-2)] text-left text-[10px] uppercase text-[var(--edr-muted)]">
             <tr>
@@ -493,7 +602,7 @@ function Detalle({
             </tr>
           </thead>
           <tbody>
-            {porDia(cuenta).map((d) => (
+            {dias.map((d) => (
               <tr key={d.fecha} className="border-t border-[var(--edr-border)]">
                 <td className="edr-mono px-2 py-1">
                   {d.fecha.split('-').reverse().slice(0, 2).join('/')}

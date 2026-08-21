@@ -15,7 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { horarioDeRetiro, tramosDeHorario } from '../lib/franja';
 import { fueCorregido, logCash, summarizeLogs, type DeliveryLog } from '../lib/settlement';
-import { armarBilletera, porDia } from '../lib/billetera';
+import { armarBilletera, porDia, resumenDelRango } from '../lib/billetera';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
@@ -1013,6 +1013,25 @@ console.log('\n=== dia por dia ===\n');
   ], []));
   caso('una entrega de las 22:30 queda en su dia, no en el siguiente',
     [deNoche[0].fecha], ['2026-08-18']);
+
+  // EL RECORTE POR FECHAS del admin. Las sumas son de lo que paso esos dias;
+  // el saldo al cierre arrastra desde el principio, porque un rango no tiene
+  // saldo propio.
+  const todo = resumenDelRango(cuenta, '2026-08-17', '2026-08-19');
+  casoNumero('el rango entero cobra 35.000', todo.cobrado, 35000);
+  casoNumero('con 28.000 a rendir', todo.aRendir, 28000);
+  casoNumero('rindio 20.000', todo.rendido, 20000);
+  casoNumero('y cierra debiendo 8.000', todo.saldoAlCierre, 8000);
+  casoNumero('en tres dias con movimiento', todo.dias, 3);
+
+  const soloElMartes = resumenDelRango(cuenta, '2026-08-18', '2026-08-18');
+  casoNumero('el martes solo dejo 1.500', soloElMartes.aRendir, 1500);
+  casoNumero('pero al cierre del martes debia 28.000, arrastrado', soloElMartes.saldoAlCierre, 28000);
+  casoNumero('un dia solo es un dia', soloElMartes.dias, 1);
+
+  const sinNada = resumenDelRango(cuenta, '2026-08-20', '2026-08-25');
+  casoNumero('un rango sin movimientos no tiene dias', sinNada.dias, 0);
+  casoNumero('ni plata', sinNada.cobrado, 0);
 
   // Sin nada, la lista esta vacia: no se inventan dias en cero.
   casoNumero('sin movimientos no hay dias', porDia(armarBilletera('moto', [], [])).length, 0);

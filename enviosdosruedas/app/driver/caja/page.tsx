@@ -391,8 +391,21 @@ export default function CajaPage() {
               color: cerrado ? '#fff' : 'var(--edr-blue)',
             }}
           >
+            {/*
+              NO PUEDE DECIR "TENÉS QUE RENDIR", aunque antes lo dijera.
+              
+              Arriba está la cuenta con la oficina, que YA dice eso y con otro
+              número: uno es lo que debe en total y el otro lo que cobró en el
+              período que está mirando. Dos carteles con la misma frase y
+              distinta plata es la forma más rápida de que deje de creerle a los
+              dos.
+            */}
             <div className="font-bebas text-[17px] tracking-[.1em]">
-              {!cerrado ? 'TENÉS QUE RENDIR' : leFaltaRendir ? 'TENÉS QUE RENDIR' : 'TENÉS QUE COBRAR'}
+              {!cerrado
+                ? `COBRASTE ${comoSeLlama(periodo, desde, hasta).toUpperCase()}`
+                : leFaltaRendir
+                  ? 'QUEDÓ A RENDIR DEL DÍA'
+                  : 'QUEDÓ A TU FAVOR DEL DÍA'}
             </div>
 
             <div className="edr-mono text-[56px] font-extrabold leading-[.95] tracking-[-.04em]">
@@ -402,7 +415,7 @@ export default function CajaPage() {
             <div className="text-[13px] font-semibold opacity-80">
               {cerrado
                 ? 'según el cierre que hizo la oficina'
-                : `efectivo cobrado ${comoSeLlama(periodo, desde, hasta)}`}
+                : 'efectivo que juntaste en la calle'}
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import { notificarRepartidor } from '@/lib/notify';
 import { money, nombreDelDestinatario } from '@/lib/format';
+import { anotar as anotarEnLaBilletera } from '@/lib/billetera';
 import {
   dayRange,
   logCash,
@@ -103,6 +104,10 @@ export default function BillingPage() {
   const [montoReal, setMontoReal] = useState('');
   const [notaCorreccion, setNotaCorreccion] = useState('');
   const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
+  /** El cuadro para anotar que entregó la plata (paso 55). */
+  const [anotandoRendicion, setAnotandoRendicion] = useState(false);
+  const [montoRendido, setMontoRendido] = useState('');
+  const [guardandoRendicion, setGuardandoRendicion] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -267,6 +272,38 @@ export default function BillingPage() {
     }
 
     setCorrigiendo(null);
+    await reload();
+  }
+
+  /**
+   * Anota acá mismo que entregó la plata.
+   *
+   * POR QUÉ EL BOTÓN VIVE EN EL CIERRE. Cerrar el día y recibir la plata son
+   * dos actos distintos —se puede cerrar el día sin que haya entregado nada— y
+   * por eso la billetera no se mueve sola al liquidar. Pero el momento en que
+   * suele entregarla es justo éste, con el admin mirando la cuenta del día: si
+   * para anotarlo hubiera que cambiar de pantalla, no se anotaría.
+   */
+  async function guardarRendicion() {
+    setGuardandoRendicion(true);
+    setError('');
+
+    const r = await anotarEnLaBilletera({
+      driverId,
+      fecha: day,
+      tipo: 'rendicion',
+      monto: Number(montoRendido),
+      nota: 'Anotado al cerrar el día',
+    });
+
+    setGuardandoRendicion(false);
+
+    if (r.error) {
+      setError(r.error);
+      return;
+    }
+
+    setAnotandoRendicion(false);
     await reload();
   }
 
@@ -527,8 +564,28 @@ export default function BillingPage() {
                 */}
                 <Renglon
                   label="Efectivo rendido"
-                  value={money(rendidoEnLaBilletera)}
-                  hint="se anota en la Billetera, con la fecha en que te lo entregó"
+                  hint="con la fecha en que te lo entregó · va a la Billetera"
+                  input={
+                    <div className="flex items-center gap-2">
+                      <span className="edr-mono text-lg font-black">
+                        {money(rendidoEnLaBilletera)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setAnotandoRendicion(true);
+                          // Arranca con lo que falta del día: es lo que suele
+                          // entregar, y volver a escribirlo es una oportunidad
+                          // de equivocarse.
+                          setMontoRendido(
+                            String(Math.max(0, cobradoNum - rendidoEnLaBilletera)),
+                          );
+                        }}
+                        className="rounded border border-[var(--edr-yellow)] px-2.5 py-1 text-xs font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
+                      >
+                        Anotar que rindió
+                      </button>
+                    </div>
+                  }
                 />
 
                 <Renglon
@@ -770,6 +827,69 @@ export default function BillingPage() {
           </table>
         </div>
       </main>
+
+      {/* Anotar que entregó la plata (paso 55) */}
+      {anotandoRendicion && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-10 w-full max-w-md rounded-lg bg-[var(--edr-surface)] shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--edr-border)] px-5 py-4">
+              <h2 className="text-lg font-bold">¿Cuánto te entregó {driverName}?</h2>
+              <button
+                onClick={() => setAnotandoRendicion(false)}
+                className="rounded px-2 py-1 text-2xl leading-none text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid gap-3 px-5 py-5">
+              <p className="text-sm text-[var(--edr-muted)]">
+                Ese día cobró <strong className="edr-mono">{money(cobradoNum)}</strong>
+                {rendidoEnLaBilletera > 0 && (
+                  <> y ya entregó <span className="edr-mono">{money(rendidoEnLaBilletera)}</span></>
+                )}
+                .
+              </p>
+
+              <div>
+                <label className={labelCls}>Cuánto entregó</label>
+                <input
+                  className={field}
+                  inputMode="numeric"
+                  value={montoRendido}
+                  onChange={(e) => setMontoRendido(e.target.value)}
+                  placeholder="50000"
+                />
+              </div>
+
+              {/* Que la fecha sea la del día que se está cerrando es lo normal,
+                  pero no siempre: si entregó hoy lo del lunes, la entrega es de
+                  hoy. Para eso está la Billetera, y lo dice acá. */}
+              <p className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-3 py-2 text-xs text-[var(--edr-muted)]">
+                Se anota con fecha <strong>{day.split('-').reverse().join('/')}</strong>, el día que
+                estás cerrando. Si te la entregó otro día, anotalo desde la Billetera para ponerle
+                la fecha que corresponde.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-[var(--edr-border)] px-5 py-4">
+              <button
+                onClick={() => setAnotandoRendicion(false)}
+                className="rounded border border-[var(--edr-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarRendicion}
+                disabled={guardandoRendicion}
+                className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
+              >
+                {guardandoRendicion ? 'Guardando…' : 'Anotar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Corregir lo cobrado (paso 54) */}
       {corrigiendo && (

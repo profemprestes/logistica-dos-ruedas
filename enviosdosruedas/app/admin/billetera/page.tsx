@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
-import { money, nombreDelDestinatario } from '@/lib/format';
+import { diaAR, money, nombreDelDestinatario } from '@/lib/format';
 import { logCash, pagoDelEnvio } from '@/lib/settlement';
 import {
   anotar,
@@ -465,8 +465,18 @@ function Detalle({
           <tbody>
             {conPlata.map((l) => (
               <tr key={l.id} className="border-b border-[var(--edr-border)] last:border-0">
+                {/*
+                  La fecha va con `diaAR` y no cortando el texto del ISO.
+                  
+                  Los movimientos se guardan en UTC, tres horas adelante: una
+                  entrega de las diez de la noche queda escrita como del día
+                  siguiente. Cortando el texto, esa entrega aparecía un día
+                  corrido de todo el resto de la pantalla — y en una lista de
+                  plata, una fecha que no coincide es lo primero que hace dudar
+                  del total.
+                */}
                 <td className="edr-mono px-2 py-1 text-[var(--edr-muted)]">
-                  {l.happened_at.slice(8, 10)}/{l.happened_at.slice(5, 7)}
+                  {diaAR(l.happened_at)}
                 </td>
                 <td className="edr-mono px-2 py-1">{l.shipment?.tracking_code ?? '—'}</td>
                 <td className="px-2 py-1">

@@ -14,20 +14,20 @@ import {
  * DÍA. Pero la plata no se entrega por día: el repartidor junta lo de varias
  * jornadas y un martes deja un monto que cubre todo. El 12/08/2026 quedó
  * escrito "cobró $ 9.900, rindió $ 55.000" — cierto, pero pegado a un día al
- * que no pertenece. Por eso el saldo de "Caja y ganancia" avisaba que en una
- * ventana de días miente.
+ * que no pertenece. Acá el saldo sale de sumar TODO desde el principio, y las
+ * entregas de plata son movimientos con su propia fecha.
  *
- * Acá el saldo sale de sumar TODO desde el principio, y las entregas de plata
- * son movimientos con su propia fecha.
+ * ES UN SOLO NÚMERO, y es EL MISMO que da el cierre de caja. Así se rinde acá:
+ * el repartidor se queda con su parte de lo que cobró y entrega la diferencia.
+ * "Total a rendir $ 59.100" del cierre es cobró $ 78.400 menos sus $ 19.300 —
+ * nunca entrega los $ 78.400 para después cobrar aparte. La primera versión
+ * mostraba esas dos platas por separado, y el dueño la leyó como que el
+ * repartidor debía $ 78.400: un número que ninguna rendición real iba a
+ * empardar. La cuenta que no coincide con la plata sobre la mesa no sirve.
  *
- * DOS PLATAS QUE VAN EN SENTIDOS CONTRARIOS, y conviene no mezclarlas al
- * mirarlas aunque el saldo final las netee:
+ *   saldo = cobrado − su parte − rendido + pagado + ajustes
  *
- *   · Lo que él COBRÓ en la calle y todavía no entregó → nos debe.
- *   · Lo que le TOCA por los envíos que hizo y todavía no cobró → le debemos.
- *
- * El saldo es la resta. Positivo quiere decir que tiene plata nuestra;
- * negativo, que hay que pagarle.
+ * Positivo: tiene que rendir. Negativo: hay que pagarle.
  */
 
 /**
@@ -60,20 +60,19 @@ export interface Billetera {
   driverId: string;
   /** Efectivo que cobró en la calle desde que arranca la cuenta. */
   cobrado: number;
-  /** De eso, cuánto entregó ya. */
+  /** Su parte por los envíos que hizo: lo que se queda de lo cobrado. */
+  suParte: number;
+  /** Lo que ya entregó en la oficina. */
   rendido: number;
-  /** Lo que le toca por los envíos que hizo. */
-  ganado: number;
-  /** De eso, cuánto se le pagó ya. */
+  /** Lo que se le pagó de nuestro bolsillo (cuando cobra menos de su parte). */
   pagado: number;
   /** Ajustes a mano, con su signo. */
   ajustes: number;
-  /** Positivo: tiene plata nuestra. Negativo: hay que pagarle. */
+  /**
+   * EL número: lo que tiene que rendir hoy, ya descontada su parte.
+   * Positivo: nos debe la diferencia. Negativo: hay que pagarle.
+   */
   saldo: number;
-  /** Lo que le falta entregar, sin netear con lo que se le debe. */
-  debeRendir: number;
-  /** Lo que le falta cobrar, sin netear con lo que debe entregar. */
-  leDebemos: number;
   movimientos: MovimientoCaja[];
   /** Los movimientos de la calle, para poder mostrar el detalle. */
   logs: DeliveryLog[];
@@ -92,13 +91,11 @@ export function billeteraVacia(id: string): Billetera {
   return {
     driverId: id,
     cobrado: 0,
+    suParte: 0,
     rendido: 0,
-    ganado: 0,
     pagado: 0,
     ajustes: 0,
     saldo: 0,
-    debeRendir: 0,
-    leDebemos: 0,
     movimientos: [],
     logs: [],
   };
@@ -122,9 +119,9 @@ export function armarBilletera(
     c.logs.push(l);
     c.cobrado += logCash(l);
 
-    // Lo que le toca sale de los envíos ENTREGADOS, con las mismas reglas que
-    // los resúmenes y el cierre de caja. Un retiro no le paga nada.
-    if (l.event === 'entregado') c.ganado += pagoDelEnvio(l);
+    // Su parte sale de los envíos ENTREGADOS, con las mismas reglas que los
+    // resúmenes y el cierre de caja. Un retiro no le paga nada.
+    if (l.event === 'entregado') c.suParte += pagoDelEnvio(l);
   }
 
   for (const m of movimientos) {
@@ -136,9 +133,7 @@ export function armarBilletera(
     else c.ajustes += monto;
   }
 
-  c.debeRendir = Math.round(c.cobrado - c.rendido);
-  c.leDebemos = Math.round(c.ganado - c.pagado);
-  c.saldo = Math.round(c.debeRendir - c.leDebemos + c.ajustes);
+  c.saldo = Math.round(c.cobrado - c.suParte - c.rendido + c.pagado + c.ajustes);
 
   return c;
 }
@@ -149,17 +144,20 @@ export interface DiaDeCaja {
   fecha: string;
   /** Efectivo que cobró en la calle ese día. */
   cobrado: number;
-  /** Lo que le tocó por los envíos que entregó ese día. */
-  ganado: number;
+  /** Su parte por los envíos que entregó ese día. */
+  suParte: number;
+  /** Lo que quedó a rendir POR ese día: cobrado menos su parte. */
+  delDia: number;
   /** Lo que entregó ese día. */
   rendido: number;
   /** Lo que se le pagó ese día. */
   pagado: number;
   ajustes: number;
-  /** Cuánto debía rendir al terminar ese día, contando desde el principio. */
-  debeAcumulado: number;
-  /** Cuánto se le debía a él al terminar ese día. */
-  leDebemosAcumulado: number;
+  /**
+   * Cómo quedó la cuenta ENTERA al terminar ese día, contando desde el
+   * principio. Positivo: le quedaba por rendir. Negativo: se le debía.
+   */
+  saldo: number;
   /** Cuántas entregas hizo. Para poder decir "6 entregas" y no sólo plata. */
   entregas: number;
 }
@@ -167,11 +165,10 @@ export interface DiaDeCaja {
 /**
  * La cuenta partida día por día, con el saldo arrastrándose.
  *
- * POR QUÉ ARRASTRA. Un día suelto no contesta nada: el repartidor cobró $ 30.000
- * el lunes, no entregó nada, y el martes cobró $ 5.000. Mirando el martes solo
- * parece que debe $ 5.000. Lo que necesita saber —y lo que la oficina le va a
- * pedir— es que debe $ 35.000. Por eso cada día muestra cómo quedó la cuenta
- * ENTERA hasta ahí.
+ * POR QUÉ ARRASTRA. Un día suelto no contesta nada: el repartidor quedó
+ * debiendo $ 30.000 el lunes y $ 5.000 el martes. Mirando el martes solo
+ * parece que debe $ 5.000; lo que la oficina le va a pedir es $ 35.000. Por
+ * eso cada día muestra cómo quedó la cuenta ENTERA hasta ahí.
  *
  * Los días sin nada no aparecen: una lista con los domingos en cero es más
  * larga y dice menos.
@@ -185,12 +182,12 @@ export function porDia(c: Billetera): DiaDeCaja[] {
     const d = dias.get(fecha) ?? {
       fecha,
       cobrado: 0,
-      ganado: 0,
+      suParte: 0,
+      delDia: 0,
       rendido: 0,
       pagado: 0,
       ajustes: 0,
-      debeAcumulado: 0,
-      leDebemosAcumulado: 0,
+      saldo: 0,
       entregas: 0,
     };
     dias.set(fecha, d);
@@ -203,7 +200,7 @@ export function porDia(c: Billetera): DiaDeCaja[] {
     const d = enDia(hoyAR(new Date(l.happened_at)));
     d.cobrado += logCash(l);
     if (l.event === 'entregado') {
-      d.ganado += pagoDelEnvio(l);
+      d.suParte += pagoDelEnvio(l);
       d.entregas += 1;
     }
   }
@@ -218,13 +215,11 @@ export function porDia(c: Billetera): DiaDeCaja[] {
 
   const enOrden = [...dias.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-  let debe = 0;
-  let leDebemos = 0;
+  let saldo = 0;
   for (const d of enOrden) {
-    debe += d.cobrado - d.rendido;
-    leDebemos += d.ganado - d.pagado;
-    d.debeAcumulado = Math.round(debe);
-    d.leDebemosAcumulado = Math.round(leDebemos);
+    d.delDia = Math.round(d.cobrado - d.suParte);
+    saldo += d.cobrado - d.suParte - d.rendido + d.pagado + d.ajustes;
+    d.saldo = Math.round(saldo);
   }
 
   return enOrden.reverse();

@@ -854,7 +854,9 @@ console.log('\n=== corregir lo cobrado ===\n');
    martes deja un monto que cubre todo. El 12/08/2026 quedo escrito "cobro
    $ 9.900, rindio $ 55.000" — cierto, pero pegado a un dia al que no pertenece.
 
-   Acá el saldo sale de sumar todo, sin ventanas de tiempo.
+   Aca el saldo sale de sumar todo, sin ventanas de tiempo, y es UN SOLO
+   numero: lo cobrado menos su parte, igual que el "Total a rendir" del
+   cierre. Asi se rinde de verdad — se queda con lo suyo y trae la diferencia.
    ========================================================================== */
 
 console.log('\n=== la billetera ===\n');
@@ -889,30 +891,43 @@ console.log('\n=== la billetera ===\n');
     created_at: '2026-08-19T12:00:00Z',
   });
 
-  // Un dia de trabajo, sin rendir nada todavia.
+  // Un dia de trabajo, sin rendir nada todavia. El saldo ya viene con su
+  // parte descontada: es EL MISMO numero que el "Total a rendir" del cierre.
   const solo = armarBilletera('moto', [entrega('a', 10000, 4000), entrega('b', 5000, 4000)], []);
   casoNumero('cobro lo de los dos envios', solo.cobrado, 15000);
-  casoNumero('debe rendir todo lo que cobro', solo.debeRendir, 15000);
-  casoNumero('le tocan el 70% de los dos envios', solo.leDebemos, Math.round(8000 * 0.7));
+  casoNumero('su parte es el 70% de los dos envios', solo.suParte, Math.round(8000 * 0.7));
+  casoNumero('tiene que rendir lo cobrado menos su parte', solo.saldo, 15000 - 5600);
+
+  // LO QUE PASO EL 20/08/2026: el cierre dijo "Total a rendir $ 59.100"
+  // (cobro $ 78.400, su parte $ 19.300) y la billetera pedia los $ 78.400
+  // enteros — un numero que ninguna rendicion real iba a empardar. Rendir lo
+  // que dice el cierre tiene que dejar la cuenta en CERO.
+  const comoElCierre = armarBilletera(
+    'moto',
+    [entrega('a', 30000, 10000)],
+    [anotado(1, 'rendicion', 30000 - 7000)],
+  );
+  casoNumero('rendir el "Total a rendir" del cierre deja el saldo en cero', comoElCierre.saldo, 0);
 
   // Entrega una parte.
   const aMedias = armarBilletera('moto', [entrega('a', 10000, 4000)], [anotado(1, 'rendicion', 4000)]);
-  casoNumero('rindiendo una parte, debe el resto', aMedias.debeRendir, 6000);
+  casoNumero('rindiendo una parte, debe el resto del neto', aMedias.saldo, 10000 - 2800 - 4000);
 
-  // Entrega MAS de lo que cobro ese dia: es plata de dias anteriores, y el
-  // saldo tiene que poder quedar en negativo en vez de trabarse en cero.
+  // Entrega MAS de lo que le quedaba: es plata de dias anteriores, y el saldo
+  // tiene que poder quedar en negativo en vez de trabarse en cero.
   const deMas = armarBilletera('moto', [entrega('a', 9900, 4000)], [anotado(1, 'rendicion', 55000)]);
-  casoNumero('puede rendir mas de lo que cobro (plata vieja)', deMas.debeRendir, -45100);
+  casoNumero('puede rendir mas de lo que debia (plata vieja)', deMas.saldo, 9900 - 2800 - 55000);
 
-  // Le pagamos lo suyo.
+  // Reparte envios que no cobran en la puerta: el saldo da negativo, hay que
+  // pagarle. Pagandole queda al dia.
+  const sinCobrar = armarBilletera('moto', [entrega('a', 0, 10000)], []);
+  casoNumero('sin cobrar nada, el saldo es su parte en negativo', sinCobrar.saldo, -7000);
   const pagado = armarBilletera('moto', [entrega('a', 0, 10000)], [anotado(1, 'pago', 7000)]);
-  casoNumero('pagandole todo, no se le debe nada', pagado.leDebemos, 0);
+  casoNumero('pagandole lo suyo queda al dia', pagado.saldo, 0);
 
-  // Las dos platas van separadas aunque el saldo las netee.
+  // Cobra mas de lo que le toca: el saldo es la diferencia.
   const mixto = armarBilletera('moto', [entrega('a', 20000, 10000)], []);
-  casoNumero('debe rendir lo cobrado', mixto.debeRendir, 20000);
-  casoNumero('y por separado se le debe lo suyo', mixto.leDebemos, 7000);
-  casoNumero('el saldo es la resta', mixto.saldo, 13000);
+  casoNumero('cobrando 20.000 con parte de 7.000, rinde 13.000', mixto.saldo, 13000);
 
   // Un ajuste mueve el saldo y puede ir en negativo.
   const conAjuste = armarBilletera('moto', [entrega('a', 20000, 10000)], [anotado(1, 'ajuste', -3000)]);
@@ -921,21 +936,21 @@ console.log('\n=== la billetera ===\n');
   // Un retiro cobrado al comercio suma a lo que debe, pero NO le paga a el.
   const retiro: DeliveryLog = { ...entrega('r', 0, 5300), event: 'retirado', amount_collected: 5300 };
   const conRetiro = armarBilletera('moto', [retiro], []);
-  casoNumero('un retiro cobrado suma a lo que debe rendir', conRetiro.debeRendir, 5300);
-  casoNumero('pero un retiro no le paga nada a el', conRetiro.leDebemos, 0);
+  casoNumero('un retiro cobrado suma entero al saldo', conRetiro.saldo, 5300);
+  casoNumero('porque un retiro no le paga nada a el', conRetiro.suParte, 0);
 
   // Sin nada, todo en cero: la pantalla no puede mostrar un saldo inventado.
   const vacia = armarBilletera('moto', [], []);
-  casoNumero('sin movimientos, no debe nada', vacia.debeRendir, 0);
-  casoNumero('ni se le debe nada', vacia.leDebemos, 0);
+  casoNumero('sin movimientos, el saldo es cero', vacia.saldo, 0);
+  casoNumero('y no cobro nada', vacia.cobrado, 0);
 }
 
 /* ==========================================================================
    EL SEGUIMIENTO DIA POR DIA
 
-   Un dia suelto no contesta nada: si el lunes cobro $ 30.000 y no entrego, el
-   martes que cobra $ 5.000 parece que debe $ 5.000. Lo que le van a pedir es
-   $ 35.000. Por eso cada dia arrastra la cuenta entera hasta ahi.
+   Un dia suelto no contesta nada: si del lunes quedaron $ 26.500 sin rendir,
+   el martes que deja $ 1.500 parece que debe $ 1.500. Lo que le van a pedir
+   es $ 28.000. Por eso cada dia arrastra la cuenta entera hasta ahi.
    ========================================================================== */
 
 console.log('\n=== dia por dia ===\n');
@@ -981,16 +996,16 @@ console.log('\n=== dia por dia ===\n');
   const miercoles = dias.find((d) => d.fecha === '2026-08-19')!;
 
   casoNumero('el lunes cobro 30.000', lunes.cobrado, 30000);
-  casoNumero('y al cerrar el lunes debia 30.000', lunes.debeAcumulado, 30000);
+  // El neto del dia es lo del cierre: cobrado menos su parte (70% de 5.000).
+  casoNumero('del lunes quedaron a rendir 26.500', lunes.delDia, 26500);
+  casoNumero('y al cerrar el lunes el saldo era 26.500', lunes.saldo, 26500);
   casoNumero('el martes cobro 5.000', martes.cobrado, 5000);
-  casoNumero('PERO al cerrar el martes debia 35.000, no 5.000', martes.debeAcumulado, 35000);
+  casoNumero('del martes quedaron 1.500', martes.delDia, 1500);
+  casoNumero('PERO al cerrar el martes el saldo era 28.000, no 1.500', martes.saldo, 28000);
   casoNumero('el miercoles rindio 20.000', miercoles.rendido, 20000);
-  casoNumero('y le quedaron 15.000', miercoles.debeAcumulado, 15000);
+  casoNumero('y el saldo quedo en 8.000', miercoles.saldo, 8000);
   casoNumero('el miercoles no entrego nada', miercoles.entregas, 0);
   casoNumero('el lunes hizo una entrega', lunes.entregas, 1);
-
-  // Lo que se le debe tambien se arrastra.
-  casoNumero('al martes se le debian dos envios al 70%', martes.leDebemosAcumulado, 7000);
 
   // Una entrega de la noche NO se corre al dia siguiente.
   const deNoche = porDia(armarBilletera('moto', [

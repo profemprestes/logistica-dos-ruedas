@@ -305,44 +305,44 @@ export default function CajaPage() {
         Son distintas porque la plata no se entrega el mismo día que se cobra —
         se junta y se entrega cuando se pasa.
       */}
-      {billetera && (billetera.debeRendir !== 0 || billetera.leDebemos !== 0) && (
+      {billetera &&
+        (billetera.saldo !== 0 || billetera.logs.length > 0 || billetera.movimientos.length > 0) && (
         <section className="rounded-3xl border border-white/10 bg-[var(--edr-blue)] p-4 shadow-[var(--edr-sombra)]">
           <div className="font-bebas text-[15px] tracking-[.1em] text-[var(--edr-yellow)]">
             TU CUENTA · DESDE EL {ARRANCA.split('-').reverse().slice(0, 2).join('/')}
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-3">
-            {/* En negativo cambia de cara: si entregó más de lo que cobró, esa
-                plata es suya y no puede quedar escondida atrás de un cero. */}
-            <div>
-              <div className="text-[11px] font-bold uppercase text-[var(--edr-muted)]">
-                {billetera.debeRendir < 0 ? 'Rendiste de más' : 'Tenés que rendir'}
-              </div>
-              <div
-                className="edr-mono text-[30px] font-extrabold leading-none"
-                style={{
-                  color:
-                    billetera.debeRendir > 0
-                      ? 'var(--edr-naranja-claro)'
-                      : billetera.debeRendir < 0
-                        ? 'var(--edr-verde)'
-                        : '#fff',
-                }}
-              >
-                {money(Math.abs(billetera.debeRendir))}
-              </div>
+          {/*
+            UN SOLO NÚMERO, el mismo que el "Total a rendir" del cierre: lo
+            cobrado menos lo suyo. Mostrar "tenés que rendir" y "te tenemos que
+            pagar" por separado le pedía rendir una plata que nunca entrega
+            entera — él se queda con su parte y trae la diferencia.
+          */}
+          <div className="mt-2">
+            <div className="text-[11px] font-bold uppercase text-[var(--edr-muted)]">
+              {billetera.saldo > 0
+                ? 'Tenés que rendir'
+                : billetera.saldo < 0
+                  ? 'Te tienen que pagar'
+                  : 'Estás al día'}
             </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase text-[var(--edr-muted)]">
-                Te tenemos que pagar
-              </div>
-              <div
-                className="edr-mono text-[30px] font-extrabold leading-none"
-                style={{ color: billetera.leDebemos > 0 ? 'var(--edr-verde)' : '#fff' }}
-              >
-                {money(Math.max(0, billetera.leDebemos))}
-              </div>
+            <div
+              className="edr-mono text-[34px] font-extrabold leading-none"
+              style={{
+                color:
+                  billetera.saldo > 0
+                    ? 'var(--edr-naranja-claro)'
+                    : billetera.saldo < 0
+                      ? 'var(--edr-verde)'
+                      : '#fff',
+              }}
+            >
+              {money(Math.abs(billetera.saldo))}
             </div>
+            <p className="mt-1 text-[11.5px] text-[var(--edr-muted)]">
+              Ya está descontado lo tuyo: cobraste {money(billetera.cobrado)} y{' '}
+              {money(billetera.suParte)} son de tus envíos.
+            </p>
           </div>
 
           {/*
@@ -357,7 +357,7 @@ export default function CajaPage() {
             <div className="mt-3 border-t border-white/10 pt-2">
               <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase text-[var(--edr-muted)]">
                 <span>Día por día</span>
-                <span>debías al cierre</span>
+                <span>saldo al cierre</span>
               </div>
 
               <ul className="flex flex-col gap-1">
@@ -375,18 +375,24 @@ export default function CajaPage() {
                       <span
                         className="edr-mono ml-auto text-[15px] font-extrabold"
                         style={{
-                          color:
-                            d.debeAcumulado > 0 ? 'var(--edr-naranja-claro)' : 'var(--edr-verde)',
+                          color: d.saldo > 0 ? 'var(--edr-naranja-claro)' : 'var(--edr-verde)',
                         }}
                       >
-                        {d.debeAcumulado < 0 ? '+' : ''}
-                        {money(Math.abs(d.debeAcumulado))}
+                        {d.saldo < 0 ? '+' : ''}
+                        {money(Math.abs(d.saldo))}
                       </span>
                     </div>
 
                     <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11.5px] text-[var(--edr-muted)]">
                       {d.cobrado > 0 && <span>cobraste {money(d.cobrado)}</span>}
-                      {d.ganado > 0 && <span>ganaste {money(d.ganado)}</span>}
+                      {d.suParte > 0 && <span>tuyo {money(d.suParte)}</span>}
+                      {/* Lo del cierre de ese día: cobrado menos lo suyo. */}
+                      {d.delDia > 0 && (
+                        <span className="font-bold text-white">
+                          quedaron {money(d.delDia)}
+                        </span>
+                      )}
+                      {d.delDia < 0 && <span>a tu favor {money(-d.delDia)}</span>}
                       {d.rendido > 0 && (
                         <span className="font-bold text-[var(--edr-yellow)]">
                           rendiste {money(d.rendido)}
@@ -406,8 +412,9 @@ export default function CajaPage() {
           )}
 
           <p className="mt-2 text-[11.5px] text-[var(--edr-muted)]">
-            La columna de la derecha es lo que debías rendir al terminar ese día, contando desde el
-            principio. Lo anota la oficina cuando le entregás la plata: si algo no coincide, avisá.
+            La columna de la derecha es cómo quedó tu cuenta al terminar ese día, contando desde el
+            principio: en naranja lo que te faltaba rendir, en verde y con + lo que se te debía. La
+            oficina anota cada vez que entregás la plata: si algo no coincide, avisá.
           </p>
         </section>
       )}

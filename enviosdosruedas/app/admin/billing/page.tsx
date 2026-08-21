@@ -455,10 +455,15 @@ export default function BillingPage() {
             <div className="edr-mono text-2xl font-black">{money(cashFromPickups)}</div>
           </div>
           {/* Fondo amarillo: el texto va negro sí o sí. Con el color heredado
-              del cuerpo (que es amarillo) quedaba invisible. */}
+              del cuerpo (que es amarillo) quedaba invisible.
+
+              Dice "cobrado" y no "a rendir": esto es el bruto del día, y lo
+              que se rinde es el neto —menos su parte— que está abajo de todo
+              como "Total a rendir". Dos carteles de rendir con montos
+              distintos ya confundieron una vez. */}
           <div className="rounded-lg border-2 border-[var(--edr-yellow)] bg-[var(--edr-hiviz)] p-4 text-[var(--edr-blue)]">
             <div className="text-[11px] font-semibold uppercase tracking-wide">
-              Efectivo a rendir
+              Efectivo cobrado
             </div>
             <div className="edr-mono text-3xl font-black">{money(cashTotal)}</div>
           </div>
@@ -485,8 +490,12 @@ export default function BillingPage() {
                 Día liquidado
               </div>
               <div className="text-sm text-[var(--edr-muted)]">
-                {delivered.length} entregas · calculado{' '}
-                {money(Number(settlement.cash_total))} · rendido{' '}
+                {delivered.length} entregas · cobró {money(Number(settlement.cash_total))} · quedó
+                a rendir{' '}
+                <strong className="edr-mono">
+                  {money(Number(settlement.cash_total) - gananciaNum)}
+                </strong>{' '}
+                · rendido{' '}
                 {/* Lo que dice la BILLETERA, no la foto que quedó guardada al
                     cerrar: si rindió después, el cierre no se enteró. */}
                 <strong className="edr-mono">{money(rendidoEnLaBilletera)}</strong> · cerrado el{' '}
@@ -504,8 +513,15 @@ export default function BillingPage() {
               <button
                 onClick={() => {
                   setAnotandoRendicion(true);
+                  // En NETO: el efectivo del cierre menos su parte, que es lo
+                  // que él trae de verdad. Su comisión ya quedó en su bolsillo.
                   setMontoRendido(
-                    String(Math.max(0, Number(settlement.cash_total) - rendidoEnLaBilletera)),
+                    String(
+                      Math.max(
+                        0,
+                        Number(settlement.cash_total) - gananciaNum - rendidoEnLaBilletera,
+                      ),
+                    ),
                   );
                 }}
                 className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-sm font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
@@ -513,16 +529,22 @@ export default function BillingPage() {
                 Anotar que rindió
               </button>
 
-              {/* Lo que falta de ESE día. No es un error: lo normal es que
-                  junte varios días y entregue todo junto más adelante. El saldo
-                  de verdad está en la Billetera. */}
-              {rendidoEnLaBilletera !== Number(settlement.cash_total) && (
-                <div className="w-full rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                  {rendidoEnLaBilletera < Number(settlement.cash_total)
-                    ? `De ese día quedan ${money(Number(settlement.cash_total) - rendidoEnLaBilletera)} sin rendir.`
-                    : `Ese día entregó ${money(rendidoEnLaBilletera - Number(settlement.cash_total))} de más: es plata de otros días.`}
-                </div>
-              )}
+              {/* Lo que falta de ESE día, comparado en NETO (cobrado menos su
+                  parte): es lo que trae en la mano. Contra el bruto siempre
+                  "faltaba" su comisión, que no falta — es suya. Tampoco es un
+                  error que quede algo: lo normal es que junte varios días y
+                  entregue todo junto. El saldo de verdad está en la Billetera. */}
+              {(() => {
+                const netoDelDia = Number(settlement.cash_total) - gananciaNum;
+                if (rendidoEnLaBilletera === netoDelDia) return null;
+                return (
+                  <div className="w-full rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                    {rendidoEnLaBilletera < netoDelDia
+                      ? `De ese día quedan ${money(netoDelDia - rendidoEnLaBilletera)} sin rendir.`
+                      : `Ese día entregó ${money(rendidoEnLaBilletera - netoDelDia)} de más: es plata de otros días.`}
+                  </div>
+                );
+              })()}
 
               {settlement.earnings !== null && (
                 <div className="w-full rounded border border-[var(--edr-yellow)] px-3 py-2 text-sm font-bold">
@@ -595,11 +617,12 @@ export default function BillingPage() {
                       <button
                         onClick={() => {
                           setAnotandoRendicion(true);
-                          // Arranca con lo que falta del día: es lo que suele
-                          // entregar, y volver a escribirlo es una oportunidad
-                          // de equivocarse.
+                          // Arranca con lo que falta del día EN NETO: cobrado
+                          // menos su parte, que es la plata que él trae de
+                          // verdad. Volver a escribirla es una oportunidad de
+                          // equivocarse.
                           setMontoRendido(
-                            String(Math.max(0, cobradoNum - rendidoEnLaBilletera)),
+                            String(Math.max(0, cobradoNum - gananciaNum - rendidoEnLaBilletera)),
                           );
                         }}
                         className="rounded border border-[var(--edr-yellow)] px-2.5 py-1 text-xs font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
@@ -866,9 +889,14 @@ export default function BillingPage() {
 
             <div className="grid gap-3 px-5 py-5">
               <p className="text-sm text-[var(--edr-muted)]">
-                Ese día cobró <strong className="edr-mono">{money(cobradoNum)}</strong>
+                Ese día cobró <strong className="edr-mono">{money(cobradoNum)}</strong> y su parte
+                es <strong className="edr-mono">{money(gananciaNum)}</strong>: quedaron{' '}
+                <strong className="edr-mono">{money(Math.max(0, cobradoNum - gananciaNum))}</strong>
                 {rendidoEnLaBilletera > 0 && (
-                  <> y ya entregó <span className="edr-mono">{money(rendidoEnLaBilletera)}</span></>
+                  <>
+                    , de los que ya entregó{' '}
+                    <span className="edr-mono">{money(rendidoEnLaBilletera)}</span>
+                  </>
                 )}
                 .
               </p>

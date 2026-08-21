@@ -31,10 +31,12 @@ import {
  * martes deja un monto que cubre todo. El 12/08/2026 quedó escrito "cobró
  * $ 9.900, rindió $ 55.000" — cierto, pero pegado a un día al que no pertenece.
  *
- * LAS DOS PLATAS SE MUESTRAN SEPARADAS aunque el saldo las netee. Lo que él
- * cobró y todavía no entregó, y lo que le toca y todavía no cobró, son dos
- * conversaciones distintas: una es "traeme la plata" y la otra es "tomá lo
- * tuyo". Un solo número las esconde a las dos.
+ * UN SOLO NÚMERO POR REPARTIDOR, el mismo que da el cierre de caja: lo cobrado
+ * menos su parte. Así se rinde de verdad —se queda con lo suyo y entrega la
+ * diferencia—, así que cualquier otro número no coincide con la plata que pone
+ * sobre la mesa. La primera versión mostraba "debe rendir" y "le debemos" por
+ * separado y el cierre decía una tercera cifra: tres números para una sola
+ * rendición. Ver `lib/billetera.ts`.
  */
 
 const campo =
@@ -151,16 +153,12 @@ export default function BilleteraPage() {
     .map((r) => ({ r, c: cuentas.get(r.id) }))
     .filter((x): x is { r: Repartidor; c: Billetera } => Boolean(x.c))
     // Primero el que más debe: es a quien hay que llamar.
-    .sort((a, b) => b.c.debeRendir - a.c.debeRendir);
+    .sort((a, b) => b.c.saldo - a.c.saldo);
 
-  /*
-   * Los totales suman los saldos CON SIGNO, no sólo los positivos.
-   *
-   * Si uno rindió de más, esa plata pasó a ser nuestra deuda con él y tiene que
-   * bajar el total que nos deben, no quedar afuera de la cuenta.
-   */
-  const totalDeben = conCuenta.reduce((acc, x) => acc + x.c.debeRendir, 0);
-  const totalLesDebemos = conCuenta.reduce((acc, x) => acc + x.c.leDebemos, 0);
+  // Cada uno cae de un solo lado según el signo de SU saldo: el que tiene que
+  // rendir suma a la izquierda, el que hay que pagarle suma a la derecha.
+  const totalDeben = conCuenta.reduce((acc, x) => acc + Math.max(0, x.c.saldo), 0);
+  const totalLesDebemos = conCuenta.reduce((acc, x) => acc + Math.max(0, -x.c.saldo), 0);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -207,24 +205,17 @@ export default function BilleteraPage() {
                     )}
                   </div>
                   <div className="text-[11px] text-[var(--edr-muted)]">
-                    cobró {money(c.cobrado)} · rindió {money(c.rendido)}
+                    cobró {money(c.cobrado)} · su parte {money(c.suParte)} · rindió{' '}
+                    {money(c.rendido)}
+                    {c.pagado > 0 && <> · le pagamos {money(c.pagado)}</>}
                   </div>
                 </div>
 
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <Pendiente
-                    label="Debe rendir"
-                    valor={c.debeRendir}
-                    tono="warn"
-                    onAnotar={() => abrirCuadro(r, 'rendicion', c.debeRendir)}
-                    accion="Rindió"
-                  />
-                  <Pendiente
-                    label="Le debemos"
-                    valor={c.leDebemos}
-                    tono="ok"
-                    onAnotar={() => abrirCuadro(r, 'pago', c.leDebemos)}
-                    accion="Le pagué"
+                <div className="ml-auto">
+                  <Saldo
+                    valor={c.saldo}
+                    onRindio={() => abrirCuadro(r, 'rendicion', c.saldo)}
+                    onPago={() => abrirCuadro(r, 'pago', -c.saldo)}
                   />
                 </div>
               </div>
@@ -257,9 +248,9 @@ export default function BilleteraPage() {
       )}
 
       <p className="mt-4 text-xs text-[var(--edr-muted)]">
-        <strong>Debe rendir</strong> es lo que cobró en la calle menos lo que ya entregó.{' '}
-        <strong>Le debemos</strong> es lo que le toca por sus envíos menos lo que ya se le pagó. Van
-        separados a propósito: una cosa es pedirle la plata y otra pagarle la suya.
+        El saldo es <strong>lo cobrado en la calle menos su parte</strong>, igual que el
+        &quot;Total a rendir&quot; del cierre de caja, menos lo que ya rindió. En verde es plata que
+        hay que pagarle: pasa cuando reparte envíos que no cobran en la puerta.
       </p>
 
       {cuadro()}
@@ -370,56 +361,50 @@ function Tarjeta({ label, valor, tono }: { label: string; valor: string; tono: '
 }
 
 /**
- * Un pendiente con su botón al lado.
+ * El saldo del repartidor con sus dos botones.
  *
- * EN NEGATIVO CAMBIA DE CARA, y no se esconde. Si entregó más plata de la que
- * cobró —pasa cuando rinde un número redondo, o cuando cubre lo de otra
- * semana— el pendiente da negativo. Mostrando sólo `Math.max(0, …)` esa plata
- * desaparecía de la pantalla, y es plata que ahora le debemos a él.
+ * CAMBIA DE CARA SEGÚN EL SIGNO, y el botón que corresponde va primero y en
+ * amarillo: con saldo a favor nuestro lo que sigue es que rinda; con saldo a
+ * favor de él, que le paguemos. El otro botón queda igual a mano —a veces se
+ * le adelanta plata aunque deba, o rinde algo aunque se le deba— pero sin
+ * monto sugerido, porque ahí el número no lo sabe el sistema.
  */
-function Pendiente({
-  label,
+function Saldo({
   valor,
-  tono,
-  accion,
-  onAnotar,
+  onRindio,
+  onPago,
 }: {
-  label: string;
   valor: number;
-  tono: 'warn' | 'ok';
-  accion: string;
-  onAnotar: () => void;
+  onRindio: () => void;
+  onPago: () => void;
 }) {
-  const hay = valor > 0;
-  const deMas = valor < 0;
+  const debe = valor > 0;
+  const aFavor = valor < 0;
+
+  const principal =
+    'rounded bg-[var(--edr-yellow)] px-2.5 py-1 text-[11px] font-black text-[var(--edr-blue)] hover:brightness-95';
+  const secundario =
+    'rounded border border-[var(--edr-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]';
 
   return (
     <div className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-right">
       <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
-        {deMas ? (tono === 'warn' ? 'Rindió de más' : 'Le pagamos de más') : label}
+        {debe ? 'Tiene que rendir' : aFavor ? 'Hay que pagarle' : 'Al día'}
       </div>
       <div
-        className="edr-mono text-lg font-black leading-tight"
-        style={{
-          color: hay
-            ? tono === 'warn'
-              ? 'var(--edr-rojo)'
-              : 'var(--edr-verde)'
-            : deMas
-              ? tono === 'warn'
-                ? 'var(--edr-verde)'
-                : 'var(--edr-rojo)'
-              : undefined,
-        }}
+        className="edr-mono text-xl font-black leading-tight"
+        style={{ color: debe ? 'var(--edr-rojo)' : aFavor ? 'var(--edr-verde)' : undefined }}
       >
         {valor === 0 ? '—' : money(Math.abs(valor))}
       </div>
-      <button
-        onClick={onAnotar}
-        className="mt-1 rounded bg-[var(--edr-yellow)] px-2.5 py-1 text-[11px] font-black text-[var(--edr-blue)] hover:brightness-95"
-      >
-        {accion}
-      </button>
+      <div className="mt-1 flex justify-end gap-1.5">
+        <button onClick={onRindio} className={debe || valor === 0 ? principal : secundario}>
+          Rindió
+        </button>
+        <button onClick={onPago} className={aFavor ? principal : secundario}>
+          Le pagué
+        </button>
+      </div>
     </div>
   );
 }
@@ -498,10 +483,13 @@ function Detalle({
               <th className="px-2 py-1">Día</th>
               <th className="px-2 py-1 text-right">Entregas</th>
               <th className="px-2 py-1 text-right">Cobró</th>
-              <th className="px-2 py-1 text-right">Le tocó</th>
+              <th className="px-2 py-1 text-right">Su parte</th>
+              {/* Lo del cierre de caja: cobrado menos su parte, el efectivo
+                  que ese día dejó pendiente. */}
+              <th className="px-2 py-1 text-right">A rendir</th>
               <th className="px-2 py-1 text-right">Rindió</th>
               <th className="px-2 py-1 text-right">Le pagamos</th>
-              <th className="px-2 py-1 text-right">Debía al cierre</th>
+              <th className="px-2 py-1 text-right">Saldo</th>
             </tr>
           </thead>
           <tbody>
@@ -515,7 +503,10 @@ function Detalle({
                   {d.cobrado > 0 ? money(d.cobrado) : '—'}
                 </td>
                 <td className="edr-mono px-2 py-1 text-right text-[var(--edr-acento)]">
-                  {d.ganado > 0 ? money(d.ganado) : '—'}
+                  {d.suParte > 0 ? money(d.suParte) : '—'}
+                </td>
+                <td className="edr-mono px-2 py-1 text-right font-bold">
+                  {d.delDia === 0 ? '—' : d.delDia < 0 ? `+${money(-d.delDia)}` : money(d.delDia)}
                 </td>
                 <td className="edr-mono px-2 py-1 text-right font-bold">
                   {d.rendido > 0 ? money(d.rendido) : '—'}
@@ -526,11 +517,11 @@ function Detalle({
                 <td
                   className="edr-mono px-2 py-1 text-right font-black"
                   style={{
-                    color: d.debeAcumulado > 0 ? 'var(--edr-rojo)' : 'var(--edr-verde)',
+                    color: d.saldo > 0 ? 'var(--edr-rojo)' : 'var(--edr-verde)',
                   }}
                 >
-                  {d.debeAcumulado < 0 ? '+' : ''}
-                  {money(Math.abs(d.debeAcumulado))}
+                  {d.saldo < 0 ? '+' : ''}
+                  {money(Math.abs(d.saldo))}
                 </td>
               </tr>
             ))}

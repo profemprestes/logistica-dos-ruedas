@@ -12,6 +12,7 @@ import {
   borrarMovimiento,
   hoyEnCasa,
   NOMBRE_TIPO,
+  porDia,
   traerBilleteras,
   type Billetera,
   type TipoMovimiento,
@@ -152,8 +153,14 @@ export default function BilleteraPage() {
     // Primero el que más debe: es a quien hay que llamar.
     .sort((a, b) => b.c.debeRendir - a.c.debeRendir);
 
-  const totalDeben = conCuenta.reduce((acc, x) => acc + Math.max(0, x.c.debeRendir), 0);
-  const totalLesDebemos = conCuenta.reduce((acc, x) => acc + Math.max(0, x.c.leDebemos), 0);
+  /*
+   * Los totales suman los saldos CON SIGNO, no sólo los positivos.
+   *
+   * Si uno rindió de más, esa plata pasó a ser nuestra deuda con él y tiene que
+   * bajar el total que nos deben, no quedar afuera de la cuenta.
+   */
+  const totalDeben = conCuenta.reduce((acc, x) => acc + x.c.debeRendir, 0);
+  const totalLesDebemos = conCuenta.reduce((acc, x) => acc + x.c.leDebemos, 0);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -362,7 +369,14 @@ function Tarjeta({ label, valor, tono }: { label: string; valor: string; tono: '
   );
 }
 
-/** Un pendiente con su botón al lado. En cero, el botón no aparece. */
+/**
+ * Un pendiente con su botón al lado.
+ *
+ * EN NEGATIVO CAMBIA DE CARA, y no se esconde. Si entregó más plata de la que
+ * cobró —pasa cuando rinde un número redondo, o cuando cubre lo de otra
+ * semana— el pendiente da negativo. Mostrando sólo `Math.max(0, …)` esa plata
+ * desaparecía de la pantalla, y es plata que ahora le debemos a él.
+ */
 function Pendiente({
   label,
   valor,
@@ -377,19 +391,28 @@ function Pendiente({
   onAnotar: () => void;
 }) {
   const hay = valor > 0;
+  const deMas = valor < 0;
 
   return (
     <div className="rounded border border-[var(--edr-border)] px-3 py-1.5 text-right">
       <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
-        {label}
+        {deMas ? (tono === 'warn' ? 'Rindió de más' : 'Le pagamos de más') : label}
       </div>
       <div
         className="edr-mono text-lg font-black leading-tight"
         style={{
-          color: hay ? (tono === 'warn' ? 'var(--edr-rojo)' : 'var(--edr-verde)') : undefined,
+          color: hay
+            ? tono === 'warn'
+              ? 'var(--edr-rojo)'
+              : 'var(--edr-verde)'
+            : deMas
+              ? tono === 'warn'
+                ? 'var(--edr-verde)'
+                : 'var(--edr-rojo)'
+              : undefined,
         }}
       >
-        {hay ? money(valor) : '—'}
+        {valor === 0 ? '—' : money(Math.abs(valor))}
       </div>
       <button
         onClick={onAnotar}
@@ -455,6 +478,65 @@ function Detalle({
           ))}
         </ul>
       )}
+
+      {/*
+        DÍA POR DÍA, con el saldo arrastrándose.
+
+        Es la vista que pidió el repartidor y también sirve del lado de la
+        oficina: contesta "¿desde cuándo viene debiendo?", que es distinto de
+        "¿cuánto debe?". Un saldo grande de un solo día es una jornada buena; el
+        mismo saldo arrastrado tres semanas es otra cosa.
+      */}
+      <h3 className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
+        Día por día
+      </h3>
+
+      <div className="overflow-x-auto rounded border border-[var(--edr-border)]">
+        <table className="w-full text-xs">
+          <thead className="bg-[var(--edr-surface-2)] text-left text-[10px] uppercase text-[var(--edr-muted)]">
+            <tr>
+              <th className="px-2 py-1">Día</th>
+              <th className="px-2 py-1 text-right">Entregas</th>
+              <th className="px-2 py-1 text-right">Cobró</th>
+              <th className="px-2 py-1 text-right">Le tocó</th>
+              <th className="px-2 py-1 text-right">Rindió</th>
+              <th className="px-2 py-1 text-right">Le pagamos</th>
+              <th className="px-2 py-1 text-right">Debía al cierre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {porDia(cuenta).map((d) => (
+              <tr key={d.fecha} className="border-t border-[var(--edr-border)]">
+                <td className="edr-mono px-2 py-1">
+                  {d.fecha.split('-').reverse().slice(0, 2).join('/')}
+                </td>
+                <td className="edr-mono px-2 py-1 text-right">{d.entregas || '—'}</td>
+                <td className="edr-mono px-2 py-1 text-right">
+                  {d.cobrado > 0 ? money(d.cobrado) : '—'}
+                </td>
+                <td className="edr-mono px-2 py-1 text-right text-[var(--edr-acento)]">
+                  {d.ganado > 0 ? money(d.ganado) : '—'}
+                </td>
+                <td className="edr-mono px-2 py-1 text-right font-bold">
+                  {d.rendido > 0 ? money(d.rendido) : '—'}
+                </td>
+                <td className="edr-mono px-2 py-1 text-right font-bold">
+                  {d.pagado > 0 ? money(d.pagado) : '—'}
+                </td>
+                <td
+                  className="edr-mono px-2 py-1 text-right font-black"
+                  style={{
+                    color: d.debeAcumulado > 0 ? 'var(--edr-rojo)' : 'var(--edr-verde)',
+                  }}
+                >
+                  {d.debeAcumulado < 0 ? '+' : ''}
+                  {money(Math.abs(d.debeAcumulado))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h3 className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wide text-[var(--edr-muted)]">
         De dónde sale · {conPlata.length} movimiento(s) en la calle

@@ -18,7 +18,7 @@ import {
   type DeliveryLog,
 } from '@/lib/settlement';
 import { money } from '@/lib/format';
-import { ARRANCA, NOMBRE_TIPO, traerBilleteras, type Billetera } from '@/lib/billetera';
+import { ARRANCA, porDia, traerBilleteras, type Billetera } from '@/lib/billetera';
 
 /**
  * La caja del día del repartidor.
@@ -312,15 +312,24 @@ export default function CajaPage() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-3">
+            {/* En negativo cambia de cara: si entregó más de lo que cobró, esa
+                plata es suya y no puede quedar escondida atrás de un cero. */}
             <div>
               <div className="text-[11px] font-bold uppercase text-[var(--edr-muted)]">
-                Tenés que rendir
+                {billetera.debeRendir < 0 ? 'Rendiste de más' : 'Tenés que rendir'}
               </div>
               <div
                 className="edr-mono text-[30px] font-extrabold leading-none"
-                style={{ color: billetera.debeRendir > 0 ? 'var(--edr-naranja-claro)' : '#fff' }}
+                style={{
+                  color:
+                    billetera.debeRendir > 0
+                      ? 'var(--edr-naranja-claro)'
+                      : billetera.debeRendir < 0
+                        ? 'var(--edr-verde)'
+                        : '#fff',
+                }}
               >
-                {money(Math.max(0, billetera.debeRendir))}
+                {money(Math.abs(billetera.debeRendir))}
               </div>
             </div>
             <div>
@@ -336,29 +345,69 @@ export default function CajaPage() {
             </div>
           </div>
 
-          {/* Lo que ya se anotó, para que pueda controlarlo. Sin esto tendría
-              que creerle al número de arriba sin poder revisarlo. */}
-          {billetera.movimientos.length > 0 && (
-            <ul className="mt-3 flex flex-col gap-1 border-t border-white/10 pt-2">
-              {billetera.movimientos.slice(0, 6).map((m) => (
-                <li key={m.id} className="flex items-center gap-2 text-[12.5px]">
-                  <span className="edr-mono text-[var(--edr-muted)]">
-                    {m.fecha.split('-').reverse().slice(0, 2).join('/')}
-                  </span>
-                  <span className="font-semibold text-white">{NOMBRE_TIPO[m.tipo]}</span>
-                  {m.nota && (
-                    <span className="truncate text-[var(--edr-muted)]">{m.nota}</span>
-                  )}
-                  <span className="edr-mono ml-auto font-bold text-[var(--edr-yellow)]">
-                    {money(Number(m.monto))}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {/*
+            DÍA POR DÍA, con el saldo arrastrándose.
+
+            Un día suelto no contesta nada: si el lunes cobró $ 30.000 y no
+            entregó, el martes que cobra $ 5.000 parece que debe $ 5.000. Lo que
+            le van a pedir es $ 35.000. Por eso cada renglón dice cómo quedó la
+            cuenta ENTERA hasta ese día.
+          */}
+          {porDia(billetera).length > 0 && (
+            <div className="mt-3 border-t border-white/10 pt-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase text-[var(--edr-muted)]">
+                <span>Día por día</span>
+                <span>debías al cierre</span>
+              </div>
+
+              <ul className="flex flex-col gap-1">
+                {porDia(billetera).map((d) => (
+                  <li key={d.fecha} className="rounded-xl bg-black/20 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="edr-mono text-[13px] font-bold text-white">
+                        {d.fecha.split('-').reverse().slice(0, 2).join('/')}
+                      </span>
+                      <span className="text-[12px] text-[var(--edr-muted)]">
+                        {d.entregas > 0
+                          ? `${d.entregas} entrega${d.entregas === 1 ? '' : 's'}`
+                          : 'sin entregas'}
+                      </span>
+                      <span
+                        className="edr-mono ml-auto text-[15px] font-extrabold"
+                        style={{
+                          color:
+                            d.debeAcumulado > 0 ? 'var(--edr-naranja-claro)' : 'var(--edr-verde)',
+                        }}
+                      >
+                        {d.debeAcumulado < 0 ? '+' : ''}
+                        {money(Math.abs(d.debeAcumulado))}
+                      </span>
+                    </div>
+
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11.5px] text-[var(--edr-muted)]">
+                      {d.cobrado > 0 && <span>cobraste {money(d.cobrado)}</span>}
+                      {d.ganado > 0 && <span>ganaste {money(d.ganado)}</span>}
+                      {d.rendido > 0 && (
+                        <span className="font-bold text-[var(--edr-yellow)]">
+                          rendiste {money(d.rendido)}
+                        </span>
+                      )}
+                      {d.pagado > 0 && (
+                        <span className="font-bold text-[var(--edr-verde)]">
+                          te pagamos {money(d.pagado)}
+                        </span>
+                      )}
+                      {d.ajustes !== 0 && <span>ajuste {money(d.ajustes)}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <p className="mt-2 text-[11.5px] text-[var(--edr-muted)]">
-            Lo anota la oficina cuando le entregás la plata. Si algo no coincide, avisá.
+            La columna de la derecha es lo que debías rendir al terminar ese día, contando desde el
+            principio. Lo anota la oficina cuando le entregás la plata: si algo no coincide, avisá.
           </p>
         </section>
       )}

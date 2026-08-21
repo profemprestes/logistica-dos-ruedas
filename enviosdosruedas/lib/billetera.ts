@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import { hoyAR } from '@/lib/format';
 import {
   conLosMovimientos,
   logCash,
@@ -140,6 +141,93 @@ export function armarBilletera(
   c.saldo = Math.round(c.debeRendir - c.leDebemos + c.ajustes);
 
   return c;
+}
+
+/** Un día de la cuenta, con lo que entró, lo que salió y cómo quedó. */
+export interface DiaDeCaja {
+  /** yyyy-mm-dd, en hora de Mar del Plata. */
+  fecha: string;
+  /** Efectivo que cobró en la calle ese día. */
+  cobrado: number;
+  /** Lo que le tocó por los envíos que entregó ese día. */
+  ganado: number;
+  /** Lo que entregó ese día. */
+  rendido: number;
+  /** Lo que se le pagó ese día. */
+  pagado: number;
+  ajustes: number;
+  /** Cuánto debía rendir al terminar ese día, contando desde el principio. */
+  debeAcumulado: number;
+  /** Cuánto se le debía a él al terminar ese día. */
+  leDebemosAcumulado: number;
+  /** Cuántas entregas hizo. Para poder decir "6 entregas" y no sólo plata. */
+  entregas: number;
+}
+
+/**
+ * La cuenta partida día por día, con el saldo arrastrándose.
+ *
+ * POR QUÉ ARRASTRA. Un día suelto no contesta nada: el repartidor cobró $ 30.000
+ * el lunes, no entregó nada, y el martes cobró $ 5.000. Mirando el martes solo
+ * parece que debe $ 5.000. Lo que necesita saber —y lo que la oficina le va a
+ * pedir— es que debe $ 35.000. Por eso cada día muestra cómo quedó la cuenta
+ * ENTERA hasta ahí.
+ *
+ * Los días sin nada no aparecen: una lista con los domingos en cero es más
+ * larga y dice menos.
+ *
+ * Va del más nuevo al más viejo. Lo que se mira es lo de recién.
+ */
+export function porDia(c: Billetera): DiaDeCaja[] {
+  const dias = new Map<string, DiaDeCaja>();
+
+  const enDia = (fecha: string): DiaDeCaja => {
+    const d = dias.get(fecha) ?? {
+      fecha,
+      cobrado: 0,
+      ganado: 0,
+      rendido: 0,
+      pagado: 0,
+      ajustes: 0,
+      debeAcumulado: 0,
+      leDebemosAcumulado: 0,
+      entregas: 0,
+    };
+    dias.set(fecha, d);
+    return d;
+  };
+
+  for (const l of c.logs) {
+    // La hora de acá, no la del servidor: una entrega de las diez de la noche
+    // se guarda con la fecha del día siguiente en UTC.
+    const d = enDia(hoyAR(new Date(l.happened_at)));
+    d.cobrado += logCash(l);
+    if (l.event === 'entregado') {
+      d.ganado += pagoDelEnvio(l);
+      d.entregas += 1;
+    }
+  }
+
+  for (const m of c.movimientos) {
+    const d = enDia(m.fecha);
+    const monto = Number(m.monto);
+    if (m.tipo === 'rendicion') d.rendido += monto;
+    else if (m.tipo === 'pago') d.pagado += monto;
+    else d.ajustes += monto;
+  }
+
+  const enOrden = [...dias.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  let debe = 0;
+  let leDebemos = 0;
+  for (const d of enOrden) {
+    debe += d.cobrado - d.rendido;
+    leDebemos += d.ganado - d.pagado;
+    d.debeAcumulado = Math.round(debe);
+    d.leDebemosAcumulado = Math.round(leDebemos);
+  }
+
+  return enOrden.reverse();
 }
 
 /**

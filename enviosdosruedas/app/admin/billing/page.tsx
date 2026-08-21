@@ -487,20 +487,42 @@ export default function BillingPage() {
               <div className="text-sm text-[var(--edr-muted)]">
                 {delivered.length} entregas · calculado{' '}
                 {money(Number(settlement.cash_total))} · rendido{' '}
-                <strong className="edr-mono">
-                  {money(Number(settlement.actual_amount ?? settlement.cash_total))}
-                </strong>{' '}
-                · cerrado el {new Date(settlement.settled_at).toLocaleString('es-AR')}
+                {/* Lo que dice la BILLETERA, no la foto que quedó guardada al
+                    cerrar: si rindió después, el cierre no se enteró. */}
+                <strong className="edr-mono">{money(rendidoEnLaBilletera)}</strong> · cerrado el{' '}
+                {new Date(settlement.settled_at).toLocaleString('es-AR')}
               </div>
 
-              {settlement.actual_amount !== null &&
-                Number(settlement.actual_amount) !== Number(settlement.cash_total) && (
-                  <div className="w-full rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                    Ajuste manual:{' '}
-                    {money(Number(settlement.actual_amount) - Number(settlement.cash_total))}{' '}
-                    respecto de lo calculado.
-                  </div>
-                )}
+              {/*
+                ANOTAR LA RENDICIÓN CON EL DÍA YA CERRADO.
+
+                Antes este botón vivía sólo en el formulario, que desaparece al
+                liquidar. Así que para anotar que le entregó la plata había que
+                REABRIR EL DÍA —y reabrir borra el cierre—. Rendir es lo que
+                pasa DESPUÉS de cerrar: es el orden normal, no la excepción.
+              */}
+              <button
+                onClick={() => {
+                  setAnotandoRendicion(true);
+                  setMontoRendido(
+                    String(Math.max(0, Number(settlement.cash_total) - rendidoEnLaBilletera)),
+                  );
+                }}
+                className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-sm font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
+              >
+                Anotar que rindió
+              </button>
+
+              {/* Lo que falta de ESE día. No es un error: lo normal es que
+                  junte varios días y entregue todo junto más adelante. El saldo
+                  de verdad está en la Billetera. */}
+              {rendidoEnLaBilletera !== Number(settlement.cash_total) && (
+                <div className="w-full rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                  {rendidoEnLaBilletera < Number(settlement.cash_total)
+                    ? `De ese día quedan ${money(Number(settlement.cash_total) - rendidoEnLaBilletera)} sin rendir.`
+                    : `Ese día entregó ${money(rendidoEnLaBilletera - Number(settlement.cash_total))} de más: es plata de otros días.`}
+                </div>
+              )}
 
               {settlement.earnings !== null && (
                 <div className="w-full rounded border border-[var(--edr-yellow)] px-3 py-2 text-sm font-bold">

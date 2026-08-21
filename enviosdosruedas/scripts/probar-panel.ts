@@ -15,7 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buscarAtrasos, limiteDeLaFranja } from '../lib/admin/atrasos';
 import { horarioDeRetiro, tramosDeHorario } from '../lib/franja';
 import { fueCorregido, logCash, summarizeLogs, type DeliveryLog } from '../lib/settlement';
-import { armarBilletera } from '../lib/billetera';
+import { armarBilletera, porDia } from '../lib/billetera';
 import { respuestaParaElCliente } from '../lib/admin/respuesta';
 import { colaDelTelefono, esTelefono, palabrasUtiles } from '../lib/admin/busqueda';
 import { errorText } from '../lib/driver/errors';
@@ -928,4 +928,77 @@ console.log('\n=== la billetera ===\n');
   const vacia = armarBilletera('moto', [], []);
   casoNumero('sin movimientos, no debe nada', vacia.debeRendir, 0);
   casoNumero('ni se le debe nada', vacia.leDebemos, 0);
+}
+
+/* ==========================================================================
+   EL SEGUIMIENTO DIA POR DIA
+
+   Un dia suelto no contesta nada: si el lunes cobro $ 30.000 y no entrego, el
+   martes que cobra $ 5.000 parece que debe $ 5.000. Lo que le van a pedir es
+   $ 35.000. Por eso cada dia arrastra la cuenta entera hasta ahi.
+   ========================================================================== */
+
+console.log('\n=== dia por dia ===\n');
+
+{
+  const entregaDe = (dia: string, cobra: number, envio: number, id = dia): DeliveryLog => ({
+    id,
+    event: 'entregado',
+    amount_collected: cobra,
+    // Mediodia de Mar del Plata: 15 UTC. Asi el dia no se corre.
+    happened_at: `${dia}T15:00:00Z`,
+    failure_reason: null,
+    shipment: {
+      id: 1,
+      tracking_code: 'EDR1',
+      recipient_name: 'X',
+      address_street: 'CALLE 1',
+      amount_to_collect: cobra,
+      payment_mode: 'cobrar_destinatario',
+      shipping_fee: envio,
+      client_name_raw: 'STARCELL',
+    },
+  });
+
+  const anotado = (id: number, fecha: string, tipo: 'rendicion' | 'pago' | 'ajuste', monto: number) => ({
+    id, driver_id: 'moto', fecha, tipo, monto, nota: null, cargado_por: null,
+    created_at: `${fecha}T12:00:00Z`,
+  });
+
+  const cuenta = armarBilletera(
+    'moto',
+    [entregaDe('2026-08-17', 30000, 5000, 'a'), entregaDe('2026-08-18', 5000, 5000, 'b')],
+    [anotado(1, '2026-08-19', 'rendicion', 20000)],
+  );
+  const dias = porDia(cuenta);
+
+  casoNumero('tres dias con movimiento', dias.length, 3);
+  caso('van del mas nuevo al mas viejo',
+    dias.map((d) => d.fecha), ['2026-08-19', '2026-08-18', '2026-08-17']);
+
+  const lunes = dias.find((d) => d.fecha === '2026-08-17')!;
+  const martes = dias.find((d) => d.fecha === '2026-08-18')!;
+  const miercoles = dias.find((d) => d.fecha === '2026-08-19')!;
+
+  casoNumero('el lunes cobro 30.000', lunes.cobrado, 30000);
+  casoNumero('y al cerrar el lunes debia 30.000', lunes.debeAcumulado, 30000);
+  casoNumero('el martes cobro 5.000', martes.cobrado, 5000);
+  casoNumero('PERO al cerrar el martes debia 35.000, no 5.000', martes.debeAcumulado, 35000);
+  casoNumero('el miercoles rindio 20.000', miercoles.rendido, 20000);
+  casoNumero('y le quedaron 15.000', miercoles.debeAcumulado, 15000);
+  casoNumero('el miercoles no entrego nada', miercoles.entregas, 0);
+  casoNumero('el lunes hizo una entrega', lunes.entregas, 1);
+
+  // Lo que se le debe tambien se arrastra.
+  casoNumero('al martes se le debian dos envios al 70%', martes.leDebemosAcumulado, 7000);
+
+  // Una entrega de la noche NO se corre al dia siguiente.
+  const deNoche = porDia(armarBilletera('moto', [
+    { ...entregaDe('2026-08-18', 1000, 1000, 'n'), happened_at: '2026-08-19T01:30:00Z' },
+  ], []));
+  caso('una entrega de las 22:30 queda en su dia, no en el siguiente',
+    [deNoche[0].fecha], ['2026-08-18']);
+
+  // Sin nada, la lista esta vacia: no se inventan dias en cero.
+  casoNumero('sin movimientos no hay dias', porDia(armarBilletera('moto', [], [])).length, 0);
 }

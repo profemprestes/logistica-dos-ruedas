@@ -59,11 +59,18 @@ export const CORTE_RETIRO_HS = 15;
 /**
  * Cuánto antes del cierre de la franja hay que avisar.
  *
- * Retirar no es entregar: falta ir al comercio, cargarlo y recién después
- * llegar al domicilio, con las paradas que el repartidor tenga en el medio.
- * Dos horas es lo que da para que la entrega todavía entre en la franja.
+ * UNA HORA, PEDIDA POR EL DUEÑO el 21/08/2026. Estaba en dos, con el argumento
+ * de que retirar no es entregar: falta ir al comercio, cargarlo y recién
+ * después llegar al domicilio. Pero en la práctica el aviso saltaba con dos
+ * horas por delante, cuando todavía no hay nada que decidir —"faltan 2 hs aún
+ * para la entrega, ¿por qué me marca esto como alerta?"— y un aviso que
+ * aparece cuando no hay nada que hacer es el que enseña a ignorar el panel.
+ *
+ * Queda igualado a `ALERTA_ANTES_DEL_CIERRE_HS` a propósito: el envío que
+ * sigue en el comercio no tiene una etapa de "apurate", aparece ya en rojo.
+ * Para los que no tienen franja escrita sigue mandando el corte de las 15.
  */
-export const MARGEN_ANTES_DEL_CIERRE_HS = 2;
+export const MARGEN_ANTES_DEL_CIERRE_HS = 1;
 
 /**
  * A partir de acá deja de ser "apurate" y pasa a ser alerta.

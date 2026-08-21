@@ -268,11 +268,30 @@ const cargadoAyer = envio({
 
 caso('a las 9 de la mañana no molesta', tipos([cargadoAyer], 9), []);
 caso('a las 13 tampoco: la franja cierra recien a las 19', tipos([cargadoAyer], 13), []);
-caso('a las 17 sí: quedan dos horas', tipos([cargadoAyer], 17), ['sin_retirar']);
+
+/*
+ * EL MARGEN ES DE UNA HORA, no de dos (pedido del dueño el 21/08/2026).
+ *
+ * Con franja hasta las 19, a las 17 quedan dos horas y no hay nada que
+ * decidir: ese aviso era el que enseñaba a ignorar el panel. A las 18 sí.
+ */
+caso('a las 17 todavia no: falta mas de una hora', tipos([cargadoAyer], 17), []);
+caso('a las 18 sí: queda una hora', tipos([cargadoAyer], 18), ['sin_retirar']);
 
 const franjaTemprana = envio({ ...cargadoAyer, delivery_window: '11 a 12:30 hs' });
 caso('con franja de 11 a 12:30, a las 9 todavia no', tipos([franjaTemprana], 9), []);
-caso('con franja de 11 a 12:30, a las 11 sí', tipos([franjaTemprana], 11), ['sin_retirar']);
+caso('con franja de 11 a 12:30, a las 11 tampoco', tipos([franjaTemprana], 11), []);
+caso('con franja de 11 a 12:30, a las 11:30 sí', tipos([franjaTemprana], 11.5), ['sin_retirar']);
+
+/*
+ * EL CASO QUE REPORTO EL DUEÑO: EDR00001212MDQ, franja hasta 12:30.
+ *
+ * A las 10:30 le saltaba "SIN RETIRAR" con dos horas por delante. Con el
+ * margen en una hora, a esa hora no dice nada y aparece recien 11:30.
+ */
+const dorrego = envio({ ...cargadoAyer, delivery_window: 'antes de 12:30 hs' });
+caso('el de Dorrego a las 10:30 ya no molesta', tipos([dorrego], 10.5), []);
+caso('el de Dorrego a las 11:30 sí', tipos([dorrego], 11.5), ['sin_retirar']);
 
 const sinFranja = envio({ ...cargadoAyer, delivery_window: null });
 caso('sin franja, a las 13 no', tipos([sinFranja], 13), []);
@@ -344,8 +363,8 @@ const cierra18 = enLocal({ comercio: { pickup_window: '9 a 18 hs' } });
  * lo que ya andaba.
  */
 caso('sin horario cargado, a las 16:30 no avisa nada', tipos([enLocal({})], 16.5), []);
-caso('sin horario cargado, a las 17:30 avisa sólo por la entrega',
-  tipos([enLocal({})], 17.5), ['sin_retirar']);
+caso('sin horario cargado, a las 18:30 avisa sólo por la entrega',
+  tipos([enLocal({})], 18.5), ['sin_retirar']);
 
 /*
  * Y con el local cerrando, UN SOLO aviso y no dos.
@@ -354,11 +373,21 @@ caso('sin horario cargado, a las 17:30 avisa sólo por la entrega',
  * antes de las 19 y se retira donde cierran a las 18— y mostrarlo dos veces con
  * dos motivos distintos hace dudar de cuál mirar. Gana el del comercio, que
  * tiene la hora dura: pasada la persiana no hay nada que hacer hasta mañana.
- * Se nota en el color: la regla de la entrega a esa hora sería naranja.
+ *
+ * El aviso del comercio llega ANTES que el de la entrega, y eso está bien: el
+ * local cierra a las 18 y la franja recién a las 19.
  */
 caso('a las 16:30, con el local abierto hasta 18, todavía no', tipos([cierra18], 16.5), []);
 caso('a las 17:30 avisa que el comercio cierra', tipos([cierra18], 17.5), ['sin_retirar']);
 caso('y avisa en rojo', tono([cierra18], 17.5), ['rojo']);
+
+/*
+ * A las 18:30 las DOS reglas tendrían algo que decir —el local ya cerró y a la
+ * franja le queda media hora— y sale un aviso solo. Es la prueba de que el
+ * filtro de repetidos sigue andando ahora que el margen es de una hora.
+ */
+caso('a las 18:30 las dos reglas hablan y sale un aviso solo',
+  tipos([cierra18], 18.5), ['sin_retirar']);
 
 // El del envío le gana al del comercio: "este retiralo antes de las 12".
 const excepcion = enLocal({

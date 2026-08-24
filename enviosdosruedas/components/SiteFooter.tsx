@@ -18,6 +18,14 @@ import { MessageCircle } from 'lucide-react';
  */
 export const WHATSAPP = '5492236602699';
 
+/**
+ * El link corto que da Google para dejar una reseña: abre derecho el cuadro de
+ * las estrellas en la ficha de la empresa, sin pasar por la búsqueda ni por el
+ * mapa. Vive acá por lo mismo que el teléfono: es un dato de la empresa, y el
+ * día que la ficha cambie se toca en un solo lado.
+ */
+export const RESENA_GOOGLE = 'https://g.page/r/CatsN73VpT_tEBM/review';
+
 export default function SiteFooter({ compacto = false }: { compacto?: boolean }) {
   const anio = new Date().getFullYear();
 

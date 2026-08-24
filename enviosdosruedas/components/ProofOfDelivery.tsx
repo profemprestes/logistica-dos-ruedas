@@ -2,10 +2,10 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageCircle, RefreshCw } from 'lucide-react';
+import { MessageCircle, RefreshCw, Star } from 'lucide-react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
-import SiteFooter, { WHATSAPP } from '@/components/SiteFooter';
+import SiteFooter, { RESENA_GOOGLE, WHATSAPP } from '@/components/SiteFooter';
 import { fechaHoraAR, STATUS_LABEL, type ShipmentStatus } from '@/lib/format';
 import { mapaEmbedUrl } from '@/lib/mapa';
 import { MINUTOS_SIN_NOVEDAD } from '@/lib/eta';
@@ -521,6 +521,46 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
           ESCRIBINOS POR WHATSAPP
         </a>
       </div>
+
+      {/* ---------- Calificarnos en Google ----------
+          Sólo con el envío entregado. Pedirle una estrella a alguien que abrió
+          el seguimiento porque el paquete no le llegó, o que todavía lo está
+          esperando en la puerta, es la mejor manera de que la estrella sea una
+          sola.
+
+          Va acá arriba y no en el pie: el que ve ENTREGADO ya tiene la
+          respuesta que vino a buscar y cierra la página sin bajar hasta el
+          final. */}
+      {entregado && (
+        <div className="px-5 pb-5">
+          <div className="rounded-2xl border-2 border-[var(--edr-yellow)] bg-[var(--edr-surface-2)] px-5 py-5 text-center">
+            <div className="flex justify-center gap-1.5 text-[var(--edr-yellow)]">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Star key={i} size={24} strokeWidth={2} fill="currentColor" />
+              ))}
+            </div>
+
+            <p className="mt-3 font-anton text-xl uppercase leading-tight tracking-[-.01em]">
+              ¿Cómo estuvo la entrega?
+            </p>
+            <p className="mt-1 text-sm leading-snug text-[var(--edr-muted)]">
+              Contala en Google: te lleva un minuto y es lo que hace que otros nos encuentren.
+            </p>
+
+            {/* El link corto abre derecho el cuadro de las estrellas, ya sea en
+                la app de Google o en el navegador. */}
+            <a
+              href={RESENA_GOOGLE}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full bg-[var(--edr-yellow)] px-6 font-bebas text-lg tracking-[.07em] text-[var(--edr-blue)] transition hover:brightness-95"
+            >
+              <Star size={20} strokeWidth={2.5} fill="currentColor" />
+              CALIFICARNOS EN GOOGLE
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ---------- Prueba ---------- */}
       {(data.proof?.photoUrl || mapa) && (

@@ -222,6 +222,41 @@ export function horarioDeRetiro(
   return delComercio || null;
 }
 
+/**
+ * Cómo está el local ahora, en un renglón y con un color que se entiende sin
+ * leerlo.
+ *
+ * VIVE ACÁ porque lo dicen los dos lugares donde el repartidor mira un
+ * comercio —la tarjeta de la hoja de ruta y la ficha del envío— y tienen que
+ * decir lo mismo con las mismas palabras. Con una copia en cada uno, el día
+ * que se cambie el texto en uno solo la app le va a estar contando dos
+ * versiones del mismo local en dos pantallas seguidas.
+ *
+ * DICE "AHORA" A PROPÓSITO: al lado está el horario completo del comercio, y
+ * sin esa palabra los dos textos se leen como si discutieran —uno dice "8 a
+ * 13hs y 14 a 17hs" y el otro "cerrado"—. Con "ahora" se entiende que el
+ * segundo es la foto del momento.
+ *
+ * Y "cerrado" a secas no alcanza: la diferencia entre "abre 15:30" y "cerró
+ * por hoy" es la que decide si el paquete sale esta tarde o si hay que
+ * avisarle a alguien que queda para mañana.
+ */
+export function comoEstaElComercio(estado: EstadoComercio): { texto: string; color: string } {
+  if (estado.abierto) {
+    return {
+      texto: `Abierto ahora - Cierra ${faltaTexto(estado.cierraEnMin)}`,
+      color: 'var(--edr-verde-claro)',
+    };
+  }
+
+  return estado.abreA !== null
+    ? {
+        texto: `Cerrado ahora - Abre ${comoHora(estado.abreA)}HS`,
+        color: 'var(--edr-naranja-claro)',
+      }
+    : { texto: 'Cerrado por hoy', color: 'var(--edr-rojo-claro)' };
+}
+
 /** La franja tal cual la escribió la oficina, sin que grite. */
 export function textoFranja(texto: string | null | undefined): string {
   const t = (texto ?? '').trim();

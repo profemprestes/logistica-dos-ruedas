@@ -395,20 +395,32 @@ export default function ShipmentSheet({
  * Cómo está el local ahora, en un renglón y con un color que se entiende sin
  * leerlo.
  *
- * "Cerrado" a secas no alcanza: la diferencia entre "abre 15:30" y "cerró por
- * hoy" es la que decide si el paquete sale esta tarde o si hay que avisarle a
- * alguien que queda para mañana.
+ * Va con guion y no con el · del resto de la app: es lo que pidió Matías, y
+ * acá los dos lados del renglón son dos cosas distintas —cómo está y qué
+ * sigue—, no dos datos de la misma lista.
+ *
+ * DICE "AHORA" A PROPÓSITO. Justo arriba está el horario completo del
+ * comercio, así que sin esa palabra los dos renglones se leen como si
+ * discutieran: uno dice "8 a 13hs y 14 a 17hs" y el otro "cerrado". Con
+ * "ahora" se entiende que el de abajo es la foto del momento.
+ *
+ * Y "cerrado" a secas no alcanza: la diferencia entre "abre 15:30" y "cerró
+ * por hoy" es la que decide si el paquete sale esta tarde o si hay que
+ * avisarle a alguien que queda para mañana.
  */
 function comoEsta(estado: EstadoComercio): { texto: string; color: string } {
   if (estado.abierto) {
     return {
-      texto: `Abierto · cierra ${faltaTexto(estado.cierraEnMin)}`,
+      texto: `Abierto ahora - Cierra ${faltaTexto(estado.cierraEnMin)}`,
       color: 'var(--edr-verde-claro)',
     };
   }
 
   return estado.abreA !== null
-    ? { texto: `Cerrado · abre ${comoHora(estado.abreA)}`, color: 'var(--edr-naranja-claro)' }
+    ? {
+        texto: `Cerrado ahora - Abre ${comoHora(estado.abreA)}HS`,
+        color: 'var(--edr-naranja-claro)',
+      }
     : { texto: 'Cerrado por hoy', color: 'var(--edr-rojo-claro)' };
 }
 

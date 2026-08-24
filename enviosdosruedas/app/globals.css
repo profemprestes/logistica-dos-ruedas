@@ -71,6 +71,19 @@
   --edr-verde: #059669;
   --edr-whatsapp: #25d366;
 
+  /*
+   * Ámbar: lo que hay que hacer ANTES de repartir.
+   *
+   * No es una alerta de que algo salió mal —para eso están el rojo y el
+   * naranja—, es un aviso de que eso va primero. Lo usa "Pasá a retirar" en la
+   * app del repartidor, arriba de la hoja de ruta: llena, entre tarjetas
+   * azules, se ve desde el otro lado de la pantalla sin leerla.
+   *
+   * Va con texto azul oscuro encima, nunca blanco: sobre este amarillo el
+   * blanco queda en menos de 2 a 1 y al sol no se lee nada.
+   */
+  --edr-ambar: #f59e0b;
+
   /* Los mismos tres, en la versión que se lee SOBRE AZUL.
      Los de arriba están pensados para texto sobre blanco: puestos sobre el
      azul de la app quedan en menos de 3 a 1 y el número no se distingue.
@@ -120,6 +133,7 @@
   --color-edr-acento: var(--edr-acento);
   --color-edr-rojo: var(--edr-rojo);
   --color-edr-naranja: var(--edr-naranja);
+  --color-edr-ambar: var(--edr-ambar);
   --color-edr-verde: var(--edr-verde);
   --color-edr-rojo-claro: var(--edr-rojo-claro);
   --color-edr-naranja-claro: var(--edr-naranja-claro);

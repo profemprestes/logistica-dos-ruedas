@@ -20,6 +20,78 @@ export interface Colecta {
   lat: number | null;
   lng: number | null;
   fecha: string;
+  /**
+   * El horario del local, traído de su ficha. `null` si no lo tiene cargado.
+   *
+   * No vive en la colecta: la colecta guarda el comercio como texto suelto
+   * —se puede mandar a retirar a cualquier lado, esté o no dado de alta— y el
+   * horario es del comercio. Ver `conHorario`.
+   */
+  horario: string | null;
+  horarioSabado: string | null;
+}
+
+/** Sin mayúsculas, sin espacios de más: como se comparan dos textos escritos a mano. */
+function parejo(texto: string | null | undefined): string {
+  return (texto ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Le pega a cada colecta el horario del comercio al que manda.
+ *
+ * SE ATA POR NOMBRE Y, SI NO, POR DIRECCIÓN. El nombre es lo que se elige al
+ * crear la colecta, así que casi siempre alcanza; la dirección es la red que
+ * agarra lo que el nombre deja pasar, y deja pasar: en la base conviven
+ * "TOY PIOLA" y "TOYPIOLA" para el mismo local, que es el mismo problema de
+ * texto suelto que el paso 40 vino a terminar. Con los dos, hoy atan las once
+ * colectas que hay cargadas.
+ *
+ * Si no ata con ninguno no pasa nada: la colecta se muestra igual, sin
+ * horario. Una dirección a la que hay que ir sigue siendo una dirección a la
+ * que hay que ir.
+ */
+async function conHorario(cs: Omit<Colecta, 'horario' | 'horarioSabado'>[]): Promise<Colecta[]> {
+  const vacias = cs.map((c) => ({ ...c, horario: null, horarioSabado: null }));
+  if (cs.length === 0) return vacias;
+
+  /*
+   * Se traen todos los comercios de una y se cruza acá.
+   *
+   * Son veinte filas: pedirlas de una vez cuesta menos que armar una consulta
+   * por colecta, y sobre todo evita el ida y vuelta por cada tarjeta con el
+   * celular colgado de la red del centro.
+   */
+  const { data, error } = await supabase
+    .from('clients')
+    .select('name, pickup_address, pickup_window, pickup_window_sabado');
+
+  if (error) {
+    console.warn('[colectas] no se pudo leer el horario de los comercios', error.message);
+    return vacias;
+  }
+
+  type Ficha = {
+    name: string;
+    pickup_address: string | null;
+    pickup_window: string | null;
+    pickup_window_sabado: string | null;
+  };
+
+  const porNombre = new Map<string, Ficha>();
+  const porDireccion = new Map<string, Ficha>();
+  for (const f of (data ?? []) as Ficha[]) {
+    porNombre.set(parejo(f.name), f);
+    if (f.pickup_address) porDireccion.set(parejo(f.pickup_address), f);
+  }
+
+  return cs.map((c) => {
+    const ficha = porNombre.get(parejo(c.comercio)) ?? porDireccion.get(parejo(c.direccion));
+    return {
+      ...c,
+      horario: ficha?.pickup_window ?? null,
+      horarioSabado: ficha?.pickup_window_sabado ?? null,
+    };
+  });
 }
 
 /**
@@ -47,7 +119,7 @@ export async function misColectas(): Promise<Colecta[]> {
     return [];
   }
 
-  return (data ?? []) as Colecta[];
+  return conHorario((data ?? []) as Omit<Colecta, 'horario' | 'horarioSabado'>[]);
 }
 
 /**

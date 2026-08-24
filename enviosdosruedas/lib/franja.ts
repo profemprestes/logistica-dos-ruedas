@@ -11,6 +11,50 @@ import { esSabadoAR } from '@/lib/format';
  */
 
 /**
+ * Los minutos se escriben de tres formas, y las tres valen: "9:30", "9.30" y
+ * "9 30".
+ *
+ * LA DEL ESPACIO ES LA QUE USA LA OFICINA cuando carga rápido — hoy están
+ * cargados así "9 30 A 13HS Y 15 30 A 18 30HS" y "ANTES 9 30HS"—, y leerla
+ * como las nueve en punto corría el horario media hora para atrás: el local
+ * figuraba cerrando a las 18 cuando cierra 18:30, y el aviso de "pasá a
+ * retirar" saltaba antes de tiempo todos los días de ese comercio.
+ *
+ * El espacio cuenta como separador SÓLO cuando lo que sigue son dos dígitos.
+ * Por eso un rango no se confunde con una hora y media: en "10 A 14HS" entre
+ * los dos números hay una letra, no un espacio pelado.
+ */
+const RELOJ = /(\d{1,2})(?:(?:\s*[:.]\s*|\s+)(\d{2}))?(?!\d)/g;
+
+/**
+ * Las horas que aparecen escritas en un texto, en el orden en que están.
+ *
+ * VIVE EN UN SOLO LUGAR porque lo usan las dos lecturas que hacemos de una
+ * franja —la hora límite y los tramos en que abre— y son la misma pregunta
+ * hecha dos veces. Con dos copias, el día que cambie el formato de carga una
+ * se entera y la otra no.
+ *
+ * Se descarta lo que no puede ser una hora del día, así que un número de
+ * puerta o un "24/08" perdido en el texto no se toman por un horario.
+ */
+export function horasDelTexto(texto: string | null | undefined): number[] {
+  if (!texto) return [];
+
+  const horas: number[] = [];
+  for (const m of texto.matchAll(RELOJ)) {
+    const h = Number(m[1]);
+    if (h > 23) continue;
+
+    // Unos minutos imposibles no se llevan puesta la hora: "13 75" es la una
+    // escrita mal, no "ninguna hora".
+    const min = Number(m[2] ?? 0);
+    horas.push(h + (min > 59 ? 0 : min) / 60);
+  }
+
+  return horas;
+}
+
+/**
  * Las franjas las escribe la oficina a mano y salen de mil formas —"antes de
  * 19 hs", "ANTES 13HS", "11 a 12:30 hs", "14 A 17HS"— pero todas terminan
  * diciendo una hora límite, y siempre es la ÚLTIMA que aparece en el texto:
@@ -19,19 +63,8 @@ import { esSabadoAR } from '@/lib/format';
  * Devuelve `null` cuando no hay ninguna hora escrita ("por la mañana", vacío).
  */
 export function limiteDeLaFranja(texto: string | null | undefined): number | null {
-  if (!texto) return null;
-
-  let limite: number | null = null;
-  for (const m of texto.matchAll(/(\d{1,2})(?::(\d{2}))?/g)) {
-    const h = Number(m[1]);
-    const min = Number(m[2] ?? 0);
-    // Una hora del día y nada más: así un "24/08" perdido en el texto o un
-    // número de puerta no se toman por un horario.
-    if (h > 23 || min > 59) continue;
-    limite = h + min / 60;
-  }
-
-  return limite;
+  const horas = horasDelTexto(texto);
+  return horas.length ? horas[horas.length - 1] : null;
 }
 
 /**
@@ -48,10 +81,22 @@ export function minutosParaElCierre(
   return cierre === null ? null : Math.round((cierre - horaDelDia) * 60);
 }
 
-/** "en 35 min", "en 1 h 10 min", "se pasó hace 20 min". */
+/** "en 35 min", "en 1 h 10 min", "en 2 h", "se pasó hace 20 min". */
 export function faltaTexto(minutos: number): string {
   const m = Math.abs(minutos);
-  const cuanto = m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+  const horas = Math.floor(m / 60);
+  const sueltos = m % 60;
+
+  /*
+   * Las horas redondas se dicen sin la cola.
+   *
+   * "en 1 h 0 min" se lee como una app rota, y aparece más seguido de lo que
+   * parece: cada vez que se mira un comercio justo una hora antes de que
+   * cierre, que es exactamente cuando se lo mira.
+   */
+  const cuanto =
+    m < 60 ? `${m} min` : sueltos === 0 ? `${horas} h` : `${horas} h ${sueltos} min`;
+
   return minutos < 0 ? `se pasó hace ${cuanto}` : `en ${cuanto}`;
 }
 
@@ -78,15 +123,7 @@ export interface Tramo {
  * tipeo, y tomarlo en serio haría que el comercio figure cerrado todo el día.
  */
 export function tramosDeHorario(texto: string | null | undefined): Tramo[] {
-  if (!texto) return [];
-
-  const horas: number[] = [];
-  for (const m of texto.matchAll(/(\d{1,2})(?::(\d{2}))?/g)) {
-    const h = Number(m[1]);
-    const min = Number(m[2] ?? 0);
-    if (h > 23 || min > 59) continue;
-    horas.push(h + min / 60);
-  }
+  const horas = horasDelTexto(texto);
 
   if (horas.length === 1) return [{ desde: 0, hasta: horas[0] }];
 

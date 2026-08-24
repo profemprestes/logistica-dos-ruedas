@@ -1,7 +1,16 @@
 'use client';
 
-import { money,
+import { useEffect, useState } from 'react';
+import { horaDelDiaAR, money,
   nombreDelDestinatario, shipmentCash, STATUS_LABEL, type Shipment } from '@/lib/format';
+import {
+  comoHora,
+  estadoDelComercio,
+  faltaTexto,
+  horarioDeRetiro,
+  textoFranja,
+  type EstadoComercio,
+} from '@/lib/franja';
 import type { DeliveryKind } from '@/lib/driver/db';
 import { dondeRetira } from '@/lib/pickup';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
@@ -12,6 +21,7 @@ import {
   Camera,
   Check,
   ChevronLeft,
+  Clock,
   MessageCircle,
   Navigation,
   Package,
@@ -46,6 +56,46 @@ export default function ShipmentSheet({
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     `${shipment.address_street}, ${shipment.city}`,
   )}`;
+
+  /*
+   * La hora, refrescada cada minuto.
+   *
+   * Sin esto, un "cierra en 20 min" calculado al abrir la ficha seguiría
+   * diciendo lo mismo media hora después: el repartidor deja la app abierta
+   * mientras carga la moto, y la cuenta que le importa es la de ahora.
+   *
+   * Arranca en `null` y se llena recién en el navegador, porque la hora del
+   * servidor no es la del celular y mostrar una y después la otra hace
+   * parpadear el cartel.
+   */
+  const [ahora, setAhora] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const mirar = () => setAhora(new Date());
+    mirar();
+    const t = window.setInterval(mirar, 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  /*
+   * EL HORARIO DEL COMERCIO, y sólo mientras el paquete siga adentro.
+   *
+   * Para un envío programado vale el horario del DÍA EN QUE SE RETIRA y no el
+   * de hoy: un local que el sábado cierra antes tiene que decirlo el sábado,
+   * no el jueves que se mira la ficha de paso.
+   */
+  const diaDelRetiro = programado ? new Date(`${shipment.scheduled_date}T12:00:00`) : ahora;
+  const horarioRetiro = diaDelRetiro ? horarioDeRetiro(shipment, diaDelRetiro) : null;
+
+  /*
+   * El abierto/cerrado es una foto de AHORA, así que en un envío programado no
+   * va: decirle que el comercio está abierto un jueves, para un retiro del
+   * martes que viene, es contestarle una pregunta que no hizo.
+   */
+  const estadoLocal =
+    !programado && ahora && horarioRetiro
+      ? estadoDelComercio(horarioRetiro, horaDelDiaAR(ahora))
+      : null;
 
   /**
    * WhatsApp necesita el número sin espacios ni signos y con código de país.
@@ -156,6 +206,44 @@ export default function ShipmentSheet({
             </div>
             {shipment.pickup_notes && (
               <div className="text-sm text-[var(--edr-muted)]">{shipment.pickup_notes}</div>
+            )}
+
+            {/* ---------- Horario del comercio ----------
+                Es lo que evita el viaje al pedo. El repartidor arranca para el
+                local y se encuentra la persiana baja: eso no lo arregla ningún
+                mapa, lo arregla saber a qué hora abre ANTES de salir.
+
+                Arriba va el texto tal cual lo escribió la oficina —"8 A 13HS Y
+                14 A 17HS", con la siesta adentro—, porque una aclaración que
+                escribió alguien vale más que cualquier hora que saquemos
+                nosotros. Abajo, cómo está ahora, que es la pregunta de verdad.
+
+                Cuando el comercio no tiene horario cargado no se dibuja nada:
+                un cartel vacío ocupa el mismo lugar y no dice nada. */}
+            {horarioRetiro && (
+              <div className="flex items-start gap-2.5 rounded-2xl bg-black/25 px-3.5 py-2.5">
+                <Clock
+                  size={17}
+                  strokeWidth={2.5}
+                  className="mt-[3px] shrink-0 text-[var(--edr-yellow)]"
+                />
+                <div className="min-w-0">
+                  <div className="font-bebas text-[13px] tracking-[.08em] text-[var(--edr-muted)]">
+                    HORARIO DEL COMERCIO
+                  </div>
+                  <div className="text-base font-bold leading-snug text-white">
+                    {textoFranja(horarioRetiro)}
+                  </div>
+                  {estadoLocal && (
+                    <div
+                      className="text-[13px] font-bold leading-snug"
+                      style={{ color: comoEsta(estadoLocal).color }}
+                    >
+                      {comoEsta(estadoLocal).texto}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -301,6 +389,27 @@ export default function ShipmentSheet({
       </div>
     </div>
   );
+}
+
+/**
+ * Cómo está el local ahora, en un renglón y con un color que se entiende sin
+ * leerlo.
+ *
+ * "Cerrado" a secas no alcanza: la diferencia entre "abre 15:30" y "cerró por
+ * hoy" es la que decide si el paquete sale esta tarde o si hay que avisarle a
+ * alguien que queda para mañana.
+ */
+function comoEsta(estado: EstadoComercio): { texto: string; color: string } {
+  if (estado.abierto) {
+    return {
+      texto: `Abierto · cierra ${faltaTexto(estado.cierraEnMin)}`,
+      color: 'var(--edr-verde-claro)',
+    };
+  }
+
+  return estado.abreA !== null
+    ? { texto: `Cerrado · abre ${comoHora(estado.abreA)}`, color: 'var(--edr-naranja-claro)' }
+    : { texto: 'Cerrado por hoy', color: 'var(--edr-rojo-claro)' };
 }
 
 /** Un dato suelto del envío, en su cajita. */

@@ -28,6 +28,17 @@ export interface Shipment {
    * `horarioDeRetiro` en `lib/franja.ts`, que decide cuál de los dos gana.
    */
   pickup_window?: string | null;
+  /**
+   * El comercio donde se retira, con su horario.
+   *
+   * Viene pegado en la consulta de la hoja de ruta
+   * (`comercio:client_id(pickup_window, pickup_window_sabado)`), así que un
+   * envío traído de otra forma puede no tenerlo: por eso es opcional.
+   *
+   * Es el horario que manda cuando el envío no trae el suyo. Ver
+   * `horarioDeRetiro` en `lib/franja.ts`, que decide cuál de los dos gana.
+   */
+  comercio?: { pickup_window?: string | null; pickup_window_sabado?: string | null } | null;
   recipient_name: string;
   recipient_phone: string | null;
   address_street: string;

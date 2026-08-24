@@ -9,6 +9,8 @@ import {
   type Shipment,
 } from '@/lib/format';
 import { dondeRetira } from '@/lib/pickup';
+import { comoEstaElComercio, textoFranja } from '@/lib/franja';
+import { useHorarioComercio } from '@/lib/driver/useHorarioComercio';
 import { cuandoSeHace, esProgramado } from '@/lib/scheduled';
 import { lasOtras, type Puesto } from '@/lib/entregas';
 
@@ -60,6 +62,14 @@ export default function ShipmentCard({
   const cobra = cash.total > 0 && !programado;
   const flex = Boolean(shipment.is_flex);
   const sinRetirar = shipment.status === 'pendiente_retiro' || shipment.status === 'creado';
+
+  /*
+   * El horario del comercio, sólo para los que todavía están adentro.
+   *
+   * El reloj se apaga en los demás a propósito: una hoja de veinte envíos son
+   * veinte tarjetas, y las que ya se retiraron no tienen nada que contar.
+   */
+  const { horario, estado } = useHorarioComercio(shipment, sinRetirar);
 
   /*
    * CADA PASO CON SU COLOR, y el último distinto de los otros dos.
@@ -173,9 +183,30 @@ export default function ShipmentCard({
         )}
 
         {sinRetirar && shipment.pickup_address && (
-          <span className="flex items-center gap-2 rounded-xl bg-white/[.08] px-3 py-2.5 text-sm font-semibold text-[var(--edr-blue-soft)]">
-            <Package size={16} strokeWidth={2} className="shrink-0 text-[var(--edr-yellow)]" />
-            Retirar en {dondeRetira(shipment.pickup_address)}
+          <span className="flex flex-col gap-1 rounded-xl bg-white/[.08] px-3 py-2.5 text-sm font-semibold text-[var(--edr-blue-soft)]">
+            <span className="flex items-center gap-2">
+              <Package size={16} strokeWidth={2} className="shrink-0 text-[var(--edr-yellow)]" />
+              Retirar en {dondeRetira(shipment.pickup_address)}
+            </span>
+
+            {/* El horario, en chico y colgado del renglón de arriba: acá no se
+                viene a leerlo, se viene a ver de un saque si se puede ir
+                ahora. El detalle completo está adentro del envío.
+
+                Sangrado a la altura del texto —24px son el ícono más el
+                espacio— para que se lea como una aclaración de "Retirar en" y
+                no como un dato más de la tarjeta. */}
+            {horario && (
+              <span className="pl-6 text-[13px] font-medium leading-snug text-[var(--edr-muted)]">
+                {textoFranja(horario)}
+                {estado && (
+                  <span className="font-bold" style={{ color: comoEstaElComercio(estado).color }}>
+                    {' · '}
+                    {comoEstaElComercio(estado).texto}
+                  </span>
+                )}
+              </span>
+            )}
           </span>
         )}
 

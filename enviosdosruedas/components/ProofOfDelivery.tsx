@@ -544,7 +544,8 @@ export default function ProofOfDelivery({ data: inicial }: { data: TrackResult }
               ¿Cómo estuvo la entrega?
             </p>
             <p className="mt-1 text-sm leading-snug text-[var(--edr-muted)]">
-              Contala en Google: te lleva un minuto y es lo que hace que otros nos encuentren.
+              Tu calificación nos ayuda a seguir creciendo, te agradecemos si podés tomarte 1
+              minuto y dejarnos un comentario también.
             </p>
 
             {/* El link corto abre derecho el cuadro de las estrellas, ya sea en

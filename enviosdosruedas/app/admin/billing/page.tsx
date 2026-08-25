@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { anotar as anotarEnLaBilletera } from '@/lib/billetera';
 import { useAdminGuard } from '@/lib/adminGuard';
 import { notificarRepartidor } from '@/lib/notify';
 import { money, nombreDelDestinatario } from '@/lib/format';
@@ -88,6 +89,23 @@ export default function BillingPage() {
   const [montoReal, setMontoReal] = useState('');
   const [notaCorreccion, setNotaCorreccion] = useState('');
   const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
+  /*
+   * El cuadro de "me entregó plata".
+   *
+   * ES UNA ACCIÓN, NO UN DATO DE ESTA PANTALLA. El botón vive acá porque el
+   * momento en que el repartidor entrega efectivo es éste —parado en la
+   * oficina, con el día a la vista—, pero lo que se anota es un movimiento de
+   * su cuenta corriente: no aparece, no se resta y no se compara con ninguna
+   * cifra del día. Se mira, se corrige y se borra en la Billetera, que es
+   * donde se cierra la semana.
+   */
+  const [anotandoRendicion, setAnotandoRendicion] = useState(false);
+  const [montoRendido, setMontoRendido] = useState('');
+  const [guardandoRendicion, setGuardandoRendicion] = useState(false);
+  /** Lo ya anotado con la fecha del día, sólo para avisar dentro del cuadro. */
+  const [yaAnotadoEseDia, setYaAnotadoEseDia] = useState<number | null>(null);
+  /** Confirmación efímera después de anotar. */
+  const [avisoRendicion, setAvisoRendicion] = useState('');
 
   useEffect(() => {
     if (!ready) return;
@@ -138,6 +156,7 @@ export default function BillingPage() {
     // si el repartidor olvidó cargar algo, el cierre no puede quedar trabado.
     setCobrado(String(saved?.cash_total ?? calc.cashTotal));
     setEnvios(String(saved?.shipping_total ?? calc.shippingTotal));
+    setAvisoRendicion('');
     setLoading(false);
     },
     [],
@@ -239,6 +258,57 @@ export default function BillingPage() {
 
     setCorrigiendo(null);
     await reload();
+  }
+
+  /**
+   * Abre el cuadro y averigua qué hay ya anotado con esta fecha.
+   *
+   * Ese número NO se muestra en la pantalla —es de la cuenta, no del día—
+   * pero adentro del cuadro evita el error concreto de anotar dos veces la
+   * misma entrega.
+   */
+  async function abrirAnotarRendicion() {
+    setMontoRendido('');
+    setYaAnotadoEseDia(null);
+    setAnotandoRendicion(true);
+
+    const { data } = await supabase
+      .from('movimientos_caja')
+      .select('monto')
+      .eq('driver_id', driverId)
+      .eq('fecha', day)
+      .eq('tipo', 'rendicion');
+
+    setYaAnotadoEseDia((data ?? []).reduce((acc, m) => acc + Number(m.monto), 0));
+  }
+
+  async function guardarRendicion() {
+    setGuardandoRendicion(true);
+    setError('');
+
+    const r = await anotarEnLaBilletera({
+      driverId,
+      fecha: day,
+      tipo: 'rendicion',
+      monto: Number(montoRendido),
+      nota: 'Anotado desde el cierre del día',
+    });
+
+    setGuardandoRendicion(false);
+
+    if (r.error) {
+      setError(r.error);
+      return;
+    }
+
+    setAnotandoRendicion(false);
+    // Sin recargar nada: ningún número del día depende de lo anotado.
+    setAvisoRendicion(
+      `Listo: ${money(Number(montoRendido))} anotados en su cuenta de la Billetera con fecha ${day
+        .split('-')
+        .reverse()
+        .join('/')}.`,
+    );
   }
 
   async function settle() {
@@ -451,16 +521,16 @@ export default function BillingPage() {
               </div>
 
               {/*
-                ACÁ NO HAY NADA DE RENDICIONES, y estuvo dos veces antes de
-                entenderse: primero un campo, después un botón con un cartel de
-                "de ese día quedan X sin rendir". Las dos veces mezclaban lo
-                mismo: el día es control diario —qué se cobró, qué es de cada
-                uno— y la plata se entrega POR SEMANA, cuando se cierra en la
-                Billetera. Un día no se salda solo, y compararlo contra las
-                entregas fechadas ese día nunca podía cerrar.
+                EN LA CUENTA DEL DÍA NO HAY NADA DE RENDICIONES, y costó tres
+                vueltas entenderlo: primero un campo, después un botón con un
+                cartel de "de ese día quedan X sin rendir", después ni eso. La
+                regla que quedó: el día es control diario —qué se cobró, qué es
+                de cada uno— y sus números nunca muestran ni restan entregas de
+                plata, porque compararlos nunca podía cerrar: la plata se
+                entrega por semana, al cerrar la Billetera.
 
-                Anotar, corregir o borrar una entrega de plata: todo en la
-                Billetera. Acá, ni un número que lo insinúe.
+                Lo único que hay es el bloque de abajo del recuadro: la ACCIÓN
+                de anotar que entregó, que escribe derecho en su cuenta.
               */}
               {settlement.earnings !== null && (
                 <div className="w-full rounded border border-[var(--edr-yellow)] px-3 py-2 text-sm font-bold">
@@ -656,6 +726,30 @@ export default function BillingPage() {
           )}
         </div>
 
+        {/* ------------------------------------------- me entregó plata ----
+            Aparte del recuadro del cierre a propósito: son dos cosas que no se
+            mezclan. Arriba, la cuenta del día. Acá, la acción de anotar una
+            entrega de plata — que va a su cuenta corriente en la Billetera y
+            no cambia ningún número de esta pantalla. */}
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-[var(--edr-border)] px-4 py-3">
+          <div className="min-w-0 flex-1 text-sm text-[var(--edr-muted)]">
+            ¿{driverName || 'El repartidor'} te entregó plata? Anotalo acá: va a su cuenta de la
+            Billetera y no cambia la cuenta de este día.
+          </div>
+          <button
+            onClick={abrirAnotarRendicion}
+            disabled={!driverId}
+            className="rounded border border-[var(--edr-yellow)] px-3 py-2 text-sm font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)] disabled:opacity-40"
+          >
+            Me entregó plata
+          </button>
+          {avisoRendicion && (
+            <div className="w-full rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
+              {avisoRendicion}
+            </div>
+          )}
+        </div>
+
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-[var(--edr-muted)]">
           Movimientos de {driverName || 'el repartidor'} el {day}
         </h2>
@@ -762,6 +856,73 @@ export default function BillingPage() {
           </table>
         </div>
       </main>
+
+      {/* Anotar que entregó plata: escribe en la Billetera, no en el día. */}
+      {anotandoRendicion && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-10 w-full max-w-md rounded-lg bg-[var(--edr-surface)] shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--edr-border)] px-5 py-4">
+              <h2 className="text-lg font-bold">¿Cuánto te entregó {driverName}?</h2>
+              <button
+                onClick={() => setAnotandoRendicion(false)}
+                className="rounded px-2 py-1 text-2xl leading-none text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid gap-3 px-5 py-5">
+              {/* El monto arranca VACÍO a propósito: se escribe lo que se contó
+                  en la mano, no lo que una cuenta sugiera. Precargarlo era
+                  invitar a guardar un número sin mirarlo. */}
+              <div>
+                <label className={labelCls}>Cuánto te entregó</label>
+                <input
+                  className={field}
+                  inputMode="numeric"
+                  autoFocus
+                  value={montoRendido}
+                  onChange={(e) => setMontoRendido(e.target.value)}
+                  placeholder="50000"
+                />
+              </div>
+
+              <p className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-3 py-2 text-xs text-[var(--edr-muted)]">
+                Va a su cuenta corriente en la Billetera, con fecha{' '}
+                <strong>{day.split('-').reverse().join('/')}</strong>. No cambia la cuenta de este
+                día. Si te la entregó otro día, anotala desde la Billetera con la fecha que
+                corresponde.
+              </p>
+
+              {/* Sólo adentro del cuadro, para el error puntual de anotar dos
+                  veces la misma entrega. En la pantalla este número no existe. */}
+              {(yaAnotadoEseDia ?? 0) > 0 && (
+                <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                  Con esta fecha ya tiene anotados{' '}
+                  <span className="edr-mono">{money(yaAnotadoEseDia ?? 0)}</span>. Si es la misma
+                  plata, no la anotes de nuevo.
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-[var(--edr-border)] px-5 py-4">
+              <button
+                onClick={() => setAnotandoRendicion(false)}
+                className="rounded border border-[var(--edr-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarRendicion}
+                disabled={guardandoRendicion || !(Number(montoRendido) > 0)}
+                className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
+              >
+                {guardandoRendicion ? 'Guardando…' : 'Anotar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Corregir lo cobrado (paso 54) */}
       {corrigiendo && (

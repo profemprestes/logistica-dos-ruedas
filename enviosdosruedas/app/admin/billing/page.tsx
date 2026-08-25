@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import { notificarRepartidor } from '@/lib/notify';
@@ -336,7 +337,18 @@ export default function BillingPage() {
         delivered_count: delivered.length,
         failed_count: failed.length,
         cash_total: cobradoNum,
-        actual_amount: rendidoEnLaBilletera,
+        /*
+         * `actual_amount` NO SE ESCRIBE MÁS.
+         *
+         * Era lo rendido, guardado adentro del cierre de un día. Pero una
+         * entrega de plata no pertenece a ningún día: se hace después, junta
+         * varias jornadas, y a veces es sólo a cuenta. Escribirla acá era
+         * volver a atarla a una fecha que no es la suya — justo lo que el paso
+         * 55 vino a deshacer.
+         *
+         * La columna se deja en la base con lo que ya tenía, como historia. No
+         * la lee nadie: ni esta pantalla, ni la caja del repartidor.
+         */
         shipping_total: enviosNum,
         earnings: earnings.trim() === '' ? null : gananciaNum,
         notes: notes || null,
@@ -359,14 +371,21 @@ export default function BillingPage() {
       return;
     }
 
-    const saldo = cobradoNum - rendidoEnLaBilletera - gananciaNum;
+    /*
+     * Lo que ESE DÍA dejó a rendir, sin descontarle entregas de plata.
+     *
+     * Antes le restaba lo anotado en la billetera con fecha de ese día, y
+     * entonces el aviso le decía "no te queda nada por rendir" a alguien que
+     * ese mismo día había venido a pagar lo de la semana anterior.
+     */
+    const aRendir = cobradoNum - gananciaNum;
     void notificarRepartidor({
       driverId,
       title: 'Se cerró tu caja del día',
       body:
-        saldo >= 0
-          ? `Te queda por rendir ${money(saldo)}. Miralo en "Mi perfil".`
-          : `Se te debe ${money(Math.abs(saldo))}. Miralo en "Mi perfil".`,
+        aRendir >= 0
+          ? `El día te dejó ${money(aRendir)} para rendir. Miralo en "Mi perfil".`
+          : `Se te debe ${money(Math.abs(aRendir))}. Miralo en "Mi perfil".`,
       url: '/driver/profile',
       tag: `caja-${day}`,
     });
@@ -495,11 +514,23 @@ export default function BillingPage() {
                 <strong className="edr-mono">
                   {money(Number(settlement.cash_total) - gananciaNum)}
                 </strong>{' '}
-                · rendido{' '}
-                {/* Lo que dice la BILLETERA, no la foto que quedó guardada al
-                    cerrar: si rindió después, el cierre no se enteró. */}
-                <strong className="edr-mono">{money(rendidoEnLaBilletera)}</strong> · cerrado el{' '}
-                {new Date(settlement.settled_at).toLocaleString('es-AR')}
+                · cerrado el {new Date(settlement.settled_at).toLocaleString('es-AR')}
+                {/* Lo entregado con fecha de este día se dice aparte y en gris:
+                    es un dato de la cuenta corriente que pasó por acá, no una
+                    parte de lo que este día dejó a rendir. */}
+                {rendidoEnLaBilletera > 0 && (
+                  <div className="mt-1 text-xs">
+                    Con fecha de este día entregó{' '}
+                    <strong className="edr-mono">{money(rendidoEnLaBilletera)}</strong> — va a la{' '}
+                    <Link
+                      href={`/admin/billetera?repartidor=${driverId}`}
+                      className="underline underline-offset-2"
+                    >
+                      cuenta corriente
+                    </Link>
+                    , no a este día.
+                  </div>
+                )}
               </div>
 
               {/*
@@ -529,22 +560,16 @@ export default function BillingPage() {
                 Anotar que rindió
               </button>
 
-              {/* Lo que falta de ESE día, comparado en NETO (cobrado menos su
-                  parte): es lo que trae en la mano. Contra el bruto siempre
-                  "faltaba" su comisión, que no falta — es suya. Tampoco es un
-                  error que quede algo: lo normal es que junte varios días y
-                  entregue todo junto. El saldo de verdad está en la Billetera. */}
-              {(() => {
-                const netoDelDia = Number(settlement.cash_total) - gananciaNum;
-                if (rendidoEnLaBilletera === netoDelDia) return null;
-                return (
-                  <div className="w-full rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                    {rendidoEnLaBilletera < netoDelDia
-                      ? `De ese día quedan ${money(netoDelDia - rendidoEnLaBilletera)} sin rendir.`
-                      : `Ese día entregó ${money(rendidoEnLaBilletera - netoDelDia)} de más: es plata de otros días.`}
-                  </div>
-                );
-              })()}
+              {/*
+                ACÁ IBA "de ese día quedan X sin rendir", y era la mezcla en su
+                forma más pura: comparaba lo que el día dejó a rendir contra las
+                entregas de plata FECHADAS ese día. Nunca coincidían, y no tenían
+                por qué — la plata se entrega después, junta varias jornadas, y a
+                veces es sólo a cuenta.
+
+                Un día no se salda solo. Lo que falta rendir es uno para todo:
+                el saldo de la cuenta, que vive en la Billetera.
+              */}
 
               {settlement.earnings !== null && (
                 <div className="w-full rounded border border-[var(--edr-yellow)] px-3 py-2 text-sm font-bold">
@@ -594,23 +619,25 @@ export default function BillingPage() {
                 />
 
                 {/*
-                  LO RENDIDO YA NO SE ESCRIBE ACÁ.
-                  
+                  LO RENDIDO NO ES UN RENGLÓN DEL CIERRE, y por eso está fuera
+                  de la cuenta del día.
+
                   Era un campo del cierre de UN DÍA, y la plata no se entrega
                   por día: el repartidor junta lo de varias jornadas y deja un
-                  monto que cubre todo. Escrito acá, ese número quedaba pegado a
-                  un día al que no pertenece — el 12/08/2026 quedó "cobró
-                  $ 9.900, rindió $ 55.000".
-                  
-                  Ahora las entregas de plata viven en la Billetera, con su
-                  propia fecha. Este renglón muestra lo anotado y manda para
-                  allá.
+                  monto que cubre todo. Escrito acá quedaba pegado a un día al
+                  que no pertenece — el 12/08/2026 quedó "cobró $ 9.900, rindió
+                  $ 55.000", y el lunes 24/08 el día arrancó con un descuento de
+                  $ 26.280 que era de la semana anterior.
+
+                  El botón se queda porque este es el momento en que se anota,
+                  pero lo que muestra es un movimiento de la CUENTA con fecha de
+                  hoy, no una parte de este día. Por eso no se resta de nada.
                 */}
                 <Renglon
-                  label="Efectivo rendido"
-                  hint="con la fecha en que te lo entregó · va a la Billetera"
+                  label="Entregas de plata con fecha de este día"
+                  hint="van a la cuenta corriente, no a la cuenta de este día"
                   input={
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="edr-mono text-lg font-black">
                         {money(rendidoEnLaBilletera)}
                       </span>
@@ -629,6 +656,15 @@ export default function BillingPage() {
                       >
                         Anotar que rindió
                       </button>
+                      {/* Sin este link, el número se ve y no se puede tocar: no
+                          se corrige ni se borra desde acá, y no había forma de
+                          saber adónde ir. */}
+                      <Link
+                        href={`/admin/billetera?repartidor=${driverId}`}
+                        className="text-xs font-bold text-[var(--edr-acento)] underline underline-offset-2"
+                      >
+                        ver en la Billetera →
+                      </Link>
                     </div>
                   }
                 />
@@ -708,9 +744,19 @@ export default function BillingPage() {
                 />
 
                 <div className="border-t-2 border-[var(--edr-yellow)] pt-3">
+                  {/*
+                    LO QUE ESTE DÍA DEJÓ, y no lo que falta que entregue.
+
+                    Antes le restaba las entregas de plata fechadas ese día, así
+                    que un lunes en que el repartidor vino a pagar lo de la
+                    semana anterior este cartel decía cero aunque hubiera cobrado
+                    setenta mil en la calle. Cuánto falta que entregue es una
+                    pregunta de la cuenta, no del día, y se contesta en la
+                    Billetera.
+                  */}
                   {(() => {
-                    const saldo = cobradoNum - rendidoEnLaBilletera - gananciaNum;
-                    const debe = saldo >= 0;
+                    const delDia = cobradoNum - gananciaNum;
+                    const debe = delDia >= 0;
                     return (
                       <div
                         className={`rounded-lg px-4 py-3 text-center ${
@@ -718,10 +764,10 @@ export default function BillingPage() {
                         }`}
                       >
                         <div className="text-xs font-black uppercase tracking-widest">
-                          {debe ? 'Total a rendir' : 'Total a cobrar'}
+                          {debe ? 'Este día dejó a rendir' : 'Este día hay que pagarle'}
                         </div>
                         <div className="edr-mono text-3xl font-black leading-none">
-                          {money(Math.abs(saldo))}
+                          {money(Math.abs(delDia))}
                         </div>
                       </div>
                     );
@@ -891,14 +937,18 @@ export default function BillingPage() {
               <p className="text-sm text-[var(--edr-muted)]">
                 Ese día cobró <strong className="edr-mono">{money(cobradoNum)}</strong> y su parte
                 es <strong className="edr-mono">{money(gananciaNum)}</strong>: quedaron{' '}
-                <strong className="edr-mono">{money(Math.max(0, cobradoNum - gananciaNum))}</strong>
+                <strong className="edr-mono">{money(Math.max(0, cobradoNum - gananciaNum))}</strong>{' '}
+                a rendir por ese día.
+                {/* Se aclara "con fecha de ese día" y no "de esos": lo anotado
+                    puede cubrir cualquier jornada, y el monto de acá arriba es
+                    sólo el punto de partida del campo. */}
                 {rendidoEnLaBilletera > 0 && (
                   <>
-                    , de los que ya entregó{' '}
-                    <span className="edr-mono">{money(rendidoEnLaBilletera)}</span>
+                    {' '}
+                    Con esa fecha ya hay anotados{' '}
+                    <span className="edr-mono">{money(rendidoEnLaBilletera)}</span>.
                   </>
                 )}
-                .
               </p>
 
               <div>

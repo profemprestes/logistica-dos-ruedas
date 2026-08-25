@@ -57,7 +57,19 @@ export default function BilleteraPage() {
   const [cuentas, setCuentas] = useState<Map<string, Billetera>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [abierto, setAbierto] = useState<string | null>(null);
+  /*
+   * Qué fila está desplegada. Arranca con la que pida el link.
+   *
+   * El cierre de caja manda para acá cuando hay que corregir o borrar una
+   * entrega de plata, y sin esto caía en la lista entera: había que buscar al
+   * repartidor y acordarse de que el botón de borrar vive adentro de la fila.
+   * Es la diferencia entre "andá a la Billetera" y llegar a donde está el
+   * movimiento.
+   */
+  const [abierto, setAbierto] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('repartidor');
+  });
 
   /**
    * El recorte de fechas. Recorta lo que se MUESTRA —el renglón de cada uno,

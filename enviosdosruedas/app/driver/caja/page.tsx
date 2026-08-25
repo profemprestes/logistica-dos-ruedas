@@ -75,7 +75,6 @@ function diaCorto(iso: string): string {
 /** El cierre que ya hizo la oficina, si lo hizo. */
 interface Cierre {
   cash_total: number;
-  actual_amount: number;
   earnings: number | null;
   settled_at: string | null;
 }
@@ -176,7 +175,7 @@ export default function CajaPage() {
      */
     supabase
       .from('settlements')
-      .select('cash_total, actual_amount, earnings, settled_at')
+      .select('cash_total, earnings, settled_at')
       .eq('driver_id', driverId)
       .eq('day', dia)
       .maybeSingle()
@@ -202,8 +201,20 @@ export default function CajaPage() {
   /** La oficina ya cerró este día: recién ahí el número tiene signo. */
   const cerrado = unDia && cierre !== null;
 
+  /*
+   * LO QUE EL DÍA DEJÓ A RENDIR, y nada más: lo que cobró menos lo que es suyo.
+   *
+   * Antes le restaba también `actual_amount`, o sea las entregas de plata que
+   * habían quedado guardadas dentro del cierre de ese día. Y eso le mentía en
+   * los dos sentidos: un lunes que vino a pagar lo de la semana anterior, el
+   * día le figuraba en cero aunque hubiera cobrado setenta mil en la calle.
+   *
+   * Lo que debe de verdad —contando todo lo que entregó y todo lo que se le
+   * pagó— es el saldo de su billetera, que está arriba y no depende del día
+   * que esté mirando.
+   */
   const saldo = cierre
-    ? Number(cierre.cash_total) - Number(cierre.actual_amount) - Number(cierre.earnings ?? 0)
+    ? Number(cierre.cash_total) - Number(cierre.earnings ?? 0)
     : null;
 
   /*
@@ -600,15 +611,18 @@ export default function CajaPage() {
                   <div className="font-bebas text-[15px] tracking-[.08em] text-[var(--edr-muted)]">
                     CÓMO SE SACÓ
                   </div>
+                  {/* Dos renglones y no tres: lo entregado salió de acá porque
+                      no es de este día. Lo que él entrega mueve su cuenta, y la
+                      cuenta está arriba, con el saldo de verdad. */}
                   <dl className="mt-2 space-y-2">
                     <Renglon label="Efectivo cobrado" valor={Number(cierre.cash_total)} />
-                    <Renglon label="Ya rendido" valor={Number(cierre.actual_amount)} />
                     <Renglon label="Tu ganancia" valor={Number(cierre.earnings ?? 0)} />
                   </dl>
                   <p className="mt-2.5 text-xs text-[var(--edr-muted)]">
                     {leFaltaRendir
                       ? 'Cobraste más de lo que te toca: la diferencia hay que entregarla.'
                       : 'Tu ganancia es mayor que lo que cobraste: la diferencia te la pagan.'}
+                    {' '}Esto es sólo de este día. Lo que debés en total está arriba, en tu saldo.
                   </p>
                 </>
               ) : (

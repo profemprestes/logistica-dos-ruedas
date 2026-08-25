@@ -21,7 +21,7 @@ export const FALTA_PASO_56 =
 export async function fetchComerciosConStock(): Promise<ComercioConStock[]> {
   const { data, error } = await supabase
     .from('clients')
-    .select('id, name')
+    .select('id, name, parent_id')
     .eq('maneja_stock', true)
     .eq('active', true)
     .order('name');
@@ -29,7 +29,18 @@ export async function fetchComerciosConStock(): Promise<ComercioConStock[]> {
   if (error) {
     throw new Error(/maneja_stock/.test(error.message) ? FALTA_PASO_56 : error.message);
   }
-  return (data ?? []) as ComercioConStock[];
+
+  /*
+   * El depósito es del negocio: si la casa central maneja stock, sus
+   * sucursales no aparecen como depósitos aparte — Killari y Shopigo viven en
+   * el stock de Shippy. Una sucursal sólo figura si su central NO maneja.
+   */
+  type Fila = { id: number; name: string; parent_id: number | null };
+  const filas = (data ?? []) as Fila[];
+  const conStock = new Set(filas.map((c) => c.id));
+  return filas
+    .filter((c) => c.parent_id == null || !conStock.has(c.parent_id))
+    .map(({ id, name }) => ({ id, name }));
 }
 
 /** El stock de hoy sale de la vista: se calcula sumando movimientos. */

@@ -58,6 +58,12 @@ export interface Comercio {
    */
   parent_id?: number | null;
   /**
+   * Arreglo directo (paso 59): sin comisión, el valor del envío va entero al
+   * repartidor y no se le muestra en su portal. Para los arreglos con tarifa
+   * fija (Shippy, Flow) además hay números en REGLAS.
+   */
+  sin_comision?: boolean;
+  /**
    * Guarda mercadería en nuestro depósito (paso 56). Con esto prendido, sus
    * envíos llevan pedido —producto y cantidad— y el entregado descuenta stock.
    * Los productos se numeran en la misma serie EDR…MDQ que los envíos (paso 57).
@@ -147,6 +153,7 @@ export default function EditarComercio({
     active: comercio.active,
     parent_id: comercio.parent_id ?? null,
     maneja_stock: comercio.maneja_stock ?? false,
+    sin_comision: comercio.sin_comision ?? false,
     cuit: comercio.cuit ?? '',
   });
   const [guardando, setGuardando] = useState(false);
@@ -203,6 +210,7 @@ export default function EditarComercio({
       active: form.active,
       parent_id: form.parent_id,
       maneja_stock: form.maneja_stock,
+      sin_comision: form.sin_comision,
       cuit: form.cuit.trim() || null,
     };
 
@@ -250,6 +258,13 @@ export default function EditarComercio({
       const { cuit, ...sinCuit } = fila;
       void cuit;
       ({ error: e } = await escribir(sinCuit));
+    }
+
+    // Y con el arreglo directo, que llega con el paso 59.
+    if (e && /sin_comision/.test(e.message)) {
+      const { sin_comision, ...sinArreglo } = fila;
+      void sin_comision;
+      ({ error: e } = await escribir(sinArreglo));
     }
 
     setGuardando(false);
@@ -455,6 +470,28 @@ export default function EditarComercio({
               (los inactivos no aparecen al cargar un envío)
             </span>
           </label>
+
+          {/* ---------- Arreglo directo (paso 59) ---------- */}
+          <div className="rounded border border-[var(--edr-border)] p-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.sin_comision}
+                onChange={(e) => set('sin_comision', e.target.checked)}
+              />
+              Sin comisión
+              <span className="text-xs text-[var(--edr-muted)]">
+                (arreglo directo con la empresa)
+              </span>
+            </label>
+            {form.sin_comision && (
+              <p className="mt-1 text-xs text-[var(--edr-muted)]">
+                El valor de cada envío va entero al repartidor y no se le muestra al comercio en
+                su portal: el arreglo lo conocen de antemano. Las cuentas de caja y el resumen lo
+                liquidan al 100%, sin el 30%.
+              </p>
+            )}
+          </div>
 
           {/* ---------- Stock en base (paso 56) ---------- */}
           <div className="rounded border border-[var(--edr-border)] p-3">

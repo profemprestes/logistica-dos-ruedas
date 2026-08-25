@@ -370,6 +370,8 @@ function ShipmentForm({
    */
   /** Qué comercios manejan stock. Vacío hasta que contesta la base (o si falta el paso 56). */
   const [conStock, setConStock] = useState<Set<number>>(new Set());
+  /** De qué casa central es sucursal cada comercio, para el stock compartido. */
+  const [matrizDe, setMatrizDe] = useState<Map<number, number>>(new Map());
   /** Los productos de cada comercio con stock, para el desplegable. */
   const [productosDe, setProductosDe] = useState<Record<number, StockRow[]>>({});
   /**
@@ -392,9 +394,13 @@ function ShipmentForm({
       // el bloque de pedido simplemente no aparece. Incompleto, no roto.
       const { data, error: e } = await supabase
         .from('clients')
-        .select('id')
-        .eq('maneja_stock', true);
-      if (vivo && !e) setConStock(new Set((data ?? []).map((c) => c.id as number)));
+        .select('id, parent_id, maneja_stock')
+        .eq('active', true);
+      if (!vivo || e) return;
+      type Fila = { id: number; parent_id: number | null; maneja_stock: boolean };
+      const filas = (data ?? []) as Fila[];
+      setConStock(new Set(filas.filter((c) => c.maneja_stock).map((c) => c.id)));
+      setMatrizDe(new Map(filas.filter((c) => c.parent_id != null).map((c) => [c.id, c.parent_id as number])));
     }
 
     void traer();
@@ -447,6 +453,21 @@ function ShipmentForm({
     (nombre ?? '').trim().toLowerCase();
 
   /**
+   * De qué ficha sale el stock de un comercio: LA CASA CENTRAL.
+   *
+   * El depósito es del negocio, no del local: la mercadería de Shippy vale
+   * para los envíos de Killari y de Shopigo, que son sus sucursales. Si la
+   * central maneja stock, manda ella; si no, el propio (y si ninguno, no hay
+   * pedido que armar).
+   */
+  const fichaDeStock = (clientId: number | null | undefined): number | null => {
+    if (clientId == null) return null;
+    const central = matrizDe.get(clientId);
+    if (central != null && conStock.has(central)) return central;
+    return conStock.has(clientId) ? clientId : null;
+  };
+
+  /**
    * El pedido del depósito como texto: "1× Control deco, 2× Nad".
    *
    * Es lo que se guarda en el campo Producto cuando quedó vacío: ese campo es
@@ -492,13 +513,14 @@ function ShipmentForm({
   const pidiendoProductos = useRef(new Set<number>());
   useEffect(() => {
     const objetivo = new Set<number>();
-    if (form.client_id && conStock.has(form.client_id)) objetivo.add(form.client_id);
+    const delForm = fichaDeStock(form.client_id);
+    if (delForm != null) objetivo.add(delForm);
     for (const r of rows) {
       // La ficha enlazada respeta la corrección a mano de la tarjeta del
-      // retiro: si el que carga apuntó la tanda a otra ficha, los productos
-      // que se ofrecen son los de ésa.
+      // retiro, y el stock sale de su casa central si es sucursal.
       const ficha = fichaEnlazada(r.clientName);
-      if (ficha && conStock.has(ficha.id)) objetivo.add(ficha.id);
+      const deStock = ficha ? fichaDeStock(ficha.id) : null;
+      if (deStock != null) objetivo.add(deStock);
     }
 
     for (const id of objetivo) {
@@ -635,11 +657,12 @@ function ShipmentForm({
      * Si el campo Producto quedó vacío pero se eligió pedido del depósito, el
      * texto sale del pedido: es lo que ven el repartidor y la etiqueta.
      */
-    const pedidoElegido = clientId != null ? (pedidoManualPor[clientId] ?? []) : [];
+    const stockDelManual = fichaDeStock(clientId);
+    const pedidoElegido = stockDelManual != null ? (pedidoManualPor[stockDelManual] ?? []) : [];
     const productoEscrito = delFormulario.product_detail.trim();
     const productoFinal =
       productoEscrito ||
-      (clientId != null ? textoDelPedido(pedidoElegido, productosDe[clientId] ?? []) : '');
+      (stockDelManual != null ? textoDelPedido(pedidoElegido, productosDe[stockDelManual] ?? []) : '');
 
     const payload = {
       ...delFormulario,
@@ -821,8 +844,9 @@ function ShipmentForm({
         r.productDetail ||
         (() => {
           const ficha = fichaEnlazada(r.clientName);
-          return ficha
-            ? textoDelPedido(pedidosFila[r.tempId] ?? [], productosDe[ficha.id] ?? [])
+          const deStock = ficha ? fichaDeStock(ficha.id) : null;
+          return deStock != null
+            ? textoDelPedido(pedidosFila[r.tempId] ?? [], productosDe[deStock] ?? [])
             : '';
         })(),
       notes: r.notes,
@@ -1117,17 +1141,21 @@ function ShipmentForm({
               {/* El pedido del depósito, sólo para comercios que guardan
                   mercadería acá. El texto de arriba es lo que se imprime; esto
                   es lo que se descuenta — elegido de la lista, sin adivinar. */}
-              {form.client_id != null && conStock.has(form.client_id) && (
-                <div className="sm:col-span-2">
-                  <PedidoDeStock
-                    productos={productosDe[form.client_id] ?? []}
-                    lineas={pedidoManualPor[form.client_id] ?? []}
-                    onChange={(ls) =>
-                      setPedidoManualPor((prev) => ({ ...prev, [form.client_id as number]: ls }))
-                    }
-                  />
-                </div>
-              )}
+              {(() => {
+                const deStock = fichaDeStock(form.client_id);
+                if (deStock == null) return null;
+                return (
+                  <div className="sm:col-span-2">
+                    <PedidoDeStock
+                      productos={productosDe[deStock] ?? []}
+                      lineas={pedidoManualPor[deStock] ?? []}
+                      onChange={(ls) =>
+                        setPedidoManualPor((prev) => ({ ...prev, [deStock]: ls }))
+                      }
+                    />
+                  </div>
+                );
+              })()}
 
               <div className="mt-2 border-t border-[var(--edr-border)] pt-4 text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)] sm:col-span-2">
                 Plata
@@ -1568,11 +1596,12 @@ function ShipmentForm({
                                    listado; sin eso, la fila queda igual que
                                    siempre. */
                                 const c = fichaEnlazada(r.clientName);
-                                if (!c || !conStock.has(c.id)) return null;
+                                const deStock = c ? fichaDeStock(c.id) : null;
+                                if (deStock == null) return null;
                                 return (
                                   <div className="sm:col-span-3">
                                     <PedidoDeStock
-                                      productos={productosDe[c.id] ?? []}
+                                      productos={productosDe[deStock] ?? []}
                                       lineas={pedidosFila[r.tempId] ?? []}
                                       onChange={(ls) =>
                                         setPedidosFila((prev) => ({ ...prev, [r.tempId]: ls }))

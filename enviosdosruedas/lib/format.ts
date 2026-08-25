@@ -38,7 +38,12 @@ export interface Shipment {
    * Es el horario que manda cuando el envío no trae el suyo. Ver
    * `horarioDeRetiro` en `lib/franja.ts`, que decide cuál de los dos gana.
    */
-  comercio?: { pickup_window?: string | null; pickup_window_sabado?: string | null } | null;
+  comercio?: {
+    pickup_window?: string | null;
+    pickup_window_sabado?: string | null;
+    /** Arreglo directo (paso 59): su portal no muestra el valor del envío. */
+    sin_comision?: boolean;
+  } | null;
   recipient_name: string;
   recipient_phone: string | null;
   address_street: string;

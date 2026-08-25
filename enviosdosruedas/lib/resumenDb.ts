@@ -4,7 +4,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import { esShippy, type Ajustes, type Totales } from '@/lib/resumen';
 import type { PedidoPegado } from '@/lib/resumenParse';
-import { customRange, logCash, conLosMovimientos, valorDelEnvio, type DeliveryLog } from '@/lib/settlement';
+import { customRange, esEnvioSinComision, logCash, conLosMovimientos, valorDelEnvio, type DeliveryLog } from '@/lib/settlement';
 
 export type Origen = 'pegado' | 'sistema' | 'mixto';
 
@@ -42,6 +42,7 @@ function renglon(log: DeliveryLog, cobrar: number, envio: number, nota = ''): Pe
     cobrar,
     envio,
     esShippy: shippy,
+    sinComision: esEnvioSinComision(log),
     shipmentId: log.shipment?.id ?? null,
     productos: [],
   };

@@ -102,6 +102,12 @@ export interface Pedido {
   cobrar: number;
   envio: number;
   esShippy: boolean;
+  /**
+   * Arreglo directo por la marca de la ficha (paso 59): sin comisión, el
+   * envío se paga entero. Los pedidos pegados a mano no la traen y se rigen
+   * por el nombre, como siempre.
+   */
+  sinComision?: boolean;
   /** Si vino del sistema, de qué envío salió. Los pegados a mano no tienen. */
   shipmentId?: number | null;
 }
@@ -159,10 +165,13 @@ export function calcular(pedidos: Pedido[], ajustes: Ajustes): Totales {
       efectivoShippy += p.cobrar;
       enviosShippy += p.envio;
       cantidadShippy++;
-    } else if (trato) {
+    } else if (trato || p.sinComision) {
+      // La marca de la ficha (paso 59) entra por el mismo carril que el trato
+      // directo: envío entero al repartidor. La ganancia por envío sólo la
+      // tienen los arreglos con número en REGLAS.
       efectivoNormal += p.cobrar;
       enviosDirecto += p.envio;
-      gananciaDirecto += trato.gananciaPorEnvio;
+      gananciaDirecto += trato?.gananciaPorEnvio ?? 0;
     } else {
       efectivoNormal += p.cobrar;
       enviosNormales += p.envio;

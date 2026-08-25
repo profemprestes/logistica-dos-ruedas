@@ -22,6 +22,11 @@ export interface LogShipment {
   payment_mode: PaymentMode;
   shipping_fee: number;
   client_name_raw: string | null;
+  /**
+   * La marca de arreglo directo de la ficha (paso 59). Viene con el join de
+   * `LOG_SELECT`; puede faltar si la consulta cayó al select viejo.
+   */
+  comercio?: { sin_comision: boolean } | { sin_comision: boolean }[] | null;
   /** Hace falta para saber qué decir cuando el envío no trae nombre. */
   is_flex?: boolean | null;
   /**
@@ -115,6 +120,19 @@ export function fueCorregido(l: DeliveryLog): boolean {
  * La parada de un envío con varias (paso 53) vale cero POR DISEÑO y el default
  * no la toca: el precio entero está en la primera.
  */
+/**
+ * Si este envío va sin comisión: por las REGLAS del código (Shippy, Flow) o
+ * por la marca de la ficha (paso 59), que es la que cubre a los arreglos
+ * nuevos sin tocar código.
+ */
+export function esEnvioSinComision(l: DeliveryLog): boolean {
+  const s = l.shipment;
+  if (!s) return false;
+  if (esSinComision(s.client_name_raw ?? '')) return true;
+  const c = s.comercio;
+  return Boolean(Array.isArray(c) ? c[0]?.sin_comision : c?.sin_comision);
+}
+
 export function valorDelEnvio(l: DeliveryLog): number {
   const valor = Number(l.shipment?.shipping_fee ?? 0);
   if (valor) return valor;
@@ -123,7 +141,7 @@ export function valorDelEnvio(l: DeliveryLog): number {
 }
 
 export function pagoDelEnvio(l: DeliveryLog): number {
-  if (esSinComision(l.shipment?.client_name_raw ?? '')) {
+  if (esEnvioSinComision(l)) {
     // Sin comisión, el valor —cargado o acordado— va entero al repartidor.
     return valorDelEnvio(l);
   }
@@ -146,8 +164,8 @@ export function pagoDelEnvio(l: DeliveryLog): number {
  */
 export function sinPrecio(l: DeliveryLog): boolean {
   // A los comercios sin comisión nunca les falta el precio: sin valor cargado
-  // rige el acordado. Avisar "se paga $0" acá sería mentir.
-  if (esSinComision(l.shipment?.client_name_raw ?? '')) return false;
+  // rige el acordado (o el cargado, entero). Avisar "se paga $0" sería mentir.
+  if (esEnvioSinComision(l)) return false;
   return !Number(l.shipment?.shipping_fee) && l.shipment?.parte_de == null;
 }
 
@@ -241,9 +259,9 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   // "Sin comisión" junta a Shippy y a los de trato directo (Conectta): todos
   // se pagan enteros. Shippy se cuenta aparte además, porque su ganancia fija
   // es sólo de ellos.
-  const sinComision = delivered.filter((l) => esSinComision(l.shipment?.client_name_raw ?? ''));
+  const sinComision = delivered.filter(esEnvioSinComision);
   const deShippy = delivered.filter((l) => esShippy(l.shipment?.client_name_raw ?? ''));
-  const normales = delivered.filter((l) => !esSinComision(l.shipment?.client_name_raw ?? ''));
+  const normales = delivered.filter((l) => !esEnvioSinComision(l));
 
   // Los dos totales salen de sumar `pagoDelEnvio`, la misma que muestra cada
   // renglón de la lista: así la suma de la lista SIEMPRE da el total.
@@ -347,7 +365,7 @@ const LOG_BASE = 'id, event, amount_collected, happened_at, failure_reason';
 const CORRECCION = 'cobrado_corregido, correccion_nota';
 
 /** Campos que hay que pedirle a `delivery_logs` para que las cuentas cierren. */
-export const LOG_SELECT = `${LOG_BASE}, ${CORRECCION}, shipment:shipment_id(${DEL_ENVIO}, parte_de)`;
+export const LOG_SELECT = `${LOG_BASE}, ${CORRECCION}, shipment:shipment_id(${DEL_ENVIO}, parte_de, comercio:client_id(sin_comision))`;
 
 /** El mismo pedido sin lo que agregan los pasos 53 y 54, por si no se corrieron. */
 export const LOG_SELECT_SIN_PARTES = `${LOG_BASE}, shipment:shipment_id(${DEL_ENVIO})`;
@@ -370,9 +388,12 @@ export async function conLosMovimientos<T>(
   const r = await armar(LOG_SELECT);
 
   // Falla entera si le falta CUALQUIERA de las columnas nuevas —`parte_de` del
-  // paso 53, `cobrado_corregido` del 54—, así que se mira por las dos.
+  // paso 53, `cobrado_corregido` del 54, `sin_comision` del 59—, así que se
+  // miran todas. Cayendo al select viejo se pierde lo nuevo un rato; no se
+  // pierde el cierre de caja.
   const faltaAlguna =
-    r.error != null && /parte_de|cobrado_corregido|correccion_nota/.test(r.error.message);
+    r.error != null &&
+    /parte_de|cobrado_corregido|correccion_nota|sin_comision/.test(r.error.message);
 
   const buena = faltaAlguna ? await armar(LOG_SELECT_SIN_PARTES) : r;
 

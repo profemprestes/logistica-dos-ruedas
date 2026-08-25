@@ -160,12 +160,33 @@ export default function ResumenDelComercio({
         count,
       } = await supabase
         .from('shipments')
-        .select('*', { count: 'exact' })
+        // El join trae la marca de arreglo directo (paso 59), que decide si
+        // se muestra el valor del envío. Si la columna todavía no existe, se
+        // reintenta sin él: la lista no puede quedarse en blanco por eso.
+        .select('*, comercio:client_id(sin_comision)', { count: 'exact' })
         .in('client_id', ids)
         .order('created_at', { ascending: false })
         .limit(TOPE);
 
       if (!vivo) return;
+
+      if (e && /sin_comision/.test(e.message)) {
+        const otra = await supabase
+          .from('shipments')
+          .select('*', { count: 'exact' })
+          .in('client_id', ids)
+          .order('created_at', { ascending: false })
+          .limit(TOPE);
+        if (!vivo) return;
+        if (otra.error) setError(otra.error.message);
+        else {
+          setError('');
+          setEnvios((otra.data ?? []) as Shipment[]);
+          setTotal(otra.count ?? 0);
+        }
+        setCargando(false);
+        return;
+      }
 
       if (e) setError(e.message);
       else {
@@ -570,7 +591,10 @@ function plataDelEnvio(s: Shipment, puesto?: Puesto): string {
    * portal generaba la consulta de "¿por qué me cobran esto?". Se decide por
    * envío y con la misma regla que usan todas las cuentas.
    */
-  if (!esSinComision(s.client_name_raw ?? '')) {
+  const marcaFicha = Array.isArray(s.comercio)
+    ? Boolean((s.comercio[0] as { sin_comision?: boolean } | undefined)?.sin_comision)
+    : Boolean(s.comercio?.sin_comision);
+  if (!esSinComision(s.client_name_raw ?? '') && !marcaFicha) {
     if (Number(s.shipping_fee) > 0) {
       partes.push(`envío ${money(s.shipping_fee)}`);
     } else if (puesto && !puesto.esCabeza) {

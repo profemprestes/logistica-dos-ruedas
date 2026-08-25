@@ -14,6 +14,7 @@ import {
   nombreDelDestinatario,
   type Shipment,
 } from '@/lib/format';
+import { esSinComision } from '@/lib/resumen';
 import { cuandoSeHace } from '@/lib/scheduled';
 import { trackUrl } from '@/lib/trackUrl';
 import EntregasDelEnvio from '@/components/EntregasDelEnvio';
@@ -562,15 +563,24 @@ function plataDelEnvio(s: Shipment, puesto?: Puesto): string {
     partes.push(PAYMENT_LABEL[s.payment_mode]);
   }
 
-  if (Number(s.shipping_fee) > 0) {
-    partes.push(`envío ${money(s.shipping_fee)}`);
-  } else if (puesto && !puesto.esCabeza) {
-    /*
-     * Una entrega de un envío con varias figura en cero porque el precio está
-     * entero en la primera. Sin decirlo, el comercio lee "envío gratis" y
-     * después le llega una factura que no coincide con lo que vio acá.
-     */
-    partes.push('sin cargo aparte: va en la primera entrega');
+  /*
+   * A LOS COMERCIOS CON TARIFA ACORDADA EL VALOR NO SE LES MUESTRA. En los de
+   * Shippy y de trato directo (Flow), lo que hay cargado en el envío es la
+   * plata del repartidor, no el arreglo que ellos ya conocen: verlo en su
+   * portal generaba la consulta de "¿por qué me cobran esto?". Se decide por
+   * envío y con la misma regla que usan todas las cuentas.
+   */
+  if (!esSinComision(s.client_name_raw ?? '')) {
+    if (Number(s.shipping_fee) > 0) {
+      partes.push(`envío ${money(s.shipping_fee)}`);
+    } else if (puesto && !puesto.esCabeza) {
+      /*
+       * Una entrega de un envío con varias figura en cero porque el precio está
+       * entero en la primera. Sin decirlo, el comercio lee "envío gratis" y
+       * después le llega una factura que no coincide con lo que vio acá.
+       */
+      partes.push('sin cargo aparte: va en la primera entrega');
+    }
   }
 
   return partes.join(' · ');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileSpreadsheet, FileText, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, Search, Trash2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import { money } from '@/lib/format';
@@ -43,6 +43,13 @@ function hoyLocalISO(): string {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+/** Sin tildes y en minúscula, para que "condor" encuentre "EL CÓNDOR". */
+const parecido = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
 export default function FacturacionPage() {
   const ready = useAdminGuard();
 
@@ -53,6 +60,8 @@ export default function FacturacionPage() {
     if (typeof window === 'undefined') return 0;
     return Number(new URLSearchParams(window.location.search).get('comercio')) || 0;
   });
+  /** Lo escrito en el buscador de comercios. */
+  const [busqueda, setBusqueda] = useState('');
   const [desde, setDesde] = useState(() => `${hoyLocalISO().slice(0, 7)}-01`);
   const [hasta, setHasta] = useState(() => hoyLocalISO());
 
@@ -107,6 +116,10 @@ export default function FacturacionPage() {
    * central.
    */
   const facturables = comercios.filter((c) => c.parent_id == null);
+  const comercioElegido = facturables.find((c) => c.id === comercioId) ?? null;
+  const sugeridos = facturables
+    .filter((c) => parecido(c.name).includes(parecido(busqueda.trim())))
+    .slice(0, 8);
 
   async function generar() {
     const comercio = comercios.find((c) => c.id === comercioId);
@@ -166,20 +179,71 @@ export default function FacturacionPage() {
 
       {/* ------------------------------------------------ elegir qué */}
       <section className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface)] p-3">
-        <div className="min-w-48 flex-1">
+        <div className="relative min-w-48 flex-1">
           <label className={labelCls}>Comercio</label>
-          <select
-            className={`${campo} w-full`}
-            value={comercioId}
-            onChange={(e) => setComercioId(Number(e.target.value))}
-          >
-            <option value={0}>Elegí el comercio…</option>
-            {facturables.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {/* Un buscador y no un desplegable: con veinte comercios ya se hace
+              largo scrollear, y esto va a seguir creciendo. Se escribe un
+              pedazo del nombre —sin importar tildes ni mayúsculas— y se elige
+              de la lista. El elegido queda como chip, con la cruz para
+              cambiarlo. */}
+          {comercioElegido ? (
+            <div className="flex items-center gap-2 rounded border border-[var(--edr-acento)] bg-[var(--edr-surface-2)] px-3 py-2 text-sm font-bold">
+              <span className="min-w-0 flex-1 truncate">{comercioElegido.name}</span>
+              <button
+                onClick={() => {
+                  setComercioId(0);
+                  setBusqueda('');
+                }}
+                aria-label="Cambiar de comercio"
+                className="shrink-0 text-[var(--edr-muted)] hover:text-[var(--edr-rojo-claro)]"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--edr-muted)]"
+                />
+                <input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Escribí el nombre del comercio…"
+                  autoFocus
+                  className={`${campo} w-full pl-8`}
+                />
+              </div>
+              {busqueda.trim() && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] shadow-lg">
+                  {sugeridos.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-[var(--edr-muted)]">
+                      Ningún comercio con ese nombre.
+                    </p>
+                  ) : (
+                    sugeridos.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setComercioId(c.id);
+                          setBusqueda('');
+                        }}
+                        className="block w-full px-3 py-2 text-left text-sm font-semibold hover:bg-[var(--edr-surface)]"
+                      >
+                        {c.name}
+                        {c.cuit ? (
+                          <span className="ml-2 text-xs font-normal text-[var(--edr-muted)]">
+                            CUIT {c.cuit}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
         <div>
           <label className={labelCls}>Desde</label>

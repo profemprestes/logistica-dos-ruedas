@@ -11,7 +11,7 @@ import type { PaymentMode } from '@/lib/format';
 // para el cierre de caja y para los resúmenes a la vez. Que dos pantallas del
 // mismo sistema digan cosas distintas sobre la misma plata es peor que
 // cualquier error de cuenta.
-import { REGLAS, esShippy } from '@/lib/resumen';
+import { REGLAS, envioPorDefectoDe, esShippy, esSinComision, tratoDirectoDe } from '@/lib/resumen';
 
 export interface LogShipment {
   id: number;
@@ -108,17 +108,29 @@ export function fueCorregido(l: DeliveryLog): boolean {
  *     aparte y ahí está la ganancia; descontarle el 30% al repartidor sería
  *     cobrarle una comisión que ya está cobrada del otro lado.
  */
-export function pagoDelEnvio(l: DeliveryLog): number {
+/**
+ * El valor efectivo del envío: el cargado o, para los comercios sin comisión
+ * (Shippy, Conectta), el acordado cuando no se aclara.
+ *
+ * La parada de un envío con varias (paso 53) vale cero POR DISEÑO y el default
+ * no la toca: el precio entero está en la primera.
+ */
+export function valorDelEnvio(l: DeliveryLog): number {
   const valor = Number(l.shipment?.shipping_fee ?? 0);
+  if (valor) return valor;
+  if (l.shipment?.parte_de != null) return 0;
+  return envioPorDefectoDe(l.shipment?.client_name_raw ?? '') ?? 0;
+}
 
-  if (esShippy(l.shipment?.client_name_raw ?? '')) {
-    // Sin valor cargado se usa el de la regla: con Shippy está acordado.
-    return valor || REGLAS.envioShippyPorDefecto;
+export function pagoDelEnvio(l: DeliveryLog): number {
+  if (esSinComision(l.shipment?.client_name_raw ?? '')) {
+    // Sin comisión, el valor —cargado o acordado— va entero al repartidor.
+    return valorDelEnvio(l);
   }
 
   // Un envío normal sin valor suma cero a propósito: no hay nada acordado que
   // suponer, y que se note es mejor que inventar un precio.
-  return Math.round(valor * (1 - REGLAS.comision));
+  return Math.round(Number(l.shipment?.shipping_fee ?? 0) * (1 - REGLAS.comision));
 }
 
 /**
@@ -133,6 +145,9 @@ export function pagoDelEnvio(l: DeliveryLog): number {
  * día en que un envío sin precio de verdad pasa de largo.
  */
 export function sinPrecio(l: DeliveryLog): boolean {
+  // A los comercios sin comisión nunca les falta el precio: sin valor cargado
+  // rige el acordado. Avisar "se paga $0" acá sería mentir.
+  if (esSinComision(l.shipment?.client_name_raw ?? '')) return false;
   return !Number(l.shipment?.shipping_fee) && l.shipment?.parte_de == null;
 }
 
@@ -166,6 +181,8 @@ export interface DaySummary {
   earningsShippy: number;
   /** Cuántos de Shippy hubo, para poder revisar la cuenta de un vistazo. */
   countShippy: number;
+  /** Todos los que van sin comisión: Shippy más los de trato directo. */
+  countSinComision: number;
 
   /**
    * Lo que le queda a la empresa por los envíos del día.
@@ -201,11 +218,9 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
   const cashFromPickups = pickups.reduce((acc, l) => acc + logCash(l), 0);
 
   // Valor de los envíos hechos, sin tocar comisiones: eso lo ajusta el admin
-  // a mano en el cierre de caja.
-  const shippingTotal = delivered.reduce(
-    (acc, l) => acc + Number(l.shipment?.shipping_fee ?? 0),
-    0,
-  );
+  // a mano en el cierre de caja. Con el valor EFECTIVO: un Shippy o Conectta
+  // sin valor cargado vale el acordado, no cero.
+  const shippingTotal = delivered.reduce((acc, l) => acc + valorDelEnvio(l), 0);
   const shippingMissing = delivered.filter(sinPrecio).length;
 
   /*
@@ -223,12 +238,16 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
    * que es lo que se acordó con ellos. Para los normales no se inventa nada:
    * sin valor, ese envío suma cero y `shippingMissing` lo deja a la vista.
    */
+  // "Sin comisión" junta a Shippy y a los de trato directo (Conectta): todos
+  // se pagan enteros. Shippy se cuenta aparte además, porque su ganancia fija
+  // es sólo de ellos.
+  const sinComision = delivered.filter((l) => esSinComision(l.shipment?.client_name_raw ?? ''));
   const deShippy = delivered.filter((l) => esShippy(l.shipment?.client_name_raw ?? ''));
-  const normales = delivered.filter((l) => !esShippy(l.shipment?.client_name_raw ?? ''));
+  const normales = delivered.filter((l) => !esSinComision(l.shipment?.client_name_raw ?? ''));
 
   // Los dos totales salen de sumar `pagoDelEnvio`, la misma que muestra cada
   // renglón de la lista: así la suma de la lista SIEMPRE da el total.
-  const earningsShippy = deShippy.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
+  const earningsShippy = sinComision.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
   const earningsNormales = normales.reduce((acc, l) => acc + pagoDelEnvio(l), 0);
 
   /*
@@ -245,7 +264,21 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
     0,
   );
   const profitComision = Math.round(facturadoNormales - earningsNormales);
-  const profitShippy = deShippy.length * REGLAS.gananciaPorShippy;
+  /*
+   * La ganancia fija de Shippy más la del trato directo, cada una con su
+   * regla. La de Conectta hoy vale cero: el número no está definido y el
+   * sistema no lo inventa (ver REGLAS.tratoDirecto).
+   */
+  const profitShippy =
+    deShippy.length * REGLAS.gananciaPorShippy +
+    sinComision.reduce(
+      (acc, l) =>
+        acc +
+        (esShippy(l.shipment?.client_name_raw ?? '')
+          ? 0
+          : (tratoDirectoDe(l.shipment?.client_name_raw ?? '')?.gananciaPorEnvio ?? 0)),
+      0,
+    );
 
   return {
     delivered,
@@ -260,6 +293,7 @@ export function summarizeLogs(logs: DeliveryLog[]): DaySummary {
     earningsNormales,
     earningsShippy,
     countShippy: deShippy.length,
+    countSinComision: sinComision.length,
     companyProfit: profitComision + profitShippy,
     profitComision,
     profitShippy,

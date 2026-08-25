@@ -36,11 +36,50 @@ export const REGLAS = {
 
   /** Los comercios que se liquidan como Shippy, sin comisión. */
   comerciosShippy: ['KILLARI', 'SHOPIGO', 'SHIPPY'],
+
+  /**
+   * Comercios con trato directo, aparte de Shippy: sin comisión, el valor del
+   * envío va ENTERO al repartidor, y cuando el envío no trae valor se usa el
+   * acordado. Definido por Matías el 25/08/2026.
+   *
+   * `gananciaPorEnvio` es lo que deja cada envío a la empresa, que se cobra
+   * aparte (como con Shippy). En cero quiere decir que ese número todavía no
+   * está definido: el sistema no lo inventa.
+   */
+  tratoDirecto: {
+    CONECTTA: { envioPorDefecto: 2000, gananciaPorEnvio: 0 },
+  } as Record<string, { envioPorDefecto: number; gananciaPorEnvio: number }>,
 } as const;
 
 export function esShippy(comercio: string): boolean {
   const c = (comercio ?? '').toUpperCase();
   return REGLAS.comerciosShippy.some((s) => c.includes(s));
+}
+
+/** La regla de trato directo de ese comercio, si tiene. Mismo criterio que `esShippy`. */
+export function tratoDirectoDe(
+  comercio: string,
+): { envioPorDefecto: number; gananciaPorEnvio: number } | null {
+  const c = (comercio ?? '').toUpperCase();
+  const clave = Object.keys(REGLAS.tratoDirecto).find((k) => c.includes(k));
+  return clave ? REGLAS.tratoDirecto[clave] : null;
+}
+
+/**
+ * Si a este comercio no se le descuenta comisión: Shippy o trato directo.
+ * El valor del envío es lo que se le paga al repartidor, entero.
+ */
+export function esSinComision(comercio: string): boolean {
+  return esShippy(comercio) || tratoDirectoDe(comercio) !== null;
+}
+
+/**
+ * El valor acordado del envío cuando no se aclara. `null` para los comercios
+ * comunes: ahí no hay nada acordado que suponer.
+ */
+export function envioPorDefectoDe(comercio: string): number | null {
+  if (esShippy(comercio)) return REGLAS.envioShippyPorDefecto;
+  return tratoDirectoDe(comercio)?.envioPorDefecto ?? null;
 }
 
 export interface Pedido {
@@ -64,6 +103,8 @@ export interface Totales {
   efectivoTotal: number;
   enviosNormales: number;
   enviosShippy: number;
+  /** Envíos de comercios con trato directo (Conectta): al 100%, como Shippy. */
+  enviosDirecto: number;
   /** Lo que le toca al repartidor por los envíos normales (el 70%). */
   aPagarNormales: number;
   /** Todo lo que hay que pagarle: normales al 70% más Shippy al 100%. */
@@ -92,13 +133,27 @@ export function calcular(pedidos: Pedido[], ajustes: Ajustes): Totales {
   let efectivoShippy = 0;
   let enviosNormales = 0;
   let enviosShippy = 0;
+  let enviosDirecto = 0;
+  let gananciaDirecto = 0;
   let cantidadShippy = 0;
 
   for (const p of pedidos) {
+    /*
+     * Tres tarifas y no dos: normales al 70%, Shippy al 100% con su ganancia
+     * fija, y el trato directo (Conectta) al 100% con la ganancia de SU regla.
+     * El efectivo del trato directo va a la caja normal: sólo el de Shippy se
+     * puede apartar (`excluirEfectivoShippy`).
+     */
+    const trato = p.esShippy ? null : tratoDirectoDe(p.comercioOriginal);
+
     if (p.esShippy) {
       efectivoShippy += p.cobrar;
       enviosShippy += p.envio;
       cantidadShippy++;
+    } else if (trato) {
+      efectivoNormal += p.cobrar;
+      enviosDirecto += p.envio;
+      gananciaDirecto += trato.gananciaPorEnvio;
     } else {
       efectivoNormal += p.cobrar;
       enviosNormales += p.envio;
@@ -106,8 +161,11 @@ export function calcular(pedidos: Pedido[], ajustes: Ajustes): Totales {
   }
 
   const aPagarNormales = enviosNormales * (1 - REGLAS.comision);
-  const aPagarTotal = aPagarNormales + enviosShippy;
-  const ganancia = enviosNormales * REGLAS.comision + cantidadShippy * REGLAS.gananciaPorShippy;
+  const aPagarTotal = aPagarNormales + enviosShippy + enviosDirecto;
+  const ganancia =
+    enviosNormales * REGLAS.comision +
+    cantidadShippy * REGLAS.gananciaPorShippy +
+    gananciaDirecto;
 
   const efectivoAContemplar =
     efectivoNormal + (ajustes.excluirEfectivoShippy ? 0 : efectivoShippy);
@@ -119,6 +177,7 @@ export function calcular(pedidos: Pedido[], ajustes: Ajustes): Totales {
     efectivoTotal: efectivoNormal + efectivoShippy,
     enviosNormales,
     enviosShippy,
+    enviosDirecto,
     aPagarNormales,
     aPagarTotal,
     ganancia,
@@ -206,7 +265,7 @@ export function textoDetallado(
   txt += `Total envíos Shippy (netos): ${plata(t.enviosShippy)}\n\n`;
   txt +=
     `Envíos a pagar al cadete: ${plata(t.aPagarNormales)} (Normales) + ` +
-    `${plata(t.enviosShippy)} (Shippy) = ${plata(t.aPagarTotal)}\n\n`;
+    `${plata(t.enviosShippy)} (Shippy)${t.enviosDirecto > 0 ? ` + ${plata(t.enviosDirecto)} (Directo)` : ''} = ${plata(t.aPagarTotal)}\n\n`;
 
   if (ajustes.rendido > 0) txt += `Rendido hoy a cuenta: ${plata(ajustes.rendido)}\n`;
   if (ajustes.pendiente > 0) txt += `Efectivo pendiente a rendir: ${plata(ajustes.pendiente)}\n`;

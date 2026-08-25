@@ -12,6 +12,7 @@ import {
   monthRange,
   pagoDelEnvio,
   summarizeLogs,
+  valorDelEnvio,
   today,
   weekRange,
   type DaySummary,
@@ -543,15 +544,17 @@ export default function CajaPage() {
                 : 'Es una cuenta del sistema y PUEDE CAMBIAR: el número final lo confirma la oficina al cerrar el día.'}
             </p>
 
-            {resumen.countShippy > 0 && (
+            {resumen.countSinComision > 0 && (
               <p className="mt-1 text-xs text-[var(--edr-muted)]">
-                {resumen.countShippy} de Shippy van enteros, sin comisión.
+                {resumen.countSinComision} van enteros, sin comisión (Shippy y trato directo).
               </p>
             )}
 
             <ul className="mt-3 flex flex-col gap-1.5">
               {resumen.delivered.map((l) => {
-                const valor = Number(l.shipment?.shipping_fee ?? 0);
+                // El valor efectivo: un Shippy o Conectta sin valor cargado
+                // vale el acordado, y eso es lo que hay que mostrarle.
+                const valor = valorDelEnvio(l);
                 const paga = pagoDelEnvio(l);
                 // Sin valor cargado no se inventa nada: se dice que falta.
                 const sinCargar = valor === 0 && paga === 0;

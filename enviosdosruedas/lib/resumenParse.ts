@@ -10,7 +10,7 @@
  * (comercio, cuánto cobra, cuánto es el envío). Mismo texto de entrada, dos
  * cosas distintas del otro lado.
  */
-import { REGLAS, esShippy, type Pedido } from '@/lib/resumen';
+import { envioPorDefectoDe, esShippy, type Pedido } from '@/lib/resumen';
 
 export interface Producto {
   nombre: string;
@@ -122,13 +122,12 @@ export function parsearResumen(texto: string): PedidoPegado[] {
 
     const shippy = esShippy(comercio);
 
-    // El precio del envío. Shippy casi nunca lo escribe: va el de lista.
+    // El precio del envío. Los comercios con tarifa acordada —Shippy,
+    // Conectta— casi nunca lo escriben: va el de la regla.
     const envioEscrito = linea.match(/ENV(?:I|Í)O\s*\$?([0-9.]+)/i);
     const envio = envioEscrito
       ? numero(envioEscrito[1])
-      : shippy
-        ? REGLAS.envioShippyPorDefecto
-        : 0;
+      : (envioPorDefectoDe(comercio) ?? 0);
 
     // "Cobrar envío" quiere decir que le cobra al destinatario el envío y nada
     // más; no hay un monto aparte que buscar.

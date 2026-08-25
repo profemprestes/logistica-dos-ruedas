@@ -4,7 +4,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import { esShippy, type Ajustes, type Totales } from '@/lib/resumen';
 import type { PedidoPegado } from '@/lib/resumenParse';
-import { customRange, logCash, conLosMovimientos, type DeliveryLog } from '@/lib/settlement';
+import { customRange, logCash, conLosMovimientos, valorDelEnvio, type DeliveryLog } from '@/lib/settlement';
 
 export type Origen = 'pegado' | 'sistema' | 'mixto';
 
@@ -104,7 +104,10 @@ export async function traerDelSistema(
     renglon(
       l,
       logCash(l) + (alRetirar.get(l.shipment!.id)?.monto ?? 0),
-      Number(l.shipment?.shipping_fee ?? 0),
+      // El valor EFECTIVO: un Shippy o Conectta cargado sin valor vale el
+      // acordado. Los renglones de más abajo (fallidos, cobrado sin entregar)
+      // siguen en cero a propósito: ahí el monto es una decisión humana.
+      valorDelEnvio(l),
     ),
   );
 

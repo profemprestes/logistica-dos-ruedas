@@ -188,7 +188,7 @@ export default function BillingPage() {
     driverEarnings,
     earningsNormales,
     earningsShippy,
-    countShippy,
+    countSinComision,
   } =
     summary;
   const driverName = drivers.find((d) => d.id === driverId)?.full_name ?? '';
@@ -588,8 +588,8 @@ export default function BillingPage() {
                   hint={
                     gananciaNum !== driverEarnings
                       ? `el sistema calculó ${money(driverEarnings)}`
-                      : countShippy > 0
-                        ? `${money(earningsNormales)} al 70% + ${money(earningsShippy)} de ${countShippy} Shippy (sin comisión)`
+                      : countSinComision > 0
+                        ? `${money(earningsNormales)} al 70% + ${money(earningsShippy)} de ${countSinComision} envío(s) sin comisión`
                         : `${money(shippingTotal)} menos el 30% de comisión`
                   }
                   input={

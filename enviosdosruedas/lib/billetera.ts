@@ -10,12 +10,18 @@ import {
 /**
  * La cuenta corriente de cada repartidor.
  *
- * QUÉ RESUELVE. Hasta el paso 55, lo rendido vivía adentro del cierre de UN
- * DÍA. Pero la plata no se entrega por día: el repartidor junta lo de varias
- * jornadas y un martes deja un monto que cubre todo. El 12/08/2026 quedó
- * escrito "cobró $ 9.900, rindió $ 55.000" — cierto, pero pegado a un día al
- * que no pertenece. Acá el saldo sale de sumar TODO desde el principio, y las
- * entregas de plata son movimientos con su propia fecha.
+ * EL MODELO ES DE DOS NIVELES, y así trabaja la empresa (24/08/2026):
+ *
+ *   · EL CIERRE DEL DÍA es el control diario: efectivo cobrado, efectivo
+ *     rendido ESE día (a mano, arranca en 0), envíos, y el total del día — a
+ *     rendir o a cobrar. Ese rendido diario vive en el cierre
+ *     (`settlements.actual_amount`) y esta cuenta lo suma con la fecha del día.
+ *
+ *   · LA BILLETERA acumula esos totales diarios como pendiente, y al final de
+ *     la semana se hace EL CIERRE SEMANAL: si tiene que cobrar se le paga, si
+ *     tiene que rendir lo rinde. Esos son los `movimientos_caja` — rendición,
+ *     pago, ajuste — con su propia fecha, y no figuran en el cierre de ningún
+ *     día.
  *
  * ES UN SOLO NÚMERO, y es EL MISMO que da el cierre de caja. Así se rinde acá:
  * el repartidor se queda con su parte de lo que cobró y entrega la diferencia.
@@ -25,7 +31,7 @@ import {
  * repartidor debía $ 78.400: un número que ninguna rendición real iba a
  * empardar. La cuenta que no coincide con la plata sobre la mesa no sirve.
  *
- *   saldo = cobrado − su parte − rendido + pagado + ajustes
+ *   saldo = cobrado − su parte − rendido (diario + semanal) + pagado + ajustes
  *
  * Positivo: tiene que rendir. Negativo: hay que pagarle.
  */
@@ -56,13 +62,20 @@ export interface MovimientoCaja {
   created_at: string;
 }
 
+/** El rendido a mano de un cierre de día: cuánto entregó ese día. */
+export interface RendidoDeCierre {
+  /** El día del cierre, yyyy-mm-dd. */
+  day: string;
+  monto: number;
+}
+
 export interface Billetera {
   driverId: string;
   /** Efectivo que cobró en la calle desde que arranca la cuenta. */
   cobrado: number;
   /** Su parte por los envíos que hizo: lo que se queda de lo cobrado. */
   suParte: number;
-  /** Lo que ya entregó en la oficina. */
+  /** Lo que ya entregó en la oficina: los rendidos diarios más los cierres semanales. */
   rendido: number;
   /** Lo que se le pagó de nuestro bolsillo (cuando cobra menos de su parte). */
   pagado: number;
@@ -74,6 +87,8 @@ export interface Billetera {
    */
   saldo: number;
   movimientos: MovimientoCaja[];
+  /** Los rendidos diarios de los cierres, para el día por día. */
+  cierres: RendidoDeCierre[];
   /** Los movimientos de la calle, para poder mostrar el detalle. */
   logs: DeliveryLog[];
 }
@@ -97,6 +112,7 @@ export function billeteraVacia(id: string): Billetera {
     ajustes: 0,
     saldo: 0,
     movimientos: [],
+    cierres: [],
     logs: [],
   };
 }
@@ -112,6 +128,8 @@ export function armarBilletera(
   id: string,
   logs: DeliveryLog[],
   movimientos: MovimientoCaja[],
+  /** Los rendidos a mano de los cierres de día. */
+  cierres: RendidoDeCierre[] = [],
 ): Billetera {
   const c = billeteraVacia(id);
 
@@ -131,6 +149,13 @@ export function armarBilletera(
     if (m.tipo === 'rendicion') c.rendido += monto;
     else if (m.tipo === 'pago') c.pagado += monto;
     else c.ajustes += monto;
+  }
+
+  // El rendido diario de cada cierre suma igual que una rendición: es plata
+  // que ya está en la oficina, sólo que anotada desde el cierre del día.
+  for (const x of cierres) {
+    c.cierres.push(x);
+    c.rendido += Number(x.monto);
   }
 
   c.saldo = Math.round(c.cobrado - c.suParte - c.rendido + c.pagado + c.ajustes);
@@ -211,6 +236,11 @@ export function porDia(c: Billetera): DiaDeCaja[] {
     if (m.tipo === 'rendicion') d.rendido += monto;
     else if (m.tipo === 'pago') d.pagado += monto;
     else d.ajustes += monto;
+  }
+
+  // El rendido diario del cierre cae en su día, junto a lo que cobró.
+  for (const x of c.cierres) {
+    enDia(x.day).rendido += Number(x.monto);
   }
 
   const enOrden = [...dias.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -294,7 +324,7 @@ export async function traerBilleteras(driverIds: string[]): Promise<Map<string, 
 
   const desde = `${ARRANCA}T00:00:00`;
 
-  const [porLaCalle, anotados] = await Promise.all([
+  const [porLaCalle, anotados, deCierres] = await Promise.all([
     conLosMovimientos<(DeliveryLog & { driver_id: string })[]>((select) =>
       supabase
         .from('delivery_logs')
@@ -309,6 +339,20 @@ export async function traerBilleteras(driverIds: string[]): Promise<Map<string, 
       .in('driver_id', driverIds)
       .gte('fecha', ARRANCA)
       .order('fecha', { ascending: false }),
+    /*
+     * Los rendidos diarios, del cierre de cada día.
+     *
+     * DESDE ARRANCA IGUAL QUE TODO: antes del 17/08 hay cierres con montos de
+     * prueba (el 12/08 dice "rindió $ 55.000") que meterían plata inventada.
+     * Y sólo los mayores a cero: el cero es el valor de "no entregó nada",
+     * que es casi todos los días.
+     */
+    supabase
+      .from('settlements')
+      .select('driver_id, day, actual_amount')
+      .in('driver_id', driverIds)
+      .gte('day', ARRANCA)
+      .gt('actual_amount', 0),
   ]);
 
   const suyos = new Map(driverIds.map((id) => [id, [] as DeliveryLog[]]));
@@ -319,8 +363,16 @@ export async function traerBilleteras(driverIds: string[]): Promise<Map<string, 
   const anotadosDe = new Map(driverIds.map((id) => [id, [] as MovimientoCaja[]]));
   for (const m of (anotados.data ?? []) as MovimientoCaja[]) anotadosDe.get(m.driver_id)?.push(m);
 
+  const cierresDe = new Map(driverIds.map((id) => [id, [] as RendidoDeCierre[]]));
+  for (const c of deCierres.data ?? []) {
+    cierresDe.get(c.driver_id)?.push({ day: c.day, monto: Number(c.actual_amount) });
+  }
+
   for (const id of driverIds) {
-    cuentas.set(id, armarBilletera(id, suyos.get(id) ?? [], anotadosDe.get(id) ?? []));
+    cuentas.set(
+      id,
+      armarBilletera(id, suyos.get(id) ?? [], anotadosDe.get(id) ?? [], cierresDe.get(id) ?? []),
+    );
   }
 
   return cuentas;

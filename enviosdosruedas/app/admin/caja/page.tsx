@@ -167,7 +167,7 @@ export default function CajaAdminPage() {
         ),
         supabase
           .from('settlements')
-          .select('driver_id, day')
+          .select('driver_id, day, actual_amount')
           .gte('day', a)
           .lte('day', b),
       ]);
@@ -194,10 +194,18 @@ export default function CajaAdminPage() {
       }
 
       const cerrados = new Map<string, Set<string>>();
+      // Lo rendido A MANO en los cierres de esos días: el "efectivo rendido"
+      // diario, que sí es del período (el cierre semanal no: vive en la
+      // Billetera y acá no se toca).
+      const rendidoDiarioPor = new Map<string, number>();
       for (const c of cierres.data ?? []) {
         const s = cerrados.get(c.driver_id) ?? new Set<string>();
         s.add(c.day);
         cerrados.set(c.driver_id, s);
+        rendidoDiarioPor.set(
+          c.driver_id,
+          (rendidoDiarioPor.get(c.driver_id) ?? 0) + Number(c.actual_amount ?? 0),
+        );
       }
 
       /*
@@ -231,11 +239,12 @@ export default function CajaAdminPage() {
         const r = summarizeLogs(suyos);
 
         /*
-         * Lo que el período dejó a rendir: lo que cobró en la calle menos lo
-         * que es suyo. Y punto — acá no se resta nada de lo que haya
-         * entregado, porque lo que entregó no es de este período.
+         * Lo que el período dejó pendiente: la suma de los totales de cada
+         * día — cobrado, menos el rendido diario de esos cierres, menos lo que
+         * es suyo. El cierre semanal NO se resta: ése salda el acumulado en la
+         * Billetera y no pertenece a ningún período.
          */
-        const aRendir = r.cashTotal - r.driverEarnings;
+        const aRendir = r.cashTotal - (rendidoDiarioPor.get(d.id) ?? 0) - r.driverEarnings;
 
         const conMov = diasConMovimiento.get(d.id) ?? new Set<string>();
         const cerradosSuyos = cerrados.get(d.id) ?? new Set<string>();
@@ -450,10 +459,9 @@ export default function CajaAdminPage() {
           </section>
 
           <p className="mt-3 text-xs leading-relaxed text-[var(--edr-muted)]">
-            <strong>&quot;Quedó a rendir&quot; es del período</strong>: lo que cobró en esos días
-            menos lo que es suyo. No le resta las entregas de plata, porque una entrega no
-            pertenece a ninguna semana — puede ser a cuenta, de un día suelto o de dos semanas
-            juntas.
+            <strong>&quot;Quedó a rendir&quot; es del período</strong>: la suma del total de cada
+            día — cobrado, menos el efectivo rendido de ese día, menos lo que es suyo. El cierre
+            semanal no se resta acá: se anota en la Billetera cuando se salda el acumulado.
             <br />
             <strong>&quot;Saldo hoy&quot; es de la cuenta</strong>: lo que debe ahora, desde que
             arranca la caja, contando todo lo que entregó y todo lo que se le pagó. Por eso una

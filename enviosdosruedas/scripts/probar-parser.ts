@@ -281,6 +281,23 @@ const CASOS: Caso[] = [
     texto: 'KILLARI\nRETIRA EN BASE\n- ROLDAN 421. COBRAR $1000 (Julia 542233489609)',
     espera: { recipientName: 'Julia', recipientPhone: '542233489609', productDetail: '' },
   },
+  {
+    titulo: 'Flow: el segundo parentesis sin telefono es el producto',
+    texto:
+      'FLOW(CONECTTA)\nRETIRA EN BASE\n' +
+      '- ANTES 19HS MISIONES 2273 (Antonio Louro, 2235762833) (Control flow)\n' +
+      '- ANTES 19HS LAS HERAS 2862. (Pablo gorostegui 2235369280) (control Deco)',
+    filas: 2,
+    fila: 1,
+    exactos: ['productDetail', 'recipientName'],
+    espera: {
+      addressStreet: 'LAS HERAS 2862',
+      recipientName: 'Pablo gorostegui',
+      recipientPhone: '2235369280',
+      productDetail: 'control Deco',
+      pickupAddress: 'BASE',
+    },
+  },
 ];
 
 let fallos = 0;

@@ -518,8 +518,23 @@ export function parseWhatsappText(
       if (!telefono && recipientName) {
         warnings.push(`Tomé "${recipientName}" como destinatario. Si era una aclaración, corregilo.`);
       }
-      // Un segundo contacto no se pierde: va a las notas.
-      notasSueltas.push(...contactos.slice(1));
+      /*
+       * El paréntesis que viene DESPUÉS del contacto y no trae teléfono es el
+       * producto: "(Antonio Louro, 2235762833) (Control flow)" — así manda
+       * los pedidos Flow. Sólo cuando el primero era un contacto DE VERDAD
+       * (con teléfono): si el primero fue una corazonada, otro texto suelto
+       * es más probablemente una aclaración, y va a notas como siempre. Un
+       * segundo contacto CON teléfono también va a notas: son dos personas,
+       * no un paquete.
+       */
+      for (const extra of contactos.slice(1)) {
+        const otro = sacarTelefono(extra);
+        if (!otro.telefono && !productDetail && recipientPhone) {
+          productDetail = otro.resto.trim();
+        } else {
+          notasSueltas.push(extra);
+        }
+      }
     }
 
     // ¿Trae el retiro adentro de la misma línea?

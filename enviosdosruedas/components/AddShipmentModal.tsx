@@ -351,6 +351,15 @@ function ShipmentForm({
   /** El horario de retiro por comercio, al pegar una tanda. */
   const [horariosRetiro, setHorariosRetiro] = useState<Record<string, string>>({});
 
+  /**
+   * A qué ficha se enlaza cada comercio de la tanda, elegido a mano.
+   *
+   * Sin tocar nada, el enlace sale solo por el nombre (la clave canónica,
+   * como siempre). Esto guarda la corrección del que carga: "esta tanda dice
+   * FLOW pero va a la ficha tal". 0 = "crear comercio nuevo con este nombre".
+   */
+  const [enlacesElegidos, setEnlacesElegidos] = useState<Record<string, number>>({});
+
   /*
    * ---------- El pedido de stock (paso 56) ----------
    *
@@ -437,6 +446,23 @@ function ShipmentForm({
   const claveComercio = (nombre: string | null | undefined) =>
     (nombre ?? '').trim().toLowerCase();
 
+  /**
+   * La ficha a la que se enlaza un nombre de la tanda: la elegida a mano si
+   * la hay, o la que matchea por la clave canónica (sin mayúsculas, puntos ni
+   * tildes). `null` = no hay ficha: se crea comercio nuevo al guardar.
+   */
+  const fichaEnlazada = (nombre: string | null | undefined) => {
+    const clave = claveComercio(nombre);
+    const elegido = enlacesElegidos[clave];
+    if (elegido !== undefined) {
+      return elegido === 0 ? null : (comerciosConocidos.find((c) => c.id === elegido) ?? null);
+    }
+    return (
+      comerciosConocidos.find((c) => claveDeComercio(c.name) === claveDeComercio(nombre ?? '')) ??
+      null
+    );
+  };
+
   /*
    * Los productos se piden recién cuando un comercio con stock entra en
    * escena —lo eligieron en el formulario, o su nombre apareció en la tanda—
@@ -449,19 +475,12 @@ function ShipmentForm({
   useEffect(() => {
     const objetivo = new Set<number>();
     if (form.client_id && conStock.has(form.client_id)) objetivo.add(form.client_id);
-    for (const c of comerciosConocidos) {
-      /*
-       * La clave CANÓNICA (sin mayúsculas, puntos ni tildes), la misma del
-       * índice único de comercios: así "CONECTTA SA" en el WhatsApp encuentra
-       * la ficha "Conectta S.A". Con la comparación literal, un punto de
-       * diferencia escondía el bloque del pedido.
-       */
-      if (
-        conStock.has(c.id) &&
-        rows.some((r) => claveDeComercio(r.clientName) === claveDeComercio(c.name))
-      ) {
-        objetivo.add(c.id);
-      }
+    for (const r of rows) {
+      // La ficha enlazada respeta la corrección a mano de la tarjeta del
+      // retiro: si el que carga apuntó la tanda a otra ficha, los productos
+      // que se ofrecen son los de ésa.
+      const ficha = fichaEnlazada(r.clientName);
+      if (ficha && conStock.has(ficha.id)) objetivo.add(ficha.id);
     }
 
     for (const id of objetivo) {
@@ -712,6 +731,31 @@ function ShipmentForm({
     for (const r of toSave) {
       const clave = claveComercio(r.clientName);
       if (!clave || comercios.has(clave)) continue;
+
+      /*
+       * Si en la tarjeta del retiro se eligió la ficha a mano, manda ésa: es
+       * la confirmación explícita de a qué cliente va la tanda. El horario
+       * escrito se le guarda igual, y el punto confirmado sólo si la ficha no
+       * tenía (el criterio de siempre: un punto verificado no se pisa).
+       */
+      const elegida = enlacesElegidos[clave];
+      if (elegida !== undefined && elegida > 0) {
+        comercios.set(clave, elegida);
+
+        const horario = (horariosRetiro[clave] ?? '').trim();
+        if (horario) {
+          await supabase.from('clients').update({ pickup_window: horario }).eq('id', elegida);
+        }
+        const punto = puntosRetiro[clave];
+        if (punto) {
+          await supabase
+            .from('clients')
+            .update({ lat: punto.lat, lng: punto.lng })
+            .eq('id', elegida)
+            .is('lat', null);
+        }
+        continue;
+      }
 
       comercios.set(
         clave,
@@ -1236,6 +1280,48 @@ function ShipmentForm({
                         </span>
                       </div>
 
+                      {/* A QUÉ FICHA VA LA TANDA, confirmable. El enlace sale
+                          solo por el nombre, pero acá se VE y se puede
+                          corregir antes de guardar: cargar veinte envíos en
+                          el cliente equivocado es el error caro de esta
+                          pantalla. */}
+                      {(() => {
+                        const ficha = fichaEnlazada(retiro.nombre);
+                        return (
+                          <div className="mb-2">
+                            <label className={labelCls}>Se carga en la ficha de</label>
+                            <select
+                              className={`${field} [&>option]:bg-[var(--edr-surface)] [&>option]:text-white`}
+                              style={{ colorScheme: 'dark' }}
+                              value={ficha?.id ?? 0}
+                              onChange={(e) =>
+                                setEnlacesElegidos((prev) => ({
+                                  ...prev,
+                                  [clave]: Number(e.target.value),
+                                }))
+                              }
+                            >
+                              <option value={0}>
+                                Nuevo comercio: {retiro.nombre || '(sin nombre)'} — se crea al
+                                guardar
+                              </option>
+                              {comerciosConocidos.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                            {!ficha && (
+                              <p className="mt-1 text-[11px] font-bold text-[var(--edr-naranja-claro)]">
+                                Este nombre no coincide con ningún comercio cargado: al guardar se
+                                crea uno nuevo. Si es uno que ya existe con otro nombre, elegilo de
+                                la lista.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       <VerificarPunto
                         direccion={retiro.direccion}
                         ciudad="Mar del Plata"
@@ -1439,13 +1525,12 @@ function ShipmentForm({
                               </Field>
 
                               {(() => {
-                                /* El comercio de esta fila, si ya está cargado y
-                                   guarda stock acá. Con eso el pedido se elige
-                                   de su listado; sin eso, la fila queda igual
-                                   que siempre. */
-                                const c = comerciosConocidos.find(
-                                  (x) => claveDeComercio(x.name) === claveDeComercio(r.clientName),
-                                );
+                                /* El comercio de esta fila —respetando el
+                                   enlace corregido a mano—, si guarda stock
+                                   acá. Con eso el pedido se elige de su
+                                   listado; sin eso, la fila queda igual que
+                                   siempre. */
+                                const c = fichaEnlazada(r.clientName);
                                 if (!c || !conStock.has(c.id)) return null;
                                 return (
                                   <div className="sm:col-span-3">

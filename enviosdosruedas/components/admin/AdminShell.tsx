@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Receipt,
   Store,
   Users,
   PiggyBank,
@@ -78,6 +79,7 @@ const ITEMS: Item[] = [
    */
   { href: '/admin/billetera', label: 'Billetera', Icono: HandCoins },
   { href: '/admin/resumenes', label: 'Resúmenes', Icono: MessageCircle },
+  { href: '/admin/facturacion', label: 'Facturación', Icono: Receipt },
   { href: '/admin/stats', label: 'Estadísticas', Icono: BarChart3 },
   { href: '/admin/stock', label: 'Stock', Icono: Warehouse },
 ];

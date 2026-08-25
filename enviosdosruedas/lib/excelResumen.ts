@@ -23,6 +23,78 @@ export interface FilaResumen {
   valor: number;
 }
 
+/** Lo que la consulta trae de cada envío entregado, crudo. */
+export interface EnvioParaResumen {
+  id: number;
+  parte_de: number | null;
+  delivered_at: string | null;
+  scheduled_date: string;
+  address_street: string | null;
+  address_extra: string | null;
+  shipping_fee: number | null;
+  client_name_raw: string | null;
+}
+
+/**
+ * De los envíos crudos a las filas del resumen.
+ *
+ * UN ENVÍO CON VARIAS PARADAS ES UNA SOLA LÍNEA (paso 53): "Guido 1178 /
+ * Libertad 5140" con un solo valor — el comercio pagó UN envío aunque la moto
+ * haya parado dos veces. El valor del grupo es la suma de lo cargado en sus
+ * paradas (la plata puede estar en cualquiera), y para los comercios con
+ * tarifa fija de facturación (Conectta) va la tarifa UNA vez por grupo, no
+ * por parada.
+ *
+ * Una parada cuyo envío principal quedó fuera del período sale como línea
+ * suelta con lo que tenga cargado, sin inventarle tarifa: ese pedido se
+ * factura con su principal, y la línea queda a la vista para decidir a mano.
+ */
+export function armarFilasResumen(
+  envios: EnvioParaResumen[],
+  nombreComercio: string,
+): FilaResumen[] {
+  const dir = (e: EnvioParaResumen) =>
+    [e.address_street, e.address_extra].filter(Boolean).join(' ').trim() || '(sin dirección)';
+  const fechaDe = (e: EnvioParaResumen) =>
+    String(e.delivered_at ?? e.scheduled_date).slice(0, 10);
+
+  const ids = new Set(envios.map((e) => e.id));
+  const principales = envios.filter((e) => e.parte_de == null);
+  const partesDe = new Map<number, EnvioParaResumen[]>();
+  const sueltas: EnvioParaResumen[] = [];
+
+  for (const e of envios) {
+    if (e.parte_de == null) continue;
+    if (ids.has(e.parte_de)) {
+      const lista = partesDe.get(e.parte_de) ?? [];
+      lista.push(e);
+      partesDe.set(e.parte_de, lista);
+    } else {
+      sueltas.push(e);
+    }
+  }
+
+  const filas: FilaResumen[] = principales.map((p) => {
+    const grupo = [p, ...(partesDe.get(p.id) ?? [])];
+    const cargado = grupo.reduce((a, e) => a + (Number(e.shipping_fee) || 0), 0);
+    return {
+      fecha: fechaDe(p),
+      direccion: grupo.map(dir).join(' / '),
+      valor: valorFacturado(p.client_name_raw ?? nombreComercio, cargado),
+    };
+  });
+
+  for (const e of sueltas) {
+    filas.push({
+      fecha: fechaDe(e),
+      direccion: `${dir(e)} (parada de un envío repartido)`,
+      valor: Number(e.shipping_fee) || 0,
+    });
+  }
+
+  return filas.sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
 /**
  * Lo que se le factura al comercio por un envío.
  *

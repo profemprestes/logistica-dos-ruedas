@@ -21,13 +21,13 @@ export const FALTA_PASO_56 =
 export async function fetchComerciosConStock(): Promise<ComercioConStock[]> {
   const { data, error } = await supabase
     .from('clients')
-    .select('id, name, stock_prefijo, stock_contador')
+    .select('id, name')
     .eq('maneja_stock', true)
     .eq('active', true)
     .order('name');
 
   if (error) {
-    throw new Error(/maneja_stock|stock_prefijo/.test(error.message) ? FALTA_PASO_56 : error.message);
+    throw new Error(/maneja_stock/.test(error.message) ? FALTA_PASO_56 : error.message);
   }
   return (data ?? []) as ComercioConStock[];
 }

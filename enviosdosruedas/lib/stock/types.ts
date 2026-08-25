@@ -10,8 +10,6 @@
 export interface ComercioConStock {
   id: number;
   name: string;
-  stock_prefijo: string | null;
-  stock_contador: number;
 }
 
 export interface StockProduct {

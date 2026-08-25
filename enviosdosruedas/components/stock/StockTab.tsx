@@ -268,12 +268,9 @@ export default function StockTab({ cliente, stock, loading, onReload, onError, o
       <section className={card}>
         <h2 className="mb-1 text-base font-bold">Cargar producto</h2>
         <p className="mb-4 text-xs text-[var(--edr-muted)]">
-          El código se genera solo con el prefijo del comercio. Ejemplo:{' '}
-          <span className="edr-mono">
-            {cliente.stock_prefijo ?? '??'}
-            {String(cliente.stock_contador + 1).padStart(8, '0')}EDR
-          </span>
-          .
+          El código se genera solo y sigue la misma numeración que los envíos
+          (<span className="edr-mono">EDR…MDQ</span>): una sola serie para toda la empresa, sea de
+          quien sea el producto.
         </p>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">

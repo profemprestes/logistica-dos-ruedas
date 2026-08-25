@@ -54,10 +54,9 @@ export interface Comercio {
   /**
    * Guarda mercadería en nuestro depósito (paso 56). Con esto prendido, sus
    * envíos llevan pedido —producto y cantidad— y el entregado descuenta stock.
+   * Los productos se numeran en la misma serie EDR…MDQ que los envíos (paso 57).
    */
   maneja_stock?: boolean;
-  /** Las letras con que arrancan sus códigos de producto: "CN" → CN00000001EDR. */
-  stock_prefijo?: string | null;
 }
 
 export const VACIO: Omit<Comercio, 'id'> = {
@@ -142,7 +141,6 @@ export default function EditarComercio({
     active: comercio.active,
     parent_id: comercio.parent_id ?? null,
     maneja_stock: comercio.maneja_stock ?? false,
-    stock_prefijo: comercio.stock_prefijo ?? '',
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -181,9 +179,6 @@ export default function EditarComercio({
 
   async function guardar() {
     if (!form.name.trim()) return setError('Falta el nombre.');
-    if (form.maneja_stock && !form.stock_prefijo.trim()) {
-      return setError('Poné el prefijo para los códigos de producto (dos o tres letras).');
-    }
 
     setGuardando(true);
     setError('');
@@ -201,7 +196,6 @@ export default function EditarComercio({
       active: form.active,
       parent_id: form.parent_id,
       maneja_stock: form.maneja_stock,
-      stock_prefijo: form.stock_prefijo.trim().toUpperCase() || null,
     };
 
     const escribir = (datos: Record<string, unknown>) =>
@@ -237,10 +231,9 @@ export default function EditarComercio({
     }
 
     // Y con el stock, que llega con el paso 56.
-    if (e && /maneja_stock|stock_prefijo/.test(e.message)) {
-      const { maneja_stock, stock_prefijo, ...sinStock } = fila;
+    if (e && /maneja_stock/.test(e.message)) {
+      const { maneja_stock, ...sinStock } = fila;
       void maneja_stock;
-      void stock_prefijo;
       ({ error: e } = await escribir(sinStock));
     }
 
@@ -450,24 +443,11 @@ export default function EditarComercio({
             </label>
 
             {form.maneja_stock && (
-              <div className="mt-2">
-                <label className={labelCls}>Prefijo de sus códigos de producto</label>
-                <input
-                  className={campo}
-                  value={form.stock_prefijo}
-                  onChange={(e) => set('stock_prefijo', e.target.value.toUpperCase())}
-                  placeholder="CN"
-                  maxLength={4}
-                />
-                <p className="mt-1 text-xs text-[var(--edr-muted)]">
-                  Sus productos van a salir tipo{' '}
-                  <span className="edr-mono">
-                    {(form.stock_prefijo.trim() || 'CN').toUpperCase()}00000001EDR
-                  </span>
-                  . Con esto marcado, al cargarle un envío elegís qué productos lleva y el stock
-                  se descuenta solo cuando el envío se entrega.
-                </p>
-              </div>
+              <p className="mt-2 text-xs text-[var(--edr-muted)]">
+                Sus productos se numeran en la misma serie que los envíos
+                (<span className="edr-mono">EDR…MDQ</span>). Al cargarle un envío elegís qué
+                productos lleva, y el stock se descuenta solo cuando el envío se entrega.
+              </p>
             )}
           </div>
 

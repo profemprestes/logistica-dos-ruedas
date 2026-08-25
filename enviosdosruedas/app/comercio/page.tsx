@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { LogOut, UserCog, Warehouse } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { WHATSAPP } from '@/components/SiteFooter';
 import MiCuenta from '@/components/comercio/MiCuenta';
+import MiStock from '@/components/comercio/MiStock';
 import ResumenDelComercio, { type FichaComercio } from '@/components/comercio/ResumenDelComercio';
 import { supabase } from '@/lib/supabaseClient';
 import { pidiendo } from '@/lib/columnaNueva';
@@ -33,7 +33,7 @@ import { pidiendo } from '@/lib/columnaNueva';
 
 /** Consulta suelta: devuelve a dónde hay que ir, o los datos ya listos. */
 type Carga =
-  | { destino: '/login' | '/admin' | '/driver' | '/stock' }
+  | { destino: '/login' | '/admin' | '/driver' }
   | { comercio: FichaComercio | null; sucursales: FichaComercio[]; tieneStock: boolean };
 
 async function cargar(): Promise<Carga> {
@@ -55,11 +55,19 @@ async function cargar(): Promise<Carga> {
 
   const CAMPOS = 'id, name, pickup_address, pickup_extra, pickup_notes, pickup_window, phone';
   const CON_SABADO = `${CAMPOS}, pickup_window_sabado`;
+  const CON_STOCK = `${CON_SABADO}, maneja_stock`;
 
+  // Dos columnas que pueden faltar, cada una con su paso: se pide con todo y
+  // se va soltando lo que la base todavía no tenga.
   const { data: ficha } = await pidiendo<FichaComercio>(
-    'pickup_window_sabado',
-    () => supabase.from('clients').select(CON_SABADO).eq('profile_id', uid).maybeSingle(),
-    () => supabase.from('clients').select(CAMPOS).eq('profile_id', uid).maybeSingle(),
+    'maneja_stock',
+    () => supabase.from('clients').select(CON_STOCK).eq('profile_id', uid).maybeSingle(),
+    () =>
+      pidiendo<FichaComercio>(
+        'pickup_window_sabado',
+        () => supabase.from('clients').select(CON_SABADO).eq('profile_id', uid).maybeSingle(),
+        () => supabase.from('clients').select(CAMPOS).eq('profile_id', uid).maybeSingle(),
+      ),
   );
 
   /*
@@ -77,21 +85,12 @@ async function cargar(): Promise<Carga> {
       )
     : { data: [] };
 
-  /*
-   * Un comercio puede tener stock guardado y no tener envíos, o al revés: son
-   * dos fichas distintas en dos tablas distintas, y el acceso a cada una se da
-   * por separado. Si sólo tiene stock, lo suyo es la pantalla de stock y no
-   * este cartel de "no encontramos nada".
-   */
-  const { data: stock } = await supabase.from('stock_clients').select('id').limit(1);
-  const tieneStock = (stock ?? []).length > 0;
-
-  if (!ficha && tieneStock) return { destino: '/stock' };
-
   return {
     comercio: ficha,
     sucursales: locales ?? [],
-    tieneStock,
+    // Desde el paso 56 el stock cuelga de la MISMA ficha: si la maneja, se ve
+    // acá adentro, con la misma cuenta. Ya no hay una segunda pantalla.
+    tieneStock: Boolean(ficha?.maneja_stock),
   };
 }
 
@@ -103,6 +102,8 @@ export default function ComercioPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [miCuenta, setMiCuenta] = useState(false);
+  /** Qué está mirando: sus envíos o su mercadería en depósito. */
+  const [vista, setVista] = useState<'envios' | 'stock'>('envios');
 
   const aplicar = useCallback(
     (r: Carga) => {
@@ -152,16 +153,21 @@ export default function ComercioPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* El stock es otra pantalla y otra ficha. El link aparece sólo si
-                de verdad tiene mercadería nuestra: si no, sería una puerta a
-                una habitación vacía. */}
+            {/* Sólo si de verdad tiene mercadería nuestra: si no, sería una
+                puerta a una habitación vacía. Alterna la vista acá adentro —
+                desde el paso 56 el stock es de la misma ficha y la misma
+                cuenta, no otra pantalla. */}
             {tieneStock && (
-              <Link
-                href="/stock"
-                className="inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-xs font-bold text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
+              <button
+                onClick={() => setVista(vista === 'stock' ? 'envios' : 'stock')}
+                className={`inline-flex items-center gap-1.5 rounded border px-3 py-2 text-xs font-bold ${
+                  vista === 'stock'
+                    ? 'border-[var(--edr-yellow)] text-[var(--edr-yellow)]'
+                    : 'border-[var(--edr-border)] text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]'
+                }`}
               >
-                <Warehouse size={14} /> Mi stock
-              </Link>
+                <Warehouse size={14} /> {vista === 'stock' ? 'Mis envíos' : 'Mi stock'}
+              </button>
             )}
             {comercio && (
               <button
@@ -230,7 +236,11 @@ export default function ComercioPage() {
         </div>
       ) : (
         <>
-          <ResumenDelComercio comercio={comercio} sucursales={sucursales} />
+          {vista === 'stock' && tieneStock ? (
+            <MiStock comercio={comercio} />
+          ) : (
+            <ResumenDelComercio comercio={comercio} sucursales={sucursales} />
+          )}
           {miCuenta && <MiCuenta comercio={comercio} onCerrar={() => setMiCuenta(false)} />}
         </>
       )}

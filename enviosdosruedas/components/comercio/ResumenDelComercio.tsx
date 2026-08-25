@@ -59,6 +59,8 @@ export interface FichaComercio {
   pickup_window?: string | null;
   pickup_window_sabado?: string | null;
   phone?: string | null;
+  /** Guarda mercadería en nuestro depósito: el portal le muestra su stock. */
+  maneja_stock?: boolean;
 }
 
 /**

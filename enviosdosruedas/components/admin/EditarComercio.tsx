@@ -51,6 +51,13 @@ export interface Comercio {
    * todos los locales juntos bajo un solo usuario. Ver el paso 50.
    */
   parent_id?: number | null;
+  /**
+   * Guarda mercadería en nuestro depósito (paso 56). Con esto prendido, sus
+   * envíos llevan pedido —producto y cantidad— y el entregado descuenta stock.
+   */
+  maneja_stock?: boolean;
+  /** Las letras con que arrancan sus códigos de producto: "CN" → CN00000001EDR. */
+  stock_prefijo?: string | null;
 }
 
 export const VACIO: Omit<Comercio, 'id'> = {
@@ -134,6 +141,8 @@ export default function EditarComercio({
     lng: comercio.lng,
     active: comercio.active,
     parent_id: comercio.parent_id ?? null,
+    maneja_stock: comercio.maneja_stock ?? false,
+    stock_prefijo: comercio.stock_prefijo ?? '',
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -172,6 +181,9 @@ export default function EditarComercio({
 
   async function guardar() {
     if (!form.name.trim()) return setError('Falta el nombre.');
+    if (form.maneja_stock && !form.stock_prefijo.trim()) {
+      return setError('Poné el prefijo para los códigos de producto (dos o tres letras).');
+    }
 
     setGuardando(true);
     setError('');
@@ -188,6 +200,8 @@ export default function EditarComercio({
       lng: form.lng,
       active: form.active,
       parent_id: form.parent_id,
+      maneja_stock: form.maneja_stock,
+      stock_prefijo: form.stock_prefijo.trim().toUpperCase() || null,
     };
 
     const escribir = (datos: Record<string, unknown>) =>
@@ -220,6 +234,14 @@ export default function EditarComercio({
       const { pickup_window_sabado, ...sinSabado } = fila;
       void pickup_window_sabado;
       ({ error: e } = await escribir(sinSabado));
+    }
+
+    // Y con el stock, que llega con el paso 56.
+    if (e && /maneja_stock|stock_prefijo/.test(e.message)) {
+      const { maneja_stock, stock_prefijo, ...sinStock } = fila;
+      void maneja_stock;
+      void stock_prefijo;
+      ({ error: e } = await escribir(sinStock));
     }
 
     setGuardando(false);
@@ -412,6 +434,42 @@ export default function EditarComercio({
               (los inactivos no aparecen al cargar un envío)
             </span>
           </label>
+
+          {/* ---------- Stock en base (paso 56) ---------- */}
+          <div className="rounded border border-[var(--edr-border)] p-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.maneja_stock}
+                onChange={(e) => set('maneja_stock', e.target.checked)}
+              />
+              Maneja stock en base
+              <span className="text-xs text-[var(--edr-muted)]">
+                (guarda mercadería en nuestro depósito)
+              </span>
+            </label>
+
+            {form.maneja_stock && (
+              <div className="mt-2">
+                <label className={labelCls}>Prefijo de sus códigos de producto</label>
+                <input
+                  className={campo}
+                  value={form.stock_prefijo}
+                  onChange={(e) => set('stock_prefijo', e.target.value.toUpperCase())}
+                  placeholder="CN"
+                  maxLength={4}
+                />
+                <p className="mt-1 text-xs text-[var(--edr-muted)]">
+                  Sus productos van a salir tipo{' '}
+                  <span className="edr-mono">
+                    {(form.stock_prefijo.trim() || 'CN').toUpperCase()}00000001EDR
+                  </span>
+                  . Con esto marcado, al cargarle un envío elegís qué productos lleva y el stock
+                  se descuenta solo cuando el envío se entrega.
+                </p>
+              </div>
+            )}
+          </div>
 
           {error && (
             <div className="rounded border border-red-400 bg-red-950 px-3 py-2 text-sm text-red-100">

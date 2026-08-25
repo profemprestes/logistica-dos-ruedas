@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { parseWhatsappText, type ParsedRow } from '@/lib/parseWhatsapp';
 import {
@@ -15,6 +15,14 @@ import {
 import VerificarPunto from '@/components/admin/VerificarPunto';
 import ElegirComercio from '@/components/admin/ElegirComercio';
 import { asegurarComercio, problemaDelComercio } from '@/lib/admin/comercios';
+import {
+  fetchPedidos,
+  fetchStock,
+  guardarPedido,
+  reemplazarPedido,
+  type LineaDePedido,
+} from '@/lib/stock/db';
+import type { StockRow } from '@/lib/stock/types';
 import { notificarRepartidor } from '@/lib/notify';
 
 type Mode = 'manual' | 'pegar';
@@ -343,6 +351,69 @@ function ShipmentForm({
   /** El horario de retiro por comercio, al pegar una tanda. */
   const [horariosRetiro, setHorariosRetiro] = useState<Record<string, string>>({});
 
+  /*
+   * ---------- El pedido de stock (paso 56) ----------
+   *
+   * Cuando el comercio guarda mercadería en nuestro depósito, el envío lleva
+   * su pedido: qué productos y cuántos, elegidos de un listado — nada de
+   * adivinar desde el texto. La base descuenta sola cuando el envío pasa a
+   * entregado.
+   */
+  /** Qué comercios manejan stock. Vacío hasta que contesta la base (o si falta el paso 56). */
+  const [conStock, setConStock] = useState<Set<number>>(new Set());
+  /** Los productos de cada comercio con stock, para el desplegable. */
+  const [productosDe, setProductosDe] = useState<Record<number, StockRow[]>>({});
+  /**
+   * El pedido del formulario manual, POR COMERCIO.
+   *
+   * Si a mitad de carga se cambia el comercio del envío, las líneas del
+   * anterior no pueden viajar con él: sus productos son de otro depósito. Con
+   * el pedido colgado del comercio, cambiarlo muestra el pedido de ése (vacío
+   * al principio) y el del anterior queda esperando por si se vuelve.
+   */
+  const [pedidoManualPor, setPedidoManualPor] = useState<Record<number, LineaDePedido[]>>({});
+  /** El pedido de cada fila pegada, por su tempId. */
+  const [pedidosFila, setPedidosFila] = useState<Record<string, LineaDePedido[]>>({});
+
+  useEffect(() => {
+    let vivo = true;
+
+    async function traer() {
+      // Si la columna todavía no existe (falta el paso 56), la consulta falla y
+      // el bloque de pedido simplemente no aparece. Incompleto, no roto.
+      const { data, error: e } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('maneja_stock', true);
+      if (vivo && !e) setConStock(new Set((data ?? []).map((c) => c.id as number)));
+    }
+
+    void traer();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /** Al editar, el pedido ya guardado del envío se trae para poder corregirlo. */
+  useEffect(() => {
+    if (!editing) return;
+    let vivo = true;
+
+    fetchPedidos([editing.id]).then((mapa) => {
+      if (!vivo) return;
+      const lineas = mapa.get(editing.id) ?? [];
+      if (lineas.length && editing.client_id != null) {
+        setPedidoManualPor({
+          [editing.client_id]: lineas.map((l) => ({ productId: l.productId, cantidad: l.cantidad })),
+        });
+      }
+    });
+
+    return () => {
+      vivo = false;
+    };
+  }, [editing]);
+
   /** Los comercios ya cargados, para mostrar el punto que YA tienen guardado. */
   const [comerciosConocidos, setComerciosConocidos] = useState<
     { id: number; name: string; lat: number | null; lng: number | null; pickup_window: string | null }[]
@@ -365,6 +436,36 @@ function ShipmentForm({
   /** La clave con la que se agrupa un comercio: su nombre, sin adornos. */
   const claveComercio = (nombre: string | null | undefined) =>
     (nombre ?? '').trim().toLowerCase();
+
+  /*
+   * Los productos se piden recién cuando un comercio con stock entra en
+   * escena —lo eligieron en el formulario, o su nombre apareció en la tanda—
+   * y una sola vez por comercio: la tanda puede nombrarlo veinte veces.
+   *
+   * El `ref` evita pedir dos veces lo mismo mientras la primera consulta
+   * todavía viaja, sin escribir estado en seco dentro del efecto.
+   */
+  const pidiendoProductos = useRef(new Set<number>());
+  useEffect(() => {
+    const objetivo = new Set<number>();
+    if (form.client_id && conStock.has(form.client_id)) objetivo.add(form.client_id);
+    for (const c of comerciosConocidos) {
+      if (
+        conStock.has(c.id) &&
+        rows.some((r) => claveComercio(r.clientName) === claveComercio(c.name))
+      ) {
+        objetivo.add(c.id);
+      }
+    }
+
+    for (const id of objetivo) {
+      if (productosDe[id] || pidiendoProductos.current.has(id)) continue;
+      pidiendoProductos.current.add(id);
+      fetchStock(id)
+        .then((lista) => setProductosDe((prev) => ({ ...prev, [id]: lista })))
+        .catch(() => {});
+    }
+  });
 
   /**
    * Los comercios distintos de la tanda pegada, uno por nombre.
@@ -543,6 +644,25 @@ function ShipmentForm({
       );
     }
 
+    /*
+     * El pedido de stock, atado al envío recién guardado.
+     *
+     * DESPUÉS del envío y no junto: el envío es lo que no se puede perder. Si
+     * el pedido falla —rarísimo: la tabla llega con el paso 56 y sin ese paso
+     * el bloque ni aparece— el envío queda igual y se avisa, y el pedido se
+     * completa editando.
+     */
+    const idGuardado = editing?.id ?? guardado?.[0]?.id;
+    const pedidoDelComercio = clientId != null ? (pedidoManualPor[clientId] ?? []) : [];
+    if (idGuardado && (pedidoDelComercio.length > 0 || editing)) {
+      const r = editing
+        ? await reemplazarPedido(idGuardado, pedidoDelComercio)
+        : await guardarPedido(idGuardado, pedidoDelComercio);
+      if (r.error) {
+        setAvisoComercio(`El envío se guardó, pero el pedido de stock no: ${r.error}`);
+      }
+    }
+
     if (!puntoManual && cambioDireccion) {
       void ubicarEnElMapa((guardado ?? []).map((s) => s.id));
     }
@@ -643,6 +763,28 @@ function ShipmentForm({
     if (dbError) return setError(dbError.message);
 
     await atarLasParadas(toSave, guardados ?? []);
+
+    /*
+     * Los pedidos de stock de la tanda. `guardados` viene en el mismo orden
+     * que `toSave` (PostgREST devuelve las filas insertadas en orden), así que
+     * la fila i es el envío i.
+     */
+    const fallasPedido: string[] = [];
+    await Promise.all(
+      toSave.map(async (r, i) => {
+        const lineas = pedidosFila[r.tempId] ?? [];
+        const id = guardados?.[i]?.id;
+        if (!lineas.length || !id) return;
+        const res = await guardarPedido(id, lineas);
+        if (res.error) fallasPedido.push(r.addressStreet);
+      }),
+    );
+    if (fallasPedido.length) {
+      setAvisoComercio(
+        `Se guardaron los envíos, pero el pedido de stock de ${fallasPedido.join(', ')} no. ` +
+          'Se puede completar editando el envío.',
+      );
+    }
 
     // Igual que en el formulario manual: si algún comercio no se pudo enlazar,
     // decirlo. Los envíos quedaron guardados; lo que falta es el punto.
@@ -884,6 +1026,21 @@ function ShipmentForm({
               <Field label="Producto">
                 <input className={field} value={form.product_detail} onChange={(e) => set('product_detail', e.target.value)} />
               </Field>
+
+              {/* El pedido del depósito, sólo para comercios que guardan
+                  mercadería acá. El texto de arriba es lo que se imprime; esto
+                  es lo que se descuenta — elegido de la lista, sin adivinar. */}
+              {form.client_id != null && conStock.has(form.client_id) && (
+                <div className="sm:col-span-2">
+                  <PedidoDeStock
+                    productos={productosDe[form.client_id] ?? []}
+                    lineas={pedidoManualPor[form.client_id] ?? []}
+                    onChange={(ls) =>
+                      setPedidoManualPor((prev) => ({ ...prev, [form.client_id as number]: ls }))
+                    }
+                  />
+                </div>
+              )}
 
               <div className="mt-2 border-t border-[var(--edr-border)] pt-4 text-xs font-bold uppercase tracking-wide text-[var(--edr-muted)] sm:col-span-2">
                 Plata
@@ -1274,6 +1431,28 @@ function ShipmentForm({
                               <Field label="Producto" className="sm:col-span-1">
                                 <input className={field} value={r.productDetail} onChange={(e) => updateRow(r.tempId, { productDetail: e.target.value })} />
                               </Field>
+
+                              {(() => {
+                                /* El comercio de esta fila, si ya está cargado y
+                                   guarda stock acá. Con eso el pedido se elige
+                                   de su listado; sin eso, la fila queda igual
+                                   que siempre. */
+                                const c = comerciosConocidos.find(
+                                  (x) => claveComercio(x.name) === claveComercio(r.clientName),
+                                );
+                                if (!c || !conStock.has(c.id)) return null;
+                                return (
+                                  <div className="sm:col-span-3">
+                                    <PedidoDeStock
+                                      productos={productosDe[c.id] ?? []}
+                                      lineas={pedidosFila[r.tempId] ?? []}
+                                      onChange={(ls) =>
+                                        setPedidosFila((prev) => ({ ...prev, [r.tempId]: ls }))
+                                      }
+                                    />
+                                  </div>
+                                );
+                              })()}
                               <Field label="Notas" className="sm:col-span-2">
                                 <input className={field} value={r.notes} onChange={(e) => updateRow(r.tempId, { notes: e.target.value })} />
                               </Field>
@@ -1348,6 +1527,103 @@ function ShipmentForm({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * El pedido del depósito: qué productos lleva el envío y cuántos.
+ *
+ * Un desplegable por línea y no texto libre, a propósito: lo que se elige acá
+ * es EXACTAMENTE lo que la base descuenta cuando el envío pasa a entregado
+ * (paso 56). Un producto por línea; el mismo producto dos veces se corrige
+ * subiendo la cantidad.
+ */
+function PedidoDeStock({
+  productos,
+  lineas,
+  onChange,
+}: {
+  productos: StockRow[];
+  lineas: LineaDePedido[];
+  onChange: (lineas: LineaDePedido[]) => void;
+}) {
+  const usados = new Set(lineas.map((l) => l.productId));
+  const activos = productos.filter((p) => p.activo);
+
+  const setLinea = (i: number, patch: Partial<LineaDePedido>) =>
+    onChange(lineas.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  return (
+    <div className="rounded border border-[var(--edr-yellow)]/50 bg-[var(--edr-surface-2)] p-3">
+      <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--edr-acento)]">
+        Lleva del depósito
+      </div>
+
+      {activos.length === 0 ? (
+        <p className="text-xs text-[var(--edr-muted)]">
+          Este comercio todavía no tiene productos cargados en Stock.
+        </p>
+      ) : (
+        <>
+          {lineas.map((l, i) => {
+            const elegido = productos.find((p) => p.product_id === l.productId);
+            return (
+              <div key={i} className="mb-1.5 flex items-center gap-2">
+                <select
+                  className={`${field} min-w-0 flex-1`}
+                  value={l.productId}
+                  onChange={(e) => setLinea(i, { productId: e.target.value })}
+                >
+                  <option value="">Elegí el producto…</option>
+                  {activos.map((p) => (
+                    <option
+                      key={p.product_id}
+                      value={p.product_id}
+                      disabled={usados.has(p.product_id) && p.product_id !== l.productId}
+                    >
+                      {p.nombre} · quedan {p.stock}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  className={`${field} w-20 text-right`}
+                  value={l.cantidad || ''}
+                  onChange={(e) => setLinea(i, { cantidad: Number(e.target.value) || 0 })}
+                />
+                <button
+                  onClick={() => onChange(lineas.filter((_, j) => j !== i))}
+                  aria-label="Quitar producto"
+                  className="px-1.5 text-lg leading-none text-[var(--edr-muted)] hover:text-red-400"
+                >
+                  ×
+                </button>
+
+                {/* Se avisa, no se frena: puede estar entrando mercadería hoy
+                    mismo, y el descuento recién pasa cuando se entrega. */}
+                {elegido && l.cantidad > elegido.stock && (
+                  <span className="text-[11px] font-bold text-[var(--edr-naranja-claro)]">
+                    hay {elegido.stock}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
+          <button
+            onClick={() => onChange([...lineas, { productId: '', cantidad: 1 }])}
+            className="text-xs font-bold text-[var(--edr-acento)] underline underline-offset-2"
+          >
+            + Agregar producto
+          </button>
+
+          <p className="mt-1.5 text-[11px] text-[var(--edr-muted)]">
+            Se descuenta del stock cuando el envío figura entregado.
+          </p>
+        </>
+      )}
     </div>
   );
 }

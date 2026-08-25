@@ -5,10 +5,10 @@ import { NextResponse } from 'next/server';
  * Alta, cambio de contraseña y baja del usuario con el que entra un comercio a
  * ver SUS ENVÍOS.
  *
- * Es hermana de `/api/stock-users`, que hace lo mismo para el stock. Están
- * separadas porque cuelgan de tablas distintas —`clients` acá, `stock_clients`
- * allá— y un comercio puede tener envíos sin tener stock. Juntarlas obligaría
- * a que las dos cosas existan siempre.
+ * Es EL único acceso del comercio. Había una hermana —`/api/stock-users`,
+ * para el stock del paso 13— que se fue con el paso 56: el stock ahora cuelga
+ * del mismo `clients`, así que el mismo usuario que ve sus envíos ve su
+ * mercadería, sin segunda cuenta.
  *
  * CORRE EN EL SERVIDOR porque crear usuarios necesita la clave de servicio, y
  * esa clave no puede viajar al navegador ni una vez: quien la tenga puede leer

@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { deleteMovement, downloadCSV } from '@/lib/stock/db';
-import type { MovementRow, StockClient, StockRow } from '@/lib/stock/types';
+import type { ComercioConStock, MovementRow, StockRow } from '@/lib/stock/types';
 import { fechaCorta } from '@/lib/stock/types';
 import { btnSmall, field, tableHead, tableWrap } from './ui';
 
 interface Props {
-  cliente: StockClient;
+  cliente: ComercioConStock;
   stock: StockRow[];
   movimientos: MovementRow[];
   loading: boolean;
@@ -56,7 +56,7 @@ export default function MovimientosTab({
         <div>
           <h2 className="text-base font-bold">Historial de movimientos</h2>
           <p className="text-xs text-[var(--edr-muted)]">
-            Todo lo que entró y salió del depósito para {cliente.nombre}. Se muestran los últimos 300.
+            Todo lo que entró y salió del depósito para {cliente.name}. Se muestran los últimos 300.
           </p>
         </div>
 
@@ -83,7 +83,7 @@ export default function MovimientosTab({
           <button
             onClick={() =>
               downloadCSV(
-                `movimientos-${cliente.nombre}.csv`,
+                `movimientos-${cliente.name}.csv`,
                 ['Fecha', 'Producto', 'Código', 'Tipo', 'Cantidad', 'Detalle'],
                 filtrados.map((m) => [
                   m.fecha,

@@ -1,19 +1,22 @@
-/** Las tres tablas del paso 13, tal cual salen de Supabase. */
+/** Las tablas del paso 56, tal cual salen de Supabase. */
 
-export interface StockClient {
-  id: string;
-  nombre: string;
-  prefijo: string;
-  sufijo: string;
-  contador: number;
-  profile_id: string | null;
-  activo: boolean;
-  created_at: string;
+/**
+ * Un comercio que guarda mercadería en el depósito.
+ *
+ * NO ES UNA TABLA PROPIA: es la fila de `clients` con `maneja_stock` prendido.
+ * El paso 13 tenía una lista de clientes de stock aparte de los comercios de
+ * verdad, y eran el mismo mundo dos veces; el paso 56 los unificó.
+ */
+export interface ComercioConStock {
+  id: number;
+  name: string;
+  stock_prefijo: string | null;
+  stock_contador: number;
 }
 
 export interface StockProduct {
   id: string;
-  client_id: string;
+  client_id: number;
   nombre: string;
   codigo: string;
   minimo: number;
@@ -24,7 +27,7 @@ export interface StockProduct {
 /** Fila de la vista `stock_actual`: el producto con su stock ya sumado. */
 export interface StockRow {
   product_id: string;
-  client_id: string;
+  client_id: number;
   nombre: string;
   codigo: string;
   minimo: number;
@@ -34,7 +37,7 @@ export interface StockRow {
 
 export interface StockMovement {
   id: string;
-  client_id: string;
+  client_id: number;
   product_id: string;
   tipo: 'ingreso' | 'egreso';
   cantidad: number;

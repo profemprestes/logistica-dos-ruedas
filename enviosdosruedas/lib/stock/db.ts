@@ -1,26 +1,39 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { MovementRow, StockClient, StockMovement, StockProduct, StockRow } from './types';
+import type { ComercioConStock, MovementRow, StockMovement, StockProduct, StockRow } from './types';
 
 /**
  * Todas las consultas de stock en un solo lugar. Las pantallas sólo arman la
  * vista: si mañana cambia una tabla, se toca acá y nada más.
  *
- * Las políticas del paso 13 hacen el filtro por cliente solas (el comercio ve
- * únicamente lo suyo), así que las mismas funciones sirven para las dos
- * pantallas.
+ * Las políticas del paso 56 hacen el filtro por comercio solas (cada uno ve
+ * únicamente lo suyo), así que las mismas funciones sirven para el panel y
+ * para el portal del comercio.
  */
 
-export async function fetchClients(): Promise<StockClient[]> {
+/** El aviso que las pantallas muestran cuando la base todavía es la vieja. */
+export const FALTA_PASO_56 =
+  'Falta correr el paso 56 en la base. Hasta entonces el stock sigue con las tablas viejas.';
+
+/**
+ * Los comercios que guardan mercadería acá: los de `clients` con la marca
+ * prendida. La marca se pone en la ficha del comercio, no en esta pantalla.
+ */
+export async function fetchComerciosConStock(): Promise<ComercioConStock[]> {
   const { data, error } = await supabase
-    .from('stock_clients')
-    .select('*')
-    .order('nombre');
-  if (error) throw new Error(error.message);
-  return (data ?? []) as StockClient[];
+    .from('clients')
+    .select('id, name, stock_prefijo, stock_contador')
+    .eq('maneja_stock', true)
+    .eq('active', true)
+    .order('name');
+
+  if (error) {
+    throw new Error(/maneja_stock|stock_prefijo/.test(error.message) ? FALTA_PASO_56 : error.message);
+  }
+  return (data ?? []) as ComercioConStock[];
 }
 
 /** El stock de hoy sale de la vista: se calcula sumando movimientos. */
-export async function fetchStock(clientId: string): Promise<StockRow[]> {
+export async function fetchStock(clientId: number): Promise<StockRow[]> {
   const { data, error } = await supabase
     .from('stock_actual')
     .select('*')
@@ -30,7 +43,7 @@ export async function fetchStock(clientId: string): Promise<StockRow[]> {
   return (data ?? []) as StockRow[];
 }
 
-export async function fetchMovements(clientId: string, limit = 300): Promise<MovementRow[]> {
+export async function fetchMovements(clientId: number, limit = 300): Promise<MovementRow[]> {
   const { data, error } = await supabase
     .from('stock_movements')
     .select('*, stock_products(nombre, codigo)')
@@ -53,7 +66,7 @@ export async function fetchMovements(clientId: string, limit = 300): Promise<Mov
  * incrementa el contador y devuelve el código en una sola operación: si dos
  * personas cargan un producto al mismo tiempo, no salen dos códigos iguales.
  */
-export async function nextProductCode(clientId: string): Promise<string> {
+export async function nextProductCode(clientId: number): Promise<string> {
   const { data, error } = await supabase.rpc('siguiente_codigo_producto', {
     p_client_id: clientId,
   });
@@ -62,7 +75,7 @@ export async function nextProductCode(clientId: string): Promise<string> {
 }
 
 export interface NewProduct {
-  clientId: string;
+  clientId: number;
   nombre: string;
   minimo: number;
   stockInicial: number;
@@ -96,7 +109,7 @@ export async function createProduct(p: NewProduct): Promise<StockProduct> {
 }
 
 export interface NewMovement {
-  clientId: string;
+  clientId: number;
   productId: string;
   tipo: 'ingreso' | 'egreso';
   /** Siempre positiva: el signo lo pone `tipo`. */
@@ -172,31 +185,76 @@ export async function deleteProduct(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export async function createClient(c: {
-  nombre: string;
-  prefijo: string;
-  sufijo: string;
-}): Promise<StockClient> {
-  const { data, error } = await supabase.from('stock_clients').insert(c).select().single();
-  if (error) throw new Error(error.message);
-  return data as StockClient;
-}
+/* ------------------------------------------------- el pedido del envío */
 
-export async function updateClient(
-  id: string,
-  patch: Partial<Pick<StockClient, 'nombre' | 'prefijo' | 'sufijo' | 'activo'>>
-): Promise<void> {
-  const { error } = await supabase.from('stock_clients').update(patch).eq('id', id);
-  if (error) throw new Error(error.message);
+/** Una línea del pedido: qué producto lleva el envío y cuántos. */
+export interface LineaDePedido {
+  productId: string;
+  cantidad: number;
 }
 
 /**
- * Se lleva puestos sus productos y todo el historial de movimientos (cascade).
- * Es irreversible: por eso la pantalla lo hace escribir el nombre del cliente.
+ * Guarda el pedido de un envío recién cargado. Falla en silencio hacia el
+ * caller con el error, que decide si es grave: un envío sin pedido sigue
+ * siendo un envío.
  */
-export async function deleteClient(id: string): Promise<void> {
-  const { error } = await supabase.from('stock_clients').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+export async function guardarPedido(
+  shipmentId: number,
+  lineas: LineaDePedido[],
+): Promise<{ error?: string }> {
+  const filas = lineas
+    .filter((l) => l.productId && l.cantidad > 0)
+    .map((l) => ({ shipment_id: shipmentId, product_id: l.productId, cantidad: l.cantidad }));
+  if (!filas.length) return {};
+
+  const { error } = await supabase.from('shipment_products').insert(filas);
+  return error ? { error: error.message } : {};
+}
+
+/**
+ * Reemplaza el pedido de un envío al editarlo: se borra lo viejo y se escribe
+ * lo nuevo. Si el envío ya está entregado, el trigger de la base NO recalcula
+ * el egreso (el descuento pasó con el pedido que tenía al entregarse): la
+ * corrección de un descuento ya hecho se hace en Movimientos, a mano.
+ */
+export async function reemplazarPedido(
+  shipmentId: number,
+  lineas: LineaDePedido[],
+): Promise<{ error?: string }> {
+  const { error: e1 } = await supabase
+    .from('shipment_products')
+    .delete()
+    .eq('shipment_id', shipmentId);
+  if (e1) return { error: e1.message };
+  return guardarPedido(shipmentId, lineas);
+}
+
+/** Los pedidos de varios envíos de una vez, para la edición y los listados. */
+export async function fetchPedidos(
+  shipmentIds: number[],
+): Promise<Map<number, (LineaDePedido & { nombre: string })[]>> {
+  const mapa = new Map<number, (LineaDePedido & { nombre: string })[]>();
+  if (!shipmentIds.length) return mapa;
+
+  const { data, error } = await supabase
+    .from('shipment_products')
+    .select('shipment_id, product_id, cantidad, stock_products(nombre)')
+    .in('shipment_id', shipmentIds);
+  if (error) return mapa; // sin paso 56 no hay pedidos que traer
+
+  type Fila = {
+    shipment_id: number;
+    product_id: string;
+    cantidad: number;
+    stock_products: { nombre: string } | { nombre: string }[] | null;
+  };
+  for (const f of (data ?? []) as Fila[]) {
+    const lista = mapa.get(f.shipment_id) ?? [];
+    const prod = Array.isArray(f.stock_products) ? f.stock_products[0] : f.stock_products;
+    lista.push({ productId: f.product_id, cantidad: f.cantidad, nombre: prod?.nombre ?? '' });
+    mapa.set(f.shipment_id, lista);
+  }
+  return mapa;
 }
 
 /* --------------------------------------------------------------- CSV */

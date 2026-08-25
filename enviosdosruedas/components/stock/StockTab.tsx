@@ -11,13 +11,13 @@ import {
   nextProductCode,
 } from '@/lib/stock/db';
 import { normalizar, parseCSV } from '@/lib/stock/parse';
-import type { StockClient, StockRow } from '@/lib/stock/types';
+import type { ComercioConStock, StockRow } from '@/lib/stock/types';
 import { hoyISO } from '@/lib/stock/types';
 import { supabase } from '@/lib/supabaseClient';
 import { btnGhost, btnPrimary, btnSmall, card, field, labelCls, tableHead, tableWrap } from './ui';
 
 interface Props {
-  cliente: StockClient;
+  cliente: ComercioConStock;
   stock: StockRow[];
   loading: boolean;
   onReload: () => Promise<void>;
@@ -268,11 +268,10 @@ export default function StockTab({ cliente, stock, loading, onReload, onError, o
       <section className={card}>
         <h2 className="mb-1 text-base font-bold">Cargar producto</h2>
         <p className="mb-4 text-xs text-[var(--edr-muted)]">
-          El código se genera solo con el prefijo del cliente. Ejemplo:{' '}
+          El código se genera solo con el prefijo del comercio. Ejemplo:{' '}
           <span className="edr-mono">
-            {cliente.prefijo}
-            {String(cliente.contador + 1).padStart(8, '0')}
-            {cliente.sufijo}
+            {cliente.stock_prefijo ?? '??'}
+            {String(cliente.stock_contador + 1).padStart(8, '0')}EDR
           </span>
           .
         </p>
@@ -429,7 +428,7 @@ export default function StockTab({ cliente, stock, loading, onReload, onError, o
             <button
               onClick={() =>
                 downloadCSV(
-                  `stock-${cliente.nombre}.csv`,
+                  `stock-${cliente.name}.csv`,
                   ['Producto', 'Código', 'Stock', 'Mínimo'],
                   stock.map((p) => [p.nombre, p.codigo, p.stock, p.minimo])
                 )
@@ -465,7 +464,7 @@ export default function StockTab({ cliente, stock, loading, onReload, onError, o
               {!loading && stock.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-3 py-10 text-center text-[var(--edr-muted)]">
-                    Todavía no hay productos de {cliente.nombre}. Cargá el primero arriba.
+                    Todavía no hay productos de {cliente.name}. Cargá el primero arriba.
                   </td>
                 </tr>
               )}

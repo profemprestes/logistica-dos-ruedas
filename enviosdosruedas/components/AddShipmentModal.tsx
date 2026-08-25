@@ -447,6 +447,24 @@ function ShipmentForm({
     (nombre ?? '').trim().toLowerCase();
 
   /**
+   * El pedido del depósito como texto: "1× Control deco, 2× Nad".
+   *
+   * Es lo que se guarda en el campo Producto cuando quedó vacío: ese campo es
+   * lo que el repartidor lee en su ficha y lo que sale impreso en la
+   * etiqueta, y un envío con pedido elegido del listado pero sin texto
+   * llegaba a la calle sin decir qué lleva.
+   */
+  const textoDelPedido = (lineas: LineaDePedido[], productos: StockRow[]) =>
+    lineas
+      .filter((l) => l.productId && l.cantidad > 0)
+      .map((l) => {
+        const prod = productos.find((x) => x.product_id === l.productId);
+        return prod ? `${l.cantidad}\u00d7 ${prod.nombre}` : '';
+      })
+      .filter(Boolean)
+      .join(', ');
+
+  /**
    * La ficha a la que se enlaza un nombre de la tanda: la elegida a mano si
    * la hay, o la que matchea por la clave canónica (sin mayúsculas, puntos ni
    * tildes). `null` = no hay ficha: se crea comercio nuevo al guardar.
@@ -613,8 +631,19 @@ function ShipmentForm({
         punto: pickup_lat != null && pickup_lng != null ? { lat: pickup_lat, lng: pickup_lng } : null,
       }));
 
+    /*
+     * Si el campo Producto quedó vacío pero se eligió pedido del depósito, el
+     * texto sale del pedido: es lo que ven el repartidor y la etiqueta.
+     */
+    const pedidoElegido = clientId != null ? (pedidoManualPor[clientId] ?? []) : [];
+    const productoEscrito = delFormulario.product_detail.trim();
+    const productoFinal =
+      productoEscrito ||
+      (clientId != null ? textoDelPedido(pedidoElegido, productosDe[clientId] ?? []) : '');
+
     const payload = {
       ...delFormulario,
+      product_detail: productoFinal,
       client_id: clientId,
       pickup_address: [form.pickup_address.trim(), pickup_extra.trim()]
         .filter(Boolean)
@@ -678,11 +707,10 @@ function ShipmentForm({
      * completa editando.
      */
     const idGuardado = editing?.id ?? guardado?.[0]?.id;
-    const pedidoDelComercio = clientId != null ? (pedidoManualPor[clientId] ?? []) : [];
-    if (idGuardado && (pedidoDelComercio.length > 0 || editing)) {
+    if (idGuardado && (pedidoElegido.length > 0 || editing)) {
       const r = editing
-        ? await reemplazarPedido(idGuardado, pedidoDelComercio)
-        : await guardarPedido(idGuardado, pedidoDelComercio);
+        ? await reemplazarPedido(idGuardado, pedidoElegido)
+        : await guardarPedido(idGuardado, pedidoElegido);
       if (r.error) {
         setAvisoComercio(`El envío se guardó, pero el pedido de stock no: ${r.error}`);
       }
@@ -787,7 +815,16 @@ function ShipmentForm({
       address_extra: r.addressExtra,
       city: r.city,
       delivery_window: r.deliveryWindow,
-      product_detail: r.productDetail,
+      // Sin texto escrito, el producto sale del pedido del depósito: es lo
+      // que leen el repartidor y la etiqueta.
+      product_detail:
+        r.productDetail ||
+        (() => {
+          const ficha = fichaEnlazada(r.clientName);
+          return ficha
+            ? textoDelPedido(pedidosFila[r.tempId] ?? [], productosDe[ficha.id] ?? [])
+            : '';
+        })(),
       notes: r.notes,
       payment_mode: r.paymentMode,
       is_flex: r.isReminder,

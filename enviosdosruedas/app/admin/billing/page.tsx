@@ -1,12 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import { notificarRepartidor } from '@/lib/notify';
 import { money, nombreDelDestinatario } from '@/lib/format';
-import { anotar as anotarEnLaBilletera } from '@/lib/billetera';
 import {
   dayRange,
   logCash,
@@ -50,7 +48,7 @@ interface Settlement {
 async function fetchDay(driverId: string, day: string) {
   const { from, to } = dayRange(day);
 
-  const [logsRes, settlementRes, rendicionesRes] = await Promise.all([
+  const [logsRes, settlementRes] = await Promise.all([
     conLosMovimientos<DeliveryLog[]>((select) =>
       supabase
         .from('delivery_logs')
@@ -66,22 +64,9 @@ async function fetchDay(driverId: string, day: string) {
       .eq('driver_id', driverId)
       .eq('day', day)
       .maybeSingle(),
-    /*
-     * Lo que entregó ESE día, según la billetera (paso 55).
-     *
-     * Puede ser cero aunque haya cobrado mucho: lo normal es que junte varios
-     * días y entregue todo junto otro día. El saldo de verdad está en la
-     * Billetera; acá sólo se muestra lo de la jornada.
-     */
-    supabase
-      .from('movimientos_caja')
-      .select('monto')
-      .eq('driver_id', driverId)
-      .eq('fecha', day)
-      .eq('tipo', 'rendicion'),
   ]);
 
-  return { logsRes, settlementRes, rendicionesRes };
+  return { logsRes, settlementRes };
 }
 
 export default function BillingPage() {
@@ -95,8 +80,6 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notes, setNotes] = useState('');
-  /** Lo que entregó ese día según la billetera. Acá no se edita. */
-  const [rendidoEnLaBilletera, setRendido] = useState(0);
   const [earnings, setEarnings] = useState('');
   const [cobrado, setCobrado] = useState('');
   const [envios, setEnvios] = useState('');
@@ -105,10 +88,6 @@ export default function BillingPage() {
   const [montoReal, setMontoReal] = useState('');
   const [notaCorreccion, setNotaCorreccion] = useState('');
   const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
-  /** El cuadro para anotar que entregó la plata (paso 55). */
-  const [anotandoRendicion, setAnotandoRendicion] = useState(false);
-  const [montoRendido, setMontoRendido] = useState('');
-  const [guardandoRendicion, setGuardandoRendicion] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -126,7 +105,7 @@ export default function BillingPage() {
   }, [ready]);
 
   const apply = useCallback(
-    ({ logsRes, settlementRes, rendicionesRes }: Awaited<ReturnType<typeof fetchDay>>) => {
+    ({ logsRes, settlementRes }: Awaited<ReturnType<typeof fetchDay>>) => {
     if (logsRes.error) {
       console.error('[liquidación] no se pudieron traer los movimientos', logsRes.error);
       setError(logsRes.error.message);
@@ -142,20 +121,6 @@ export default function BillingPage() {
     setNotes(saved?.notes ?? '');
     // Arranca con lo que calculó el sistema; el admin lo pisa si rindió otra cosa.
     const calc = summarizeLogs(rows);
-    /*
-     * EL RENDIDO ARRANCA EN CERO, NO EN LO COBRADO.
-     *
-     * Arrancaba con el efectivo del día, o sea dando por hecho que el
-     * repartidor entregó todo — y entonces el saldo nacía diciendo que no debía
-     * nada. Justo al revés de lo que pasa: lo normal es que la plata la tenga
-     * él hasta que la rinde, y rendir es un hecho que ocurre, no algo que se
-     * supone. Se llena a mano cuando la entrega, que es cuando se sabe.
-     *
-     * Un día ya cerrado conserva lo que se guardó: esto es sólo el arranque.
-     */
-    setRendido(
-      (rendicionesRes.data ?? []).reduce((acc, m) => acc + Number(m.monto), 0),
-    );
     /*
      * Lo que le toca al repartidor arranca CALCULADO, no vacío.
      *
@@ -273,38 +238,6 @@ export default function BillingPage() {
     }
 
     setCorrigiendo(null);
-    await reload();
-  }
-
-  /**
-   * Anota acá mismo que entregó la plata.
-   *
-   * POR QUÉ EL BOTÓN VIVE EN EL CIERRE. Cerrar el día y recibir la plata son
-   * dos actos distintos —se puede cerrar el día sin que haya entregado nada— y
-   * por eso la billetera no se mueve sola al liquidar. Pero el momento en que
-   * suele entregarla es justo éste, con el admin mirando la cuenta del día: si
-   * para anotarlo hubiera que cambiar de pantalla, no se anotaría.
-   */
-  async function guardarRendicion() {
-    setGuardandoRendicion(true);
-    setError('');
-
-    const r = await anotarEnLaBilletera({
-      driverId,
-      fecha: day,
-      tipo: 'rendicion',
-      monto: Number(montoRendido),
-      nota: 'Anotado al cerrar el día',
-    });
-
-    setGuardandoRendicion(false);
-
-    if (r.error) {
-      setError(r.error);
-      return;
-    }
-
-    setAnotandoRendicion(false);
     await reload();
   }
 
@@ -515,62 +448,20 @@ export default function BillingPage() {
                   {money(Number(settlement.cash_total) - gananciaNum)}
                 </strong>{' '}
                 · cerrado el {new Date(settlement.settled_at).toLocaleString('es-AR')}
-                {/* Lo entregado con fecha de este día se dice aparte y en gris:
-                    es un dato de la cuenta corriente que pasó por acá, no una
-                    parte de lo que este día dejó a rendir. */}
-                {rendidoEnLaBilletera > 0 && (
-                  <div className="mt-1 text-xs">
-                    Con fecha de este día entregó{' '}
-                    <strong className="edr-mono">{money(rendidoEnLaBilletera)}</strong> — va a la{' '}
-                    <Link
-                      href={`/admin/billetera?repartidor=${driverId}`}
-                      className="underline underline-offset-2"
-                    >
-                      cuenta corriente
-                    </Link>
-                    , no a este día.
-                  </div>
-                )}
               </div>
 
               {/*
-                ANOTAR LA RENDICIÓN CON EL DÍA YA CERRADO.
+                ACÁ NO HAY NADA DE RENDICIONES, y estuvo dos veces antes de
+                entenderse: primero un campo, después un botón con un cartel de
+                "de ese día quedan X sin rendir". Las dos veces mezclaban lo
+                mismo: el día es control diario —qué se cobró, qué es de cada
+                uno— y la plata se entrega POR SEMANA, cuando se cierra en la
+                Billetera. Un día no se salda solo, y compararlo contra las
+                entregas fechadas ese día nunca podía cerrar.
 
-                Antes este botón vivía sólo en el formulario, que desaparece al
-                liquidar. Así que para anotar que le entregó la plata había que
-                REABRIR EL DÍA —y reabrir borra el cierre—. Rendir es lo que
-                pasa DESPUÉS de cerrar: es el orden normal, no la excepción.
+                Anotar, corregir o borrar una entrega de plata: todo en la
+                Billetera. Acá, ni un número que lo insinúe.
               */}
-              <button
-                onClick={() => {
-                  setAnotandoRendicion(true);
-                  // En NETO: el efectivo del cierre menos su parte, que es lo
-                  // que él trae de verdad. Su comisión ya quedó en su bolsillo.
-                  setMontoRendido(
-                    String(
-                      Math.max(
-                        0,
-                        Number(settlement.cash_total) - gananciaNum - rendidoEnLaBilletera,
-                      ),
-                    ),
-                  );
-                }}
-                className="rounded border border-[var(--edr-yellow)] px-3 py-1.5 text-sm font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
-              >
-                Anotar que rindió
-              </button>
-
-              {/*
-                ACÁ IBA "de ese día quedan X sin rendir", y era la mezcla en su
-                forma más pura: comparaba lo que el día dejó a rendir contra las
-                entregas de plata FECHADAS ese día. Nunca coincidían, y no tenían
-                por qué — la plata se entrega después, junta varias jornadas, y a
-                veces es sólo a cuenta.
-
-                Un día no se salda solo. Lo que falta rendir es uno para todo:
-                el saldo de la cuenta, que vive en la Billetera.
-              */}
-
               {settlement.earnings !== null && (
                 <div className="w-full rounded border border-[var(--edr-yellow)] px-3 py-2 text-sm font-bold">
                   Ganancia del día: {money(Number(settlement.earnings))}
@@ -618,56 +509,9 @@ export default function BillingPage() {
                   }
                 />
 
-                {/*
-                  LO RENDIDO NO ES UN RENGLÓN DEL CIERRE, y por eso está fuera
-                  de la cuenta del día.
-
-                  Era un campo del cierre de UN DÍA, y la plata no se entrega
-                  por día: el repartidor junta lo de varias jornadas y deja un
-                  monto que cubre todo. Escrito acá quedaba pegado a un día al
-                  que no pertenece — el 12/08/2026 quedó "cobró $ 9.900, rindió
-                  $ 55.000", y el lunes 24/08 el día arrancó con un descuento de
-                  $ 26.280 que era de la semana anterior.
-
-                  El botón se queda porque este es el momento en que se anota,
-                  pero lo que muestra es un movimiento de la CUENTA con fecha de
-                  hoy, no una parte de este día. Por eso no se resta de nada.
-                */}
-                <Renglon
-                  label="Entregas de plata con fecha de este día"
-                  hint="van a la cuenta corriente, no a la cuenta de este día"
-                  input={
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="edr-mono text-lg font-black">
-                        {money(rendidoEnLaBilletera)}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setAnotandoRendicion(true);
-                          // Arranca con lo que falta del día EN NETO: cobrado
-                          // menos su parte, que es la plata que él trae de
-                          // verdad. Volver a escribirla es una oportunidad de
-                          // equivocarse.
-                          setMontoRendido(
-                            String(Math.max(0, cobradoNum - gananciaNum - rendidoEnLaBilletera)),
-                          );
-                        }}
-                        className="rounded border border-[var(--edr-yellow)] px-2.5 py-1 text-xs font-bold text-[var(--edr-acento)] hover:bg-[var(--edr-surface-2)]"
-                      >
-                        Anotar que rindió
-                      </button>
-                      {/* Sin este link, el número se ve y no se puede tocar: no
-                          se corrige ni se borra desde acá, y no había forma de
-                          saber adónde ir. */}
-                      <Link
-                        href={`/admin/billetera?repartidor=${driverId}`}
-                        className="text-xs font-bold text-[var(--edr-acento)] underline underline-offset-2"
-                      >
-                        ver en la Billetera →
-                      </Link>
-                    </div>
-                  }
-                />
+                {/* Acá no va nada de lo rendido. Ver el comentario del día
+                    liquidado: el día es control diario, y las entregas de plata
+                    se anotan en la Billetera, donde se cierra la semana. */}
 
                 <Renglon
                   label="Envíos totales (sin comisión)"
@@ -918,78 +762,6 @@ export default function BillingPage() {
           </table>
         </div>
       </main>
-
-      {/* Anotar que entregó la plata (paso 55) */}
-      {anotandoRendicion && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-          <div className="my-10 w-full max-w-md rounded-lg bg-[var(--edr-surface)] shadow-xl">
-            <div className="flex items-center justify-between border-b border-[var(--edr-border)] px-5 py-4">
-              <h2 className="text-lg font-bold">¿Cuánto te entregó {driverName}?</h2>
-              <button
-                onClick={() => setAnotandoRendicion(false)}
-                className="rounded px-2 py-1 text-2xl leading-none text-[var(--edr-muted)] hover:bg-[var(--edr-surface-2)]"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="grid gap-3 px-5 py-5">
-              <p className="text-sm text-[var(--edr-muted)]">
-                Ese día cobró <strong className="edr-mono">{money(cobradoNum)}</strong> y su parte
-                es <strong className="edr-mono">{money(gananciaNum)}</strong>: quedaron{' '}
-                <strong className="edr-mono">{money(Math.max(0, cobradoNum - gananciaNum))}</strong>{' '}
-                a rendir por ese día.
-                {/* Se aclara "con fecha de ese día" y no "de esos": lo anotado
-                    puede cubrir cualquier jornada, y el monto de acá arriba es
-                    sólo el punto de partida del campo. */}
-                {rendidoEnLaBilletera > 0 && (
-                  <>
-                    {' '}
-                    Con esa fecha ya hay anotados{' '}
-                    <span className="edr-mono">{money(rendidoEnLaBilletera)}</span>.
-                  </>
-                )}
-              </p>
-
-              <div>
-                <label className={labelCls}>Cuánto entregó</label>
-                <input
-                  className={field}
-                  inputMode="numeric"
-                  value={montoRendido}
-                  onChange={(e) => setMontoRendido(e.target.value)}
-                  placeholder="50000"
-                />
-              </div>
-
-              {/* Que la fecha sea la del día que se está cerrando es lo normal,
-                  pero no siempre: si entregó hoy lo del lunes, la entrega es de
-                  hoy. Para eso está la Billetera, y lo dice acá. */}
-              <p className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-3 py-2 text-xs text-[var(--edr-muted)]">
-                Se anota con fecha <strong>{day.split('-').reverse().join('/')}</strong>, el día que
-                estás cerrando. Si te la entregó otro día, anotalo desde la Billetera para ponerle
-                la fecha que corresponde.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-[var(--edr-border)] px-5 py-4">
-              <button
-                onClick={() => setAnotandoRendicion(false)}
-                className="rounded border border-[var(--edr-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--edr-surface-2)]"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={guardarRendicion}
-                disabled={guardandoRendicion}
-                className="rounded bg-[var(--edr-yellow)] px-5 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
-              >
-                {guardandoRendicion ? 'Guardando…' : 'Anotar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Corregir lo cobrado (paso 54) */}
       {corrigiendo && (

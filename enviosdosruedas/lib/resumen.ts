@@ -47,8 +47,17 @@ export const REGLAS = {
    * está definido: el sistema no lo inventa.
    */
   tratoDirecto: {
-    CONECTTA: { envioPorDefecto: 2000, gananciaPorEnvio: 0 },
-  } as Record<string, { envioPorDefecto: number; gananciaPorEnvio: number }>,
+    /*
+     * A Conectta se le FACTURA $3.000 por envío entregado (fijo, lo aclare o
+     * no) y al repartidor se le pagan $2.000. `gananciaPorEnvio` sigue en 0
+     * hasta que Matías confirme el número — probablemente sea la diferencia,
+     * pero la plata no se supone.
+     */
+    CONECTTA: { envioPorDefecto: 2000, gananciaPorEnvio: 0, facturaPorEnvio: 3000 },
+  } as Record<
+    string,
+    { envioPorDefecto: number; gananciaPorEnvio: number; facturaPorEnvio?: number }
+  >,
 } as const;
 
 export function esShippy(comercio: string): boolean {
@@ -59,7 +68,7 @@ export function esShippy(comercio: string): boolean {
 /** La regla de trato directo de ese comercio, si tiene. Mismo criterio que `esShippy`. */
 export function tratoDirectoDe(
   comercio: string,
-): { envioPorDefecto: number; gananciaPorEnvio: number } | null {
+): { envioPorDefecto: number; gananciaPorEnvio: number; facturaPorEnvio?: number } | null {
   const c = (comercio ?? '').toUpperCase();
   const clave = Object.keys(REGLAS.tratoDirecto).find((k) => c.includes(k));
   return clave ? REGLAS.tratoDirecto[clave] : null;

@@ -42,6 +42,12 @@ export interface Comercio {
   /** El usuario con el que entra al portal. Null si todavía no tiene acceso. */
   profile_id?: string | null;
   /**
+   * CUIT de la empresa, para tenerlo a mano cuando piden factura. Opcional:
+   * la mayoría no factura, y exigirlo trabaría el alta de todos por el dato
+   * de unos pocos.
+   */
+  cuit?: string | null;
+  /**
    * De qué comercio es sucursal esta ficha. Null si es un comercio suelto o si
    * es la casa central.
    *
@@ -141,6 +147,7 @@ export default function EditarComercio({
     active: comercio.active,
     parent_id: comercio.parent_id ?? null,
     maneja_stock: comercio.maneja_stock ?? false,
+    cuit: comercio.cuit ?? '',
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -196,6 +203,7 @@ export default function EditarComercio({
       active: form.active,
       parent_id: form.parent_id,
       maneja_stock: form.maneja_stock,
+      cuit: form.cuit.trim() || null,
     };
 
     const escribir = (datos: Record<string, unknown>) =>
@@ -235,6 +243,13 @@ export default function EditarComercio({
       const { maneja_stock, ...sinStock } = fila;
       void maneja_stock;
       ({ error: e } = await escribir(sinStock));
+    }
+
+    // Y con el CUIT, que llega con el paso 58.
+    if (e && /cuit/.test(e.message)) {
+      const { cuit, ...sinCuit } = fila;
+      void cuit;
+      ({ error: e } = await escribir(sinCuit));
     }
 
     setGuardando(false);
@@ -362,6 +377,19 @@ export default function EditarComercio({
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
             />
+          </div>
+
+          <div>
+            <label className={labelCls}>CUIT (opcional)</label>
+            <input
+              className={campo}
+              value={form.cuit}
+              onChange={(e) => set('cuit', e.target.value)}
+              placeholder="30-12345678-9"
+            />
+            <p className="mt-1 text-xs text-[var(--edr-muted)]">
+              Para tenerlo a mano cuando piden factura. Sale en el resumen de envíos.
+            </p>
           </div>
 
           {/*

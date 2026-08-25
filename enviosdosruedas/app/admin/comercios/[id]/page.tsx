@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, KeyRound, Pencil, Store } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, KeyRound, Pencil, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAdminGuard } from '@/lib/adminGuard';
 import AccesoDelComercio from '@/components/admin/AccesoDelComercio';
 import PedidoDelComercio from '@/components/admin/PedidoDelComercio';
 import EditarComercio, { VACIO, type Comercio } from '@/components/admin/EditarComercio';
 import ResumenDelComercio from '@/components/comercio/ResumenDelComercio';
+import { descargarExcelResumen, valorFacturado, type FilaResumen } from '@/lib/excelResumen';
 
 /**
  * Un comercio, entero: sus envíos, su acceso y su ficha.
@@ -41,6 +42,70 @@ export default function ComercioPage() {
   const [editando, setEditando] = useState(false);
   const [nuevaSucursal, setNuevaSucursal] = useState<Omit<Comercio, 'id'> | null>(null);
   const [version, setVersion] = useState(0);
+
+  /* ---------- el resumen para facturar (Excel) ----------
+     Arranca en el mes en curso, que es el corte más común; las dos fechas se
+     tocan libres para armar "junio a agosto" o lo que pida el caso. */
+  const [excelAbierto, setExcelAbierto] = useState(false);
+  // La fecha se calcula adentro del inicializador: el compilador de React no
+  // deja llamar a Date() en el cuerpo del componente (cambia entre renders).
+  const [excelDesde, setExcelDesde] = useState(() => {
+    const hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    return `${hoy.slice(0, 7)}-01`;
+  });
+  const [excelHasta, setExcelHasta] = useState(() =>
+    new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
+  );
+  const [excelBajando, setExcelBajando] = useState(false);
+  const [excelAviso, setExcelAviso] = useState('');
+
+  /**
+   * Junta los ENTREGADOS del período —de esta ficha y sus sucursales, que son
+   * el mismo negocio— y arma el archivo. El valor de cada fila es el que se le
+   * factura al comercio: para Conectta manda la tarifa fija de la regla
+   * ($3.000 por envío entregado); para el resto, lo cargado en el envío.
+   */
+  async function bajarExcel() {
+    if (!comercio) return;
+    setExcelBajando(true);
+    setExcelAviso('');
+
+    const ids = [comercio.id, ...sucursales.map((x) => x.id)];
+    const { data, error: e } = await supabase
+      .from('shipments')
+      .select(
+        'delivered_at, scheduled_date, address_street, address_extra, shipping_fee, client_name_raw',
+      )
+      .in('client_id', ids)
+      .eq('status', 'entregado')
+      .gte('delivered_at', `${excelDesde}T00:00:00-03:00`)
+      .lte('delivered_at', `${excelHasta}T23:59:59-03:00`)
+      .order('delivered_at', { ascending: true });
+
+    setExcelBajando(false);
+
+    if (e) return setExcelAviso(e.message);
+    if (!data?.length) {
+      return setExcelAviso('No hay envíos entregados de este comercio en ese período.');
+    }
+
+    const filas: FilaResumen[] = data.map((f) => ({
+      fecha: String(f.delivered_at ?? f.scheduled_date).slice(0, 10),
+      direccion: [f.address_street, f.address_extra].filter(Boolean).join(' ') || '(sin dirección)',
+      valor: valorFacturado(f.client_name_raw ?? comercio.name, Number(f.shipping_fee ?? 0)),
+    }));
+
+    descargarExcelResumen({
+      cliente: comercio.name,
+      cuit: comercio.cuit ?? null,
+      desde: excelDesde,
+      hasta: excelHasta,
+      filas,
+    });
+    setExcelAbierto(false);
+  }
 
   useEffect(() => {
     if (!ready || !Number.isFinite(id)) return;
@@ -142,16 +207,73 @@ export default function ComercioPage() {
                     {comercio.pickup_window ? ` · ${comercio.pickup_window}` : ' · sin horario'}
                     {comercio.pickup_notes ? ` · ${comercio.pickup_notes}` : ''}
                     {comercio.phone ? ` · ${comercio.phone}` : ''}
+                    {comercio.cuit ? ` · CUIT ${comercio.cuit}` : ''}
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setEditando(true)}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-bold hover:bg-[var(--edr-surface-2)]"
-                >
-                  <Pencil size={14} /> Editar ficha
-                </button>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    onClick={() => setExcelAbierto((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-bold hover:bg-[var(--edr-surface-2)]"
+                  >
+                    <FileSpreadsheet size={14} /> Resumen Excel
+                  </button>
+                  <button
+                    onClick={() => setEditando(true)}
+                    className="inline-flex items-center gap-1.5 rounded border border-[var(--edr-border)] px-3 py-2 text-sm font-bold hover:bg-[var(--edr-surface-2)]"
+                  >
+                    <Pencil size={14} /> Editar ficha
+                  </button>
+                </div>
               </div>
+
+              {/* El detalle de envíos para facturarle, con el formato del
+                  resumen de siempre: N° · fecha · dirección · valor y el
+                  total. Sale como Excel para que se pueda retocar y mandar. */}
+              {excelAbierto && (
+                <div className="mt-3 flex flex-wrap items-end gap-3 rounded border border-dashed border-[var(--edr-border)] p-3">
+                  <div>
+                    <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)]">
+                      Desde
+                    </label>
+                    <input
+                      type="date"
+                      value={excelDesde}
+                      onChange={(e) => setExcelDesde(e.target.value)}
+                      className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)]">
+                      Hasta
+                    </label>
+                    <input
+                      type="date"
+                      value={excelHasta}
+                      onChange={(e) => setExcelHasta(e.target.value)}
+                      className="rounded border border-[var(--edr-border)] bg-[var(--edr-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--edr-acento)]"
+                    />
+                  </div>
+                  <button
+                    onClick={bajarExcel}
+                    disabled={excelBajando}
+                    className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95 disabled:opacity-50"
+                  >
+                    {excelBajando ? 'Armando…' : 'Descargar'}
+                  </button>
+                  <p className="w-full text-[11px] text-[var(--edr-muted)]">
+                    Envíos entregados del período, de esta ficha y sus sucursales.
+                    {/conectta/i.test(comercio.name)
+                      ? ' Para Conectta cada envío va a $ 3.000, el valor acordado.'
+                      : ''}
+                  </p>
+                  {excelAviso && (
+                    <p className="w-full rounded border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-900">
+                      {excelAviso}
+                    </p>
+                  )}
+                </div>
+              )}
             </section>
 
             {/* ---------------------------------------------- los locales */}

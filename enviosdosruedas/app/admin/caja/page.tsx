@@ -11,8 +11,10 @@ import {
   conLosMovimientos,
   summarizeLogs,
   today,
+  weekRange,
   type DeliveryLog,
 } from '@/lib/settlement';
+import { ARRANCA, traerBilleteras } from '@/lib/billetera';
 
 /**
  * La caja de todos, en un solo lugar.
@@ -28,9 +30,23 @@ import {
  * de la pantalla donde se paga, y ese es el día en que se deja de creerle a
  * los números.
  *
- * LO RENDIDO SALE DE LOS CIERRES, que es el único lugar donde consta que la
- * plata cambió de manos. Un día sin cerrar cuenta como no rendido, que es la
- * verdad: mientras nadie lo cerró, la plata la sigue teniendo el repartidor.
+ * DOS NÚMEROS QUE NUNCA SE RESTAN ENTRE SÍ, y es la corrección de fondo de
+ * esta pantalla:
+ *
+ *   · LO QUE EL PERÍODO GENERÓ — cobró, su parte, y lo que quedó a rendir por
+ *     esos días. Sale de las entregas y no depende de cuándo pague.
+ *   · EL SALDO DE LA CUENTA — lo que debe HOY, desde que arranca la caja.
+ *     Sale de la billetera, entera, sin recortarla al período.
+ *
+ * Antes el saldo se calculaba dentro de la ventana: cobrado menos rendido
+ * menos su parte, todo del período. Y eso miente siempre, porque la plata se
+ * entrega DESPUÉS de que el período cerró. El caso real: el lunes 24/08
+ * Emiliano entregó los $ 26.280 de la semana del 17 al 23, y la semana nueva
+ * arrancó mostrando ese descuento como si fuera de ella.
+ *
+ * Una rendición no pertenece a ningún período —puede ser a cuenta, de un día
+ * suelto, o de dos semanas juntas— así que no se la reparte: se la deja en la
+ * cuenta corriente, que es donde vive.
  */
 
 const campo =
@@ -38,21 +54,48 @@ const campo =
 const labelCls =
   'block text-[10px] font-semibold uppercase tracking-wide text-[var(--edr-muted)] mb-0.5';
 
-const ATAJOS = [
-  { label: 'Hoy', desde: 0, hasta: 0 },
-  { label: 'Ayer', desde: -1, hasta: -1 },
-  { label: 'Últimos 7 días', desde: -6, hasta: 0 },
-  { label: 'Este mes', desde: 'mes' as const, hasta: 0 },
+/**
+ * Los períodos que se miran de verdad.
+ *
+ * LA SEMANA VA PRIMERO porque es la que cierra la caja: el día es control
+ * diario, pero la plata se rinde por semana, y ese cierre se hace el lunes o
+ * el martes siguiente. "Semana pasada" es la pantalla de ese momento.
+ *
+ * Lunes a domingo, igual que los resúmenes (`weekRange`). Si acá se cortara
+ * distinto, dos pantallas dirían dos semanas para los mismos días.
+ */
+const ATAJOS: { label: string; rango: () => { desde: string; hasta: string } }[] = [
+  {
+    label: 'Semana pasada',
+    rango: () => {
+      const s = weekRange(dayShift(today(), -7));
+      return { desde: s.desde, hasta: s.hasta };
+    },
+  },
+  {
+    label: 'Esta semana',
+    rango: () => {
+      const s = weekRange(today());
+      return { desde: s.desde, hasta: s.hasta };
+    },
+  },
+  { label: 'Hoy', rango: () => ({ desde: today(), hasta: today() }) },
+  {
+    label: 'Ayer',
+    rango: () => ({ desde: dayShift(today(), -1), hasta: dayShift(today(), -1) }),
+  },
+  { label: 'Este mes', rango: () => ({ desde: `${today().slice(0, 7)}-01`, hasta: today() }) },
   /*
-   * EL ACUMULADO ES EL QUE CONTESTA "cuánto me tiene que rendir".
-   *
-   * En una ventana de días el saldo miente sin querer: un repartidor puede
-   * rendir el martes plata que cobró la semana pasada, y en la ventana de esta
-   * semana eso aparece como si le debiéramos. Desde el principio no hay
-   * períodos que mezclar y el número es la posición real.
+   * Desde que arranca la caja y no desde siempre: antes del 17/08/2026 el
+   * sistema se estaba probando y esos números son de ensayo. Es la misma
+   * fecha que usa la billetera, así que el período largo y el saldo hablan
+   * del mismo principio.
    */
-  { label: 'Acumulado', desde: 'todo' as const, hasta: 0 },
-] as const;
+  {
+    label: `Desde el ${ARRANCA.split('-').reverse().slice(0, 2).join('/')}`,
+    rango: () => ({ desde: ARRANCA, hasta: today() }),
+  },
+];
 
 interface Fila {
   id: string;
@@ -60,9 +103,13 @@ interface Fila {
   entregas: number;
   cobrado: number;
   ganancia: number;
-  rendido: number;
-  /** Positivo: tiene plata nuestra. Negativo: le debemos. */
-  saldo: number;
+  /** Lo que el período dejó a rendir: cobró menos su parte. Sin restar entregas. */
+  aRendir: number;
+  /**
+   * Lo que debe HOY, de la billetera entera. Positivo: tiene plata nuestra.
+   * Negativo: le debemos. No se recorta al período: un saldo es de ahora.
+   */
+  saldoHoy: number;
   diasSinCerrar: number;
 }
 
@@ -75,7 +122,7 @@ export default function CajaAdminPage() {
   const [totales, setTotales] = useState({
     cobrado: 0,
     ganancia: 0,
-    rendido: 0,
+    aRendir: 0,
     facturado: 0,
     comision: 0,
     shippy: 0,
@@ -105,7 +152,7 @@ export default function CajaAdminPage() {
       const { from, to } = customRange(desde, hasta);
       const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
 
-      const [drivers, logs, cierres, rendiciones] = await Promise.all([
+      const [drivers, logs, cierres] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, full_name')
@@ -123,22 +170,6 @@ export default function CajaAdminPage() {
           .select('driver_id, day')
           .gte('day', a)
           .lte('day', b),
-        /*
-         * Lo rendido sale de la BILLETERA (paso 55), no del cierre del día.
-         *
-         * Antes salía de `settlements.actual_amount`, que ata la entrega de
-         * plata al cierre de un día. Pero la plata no se entrega por día: el
-         * repartidor junta lo de varias jornadas y deja un monto que cubre
-         * todo. Desde el paso 55 esas entregas tienen su propia fecha, y si acá
-         * se siguiera leyendo el cierre, todo lo que se anote de ahora en más
-         * no aparecería y el saldo diría que nadie rindió nada.
-         */
-        supabase
-          .from('movimientos_caja')
-          .select('driver_id, monto, tipo')
-          .eq('tipo', 'rendicion')
-          .gte('fecha', a)
-          .lte('fecha', b),
       ]);
 
       if (!vivo) return;
@@ -169,18 +200,22 @@ export default function CajaAdminPage() {
         cerrados.set(c.driver_id, s);
       }
 
-      // Si el paso 55 todavía no se corrió, esta consulta falla y lo rendido
-      // queda en cero. Se ve incompleto, no roto.
-      const rendidoPor = new Map<string, number>();
-      for (const m of rendiciones.data ?? []) {
-        rendidoPor.set(m.driver_id, (rendidoPor.get(m.driver_id) ?? 0) + Number(m.monto));
-      }
+      /*
+       * El saldo sale de la billetera ENTERA, no del período elegido.
+       *
+       * Es la diferencia que arregla esta pantalla: mirando la semana pasada,
+       * el saldo que importa no es el que daría esa semana sola, es lo que el
+       * repartidor debe hoy — que puede haber quedado en cero justamente
+       * porque el lunes vino y pagó.
+       */
+      const cuentas = await traerBilleteras((drivers.data ?? []).map((d) => d.id));
+      if (!vivo) return;
 
       const armadas: Fila[] = [];
       const suma = {
         cobrado: 0,
         ganancia: 0,
-        rendido: 0,
+        aRendir: 0,
         facturado: 0,
         comision: 0,
         shippy: 0,
@@ -194,7 +229,13 @@ export default function CajaAdminPage() {
         if (suyos.length === 0) continue;
 
         const r = summarizeLogs(suyos);
-        const rendido = rendidoPor.get(d.id) ?? 0;
+
+        /*
+         * Lo que el período dejó a rendir: lo que cobró en la calle menos lo
+         * que es suyo. Y punto — acá no se resta nada de lo que haya
+         * entregado, porque lo que entregó no es de este período.
+         */
+        const aRendir = r.cashTotal - r.driverEarnings;
 
         const conMov = diasConMovimiento.get(d.id) ?? new Set<string>();
         const cerradosSuyos = cerrados.get(d.id) ?? new Set<string>();
@@ -206,14 +247,14 @@ export default function CajaAdminPage() {
           entregas: r.delivered.length,
           cobrado: r.cashTotal,
           ganancia: r.driverEarnings,
-          rendido,
-          saldo: r.cashTotal - rendido - r.driverEarnings,
+          aRendir,
+          saldoHoy: cuentas.get(d.id)?.saldo ?? 0,
           diasSinCerrar: sinCerrar,
         });
 
         suma.cobrado += r.cashTotal;
         suma.ganancia += r.driverEarnings;
-        suma.rendido += rendido;
+        suma.aRendir += aRendir;
         suma.facturado += r.shippingTotal;
         suma.comision += r.profitComision;
         suma.shippy += r.profitShippy;
@@ -238,8 +279,9 @@ export default function CajaAdminPage() {
   if (!ready) return <div className="p-8 text-sm text-[var(--edr-muted)]">Cargando…</div>;
 
   const ganancia = totales.comision + totales.shippy;
-  const enLaCalle = filas.reduce((acc, f) => acc + Math.max(0, f.saldo), 0);
-  const aPagar = filas.reduce((acc, f) => acc + Math.max(0, -f.saldo), 0);
+  // Los dos de abajo son de HOY y no del período: son posiciones de la cuenta.
+  const enLaCalle = filas.reduce((acc, f) => acc + Math.max(0, f.saldoHoy), 0);
+  const aPagar = filas.reduce((acc, f) => acc + Math.max(0, -f.saldoHoy), 0);
 
   return (
     <main className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
@@ -271,14 +313,9 @@ export default function CajaAdminPage() {
               <button
                 key={x.label}
                 onClick={() => {
-                  setDesde(
-                    x.desde === 'mes'
-                      ? `${today().slice(0, 7)}-01`
-                      : x.desde === 'todo'
-                        ? '2020-01-01'
-                        : dayShift(today(), x.desde),
-                  );
-                  setHasta(dayShift(today(), x.hasta));
+                  const r = x.rango();
+                  setDesde(r.desde);
+                  setHasta(r.hasta);
                 }}
                 className="rounded-full border border-[var(--edr-border)] px-3 py-1.5 text-xs font-bold hover:border-[var(--edr-acento)]"
               >
@@ -333,9 +370,11 @@ export default function CajaAdminPage() {
           {/* ---------- Dónde está la plata ---------- */}
           <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <Tarjeta label="Cobrado en la calle" valor={money(totales.cobrado)} />
-            <Tarjeta label="Ya rendido" valor={money(totales.rendido)} />
-            <Tarjeta label="Tienen que rendir" valor={money(enLaCalle)} tono="warn" />
-            <Tarjeta label="Hay que pagarles" valor={money(aPagar)} tono="ok" />
+            <Tarjeta label="Quedó a rendir" valor={money(totales.aRendir)} />
+            {/* Estos dos son de HOY, no del período: es la posición de la
+                cuenta, la que dice a quién hay que ir a buscar. */}
+            <Tarjeta label="Tienen que rendir hoy" valor={money(enLaCalle)} tono="warn" />
+            <Tarjeta label="Hay que pagarles hoy" valor={money(aPagar)} tono="ok" />
           </div>
 
           {/* ---------- Uno por uno ---------- */}
@@ -347,8 +386,8 @@ export default function CajaAdminPage() {
                   <th className="px-3 py-2 text-right">Entregas</th>
                   <th className="px-3 py-2 text-right">Cobró</th>
                   <th className="px-3 py-2 text-right">Su ganancia</th>
-                  <th className="px-3 py-2 text-right">Rindió</th>
-                  <th className="px-3 py-2 text-right">Saldo</th>
+                  <th className="px-3 py-2 text-right">Quedó a rendir</th>
+                  <th className="px-3 py-2 text-right">Saldo hoy</th>
                 </tr>
               </thead>
               <tbody>
@@ -378,16 +417,30 @@ export default function CajaAdminPage() {
                     <td className="edr-mono px-3 py-2 text-right">{f.entregas}</td>
                     <td className="edr-mono px-3 py-2 text-right">{money(f.cobrado)}</td>
                     <td className="edr-mono px-3 py-2 text-right">{money(f.ganancia)}</td>
-                    <td className="edr-mono px-3 py-2 text-right">{money(f.rendido)}</td>
+                    <td className="edr-mono px-3 py-2 text-right font-bold">
+                      {money(f.aRendir)}
+                    </td>
+                    {/* El saldo NO es del período: es lo que debe hoy. Por eso
+                        puede decir cero mirando una semana en la que cobró
+                        mucho — porque después vino y pagó. */}
                     <td
                       className="edr-mono px-3 py-2 text-right font-black"
                       style={{
-                        color: f.saldo >= 0 ? 'var(--edr-rojo)' : 'var(--edr-verde)',
+                        color:
+                          f.saldoHoy === 0
+                            ? 'var(--edr-muted)'
+                            : f.saldoHoy > 0
+                              ? 'var(--edr-rojo)'
+                              : 'var(--edr-verde)',
                       }}
                     >
-                      {money(Math.abs(f.saldo))}
+                      {money(Math.abs(f.saldoHoy))}
                       <div className="text-[10px] font-bold uppercase">
-                        {f.saldo >= 0 ? 'debe rendir' : 'hay que pagarle'}
+                        {f.saldoHoy === 0
+                          ? 'al día'
+                          : f.saldoHoy > 0
+                            ? 'debe rendir'
+                            : 'hay que pagarle'}
                       </div>
                     </td>
                   </tr>
@@ -396,18 +449,21 @@ export default function CajaAdminPage() {
             </table>
           </section>
 
-          <p className="mt-3 text-xs text-[var(--edr-muted)]">
-            El saldo sale de lo cobrado menos lo rendido menos lo que le toca, dentro del período
-            elegido, y por eso en una ventana de días mezcla: alguien puede rendir el martes plata
-            que cobró la semana pasada.
+          <p className="mt-3 text-xs leading-relaxed text-[var(--edr-muted)]">
+            <strong>&quot;Quedó a rendir&quot; es del período</strong>: lo que cobró en esos días
+            menos lo que es suyo. No le resta las entregas de plata, porque una entrega no
+            pertenece a ninguna semana — puede ser a cuenta, de un día suelto o de dos semanas
+            juntas.
             <br />
-            <strong>
-              Para saber cuánto te debe cada uno de verdad, mirá{' '}
-              <Link href="/admin/billetera" className="underline underline-offset-2">
-                la Billetera
-              </Link>
-            </strong>
-            : ahí el saldo va desde el principio y no hay períodos que mezclar.
+            <strong>&quot;Saldo hoy&quot; es de la cuenta</strong>: lo que debe ahora, desde que
+            arranca la caja, contando todo lo que entregó y todo lo que se le pagó. Por eso una
+            semana con mucho cobrado puede tener saldo cero: cerró y vino a pagar.
+            <br />
+            Las entregas de plata se anotan y se corrigen en{' '}
+            <Link href="/admin/billetera" className="underline underline-offset-2">
+              la Billetera
+            </Link>
+            .
           </p>
         </>
       )}

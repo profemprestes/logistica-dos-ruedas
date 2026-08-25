@@ -15,6 +15,17 @@ import { tratoDirectoDe } from '@/lib/resumen';
  * mínimos— para no colgar una dependencia entera por un solo archivo.
  */
 
+/**
+ * Los datos para pagar por transferencia. Van al pie del resumen —en el PDF y
+ * en el Excel— para que el comercio no tenga que pedirlos por WhatsApp.
+ */
+export const DATOS_PAGO = {
+  alias: 'enviosdosruedas',
+  titular: 'Matias Nicolas Cejas',
+  cuit: '20-34987367-3',
+  banco: 'BruBank',
+} as const;
+
 /** Una fila del detalle. */
 export interface FilaResumen {
   /** yyyy-mm-dd (se muestra dd/mm/aaaa). */
@@ -302,6 +313,12 @@ export function armarExcelResumen(opciones: {
       { m: f.valor },
     ]),
     [null, null, { t: 'TOTAL', s: 1 }, { m: total, s: 4 }],
+    [],
+    [{ t: 'En caso de realizar el pago por transferencia:', s: 1 }],
+    [{ t: `Alias: ${DATOS_PAGO.alias}` }],
+    [{ t: `Titular: ${DATOS_PAGO.titular}` }],
+    [{ t: `CUIT: ${DATOS_PAGO.cuit}` }],
+    [{ t: `Banco: ${DATOS_PAGO.banco}` }],
   ];
 
   const xml = (s: string) => new TextEncoder().encode(s);

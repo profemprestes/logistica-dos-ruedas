@@ -1,4 +1,4 @@
-import type { FilaResumen } from '@/lib/excelResumen';
+import { DATOS_PAGO, type FilaResumen } from '@/lib/excelResumen';
 
 /**
  * El mismo resumen, como PDF.
@@ -69,8 +69,14 @@ export function htmlDelResumen(opciones: {
   td.num { text-align: center; white-space: nowrap; width: 1%; }
   td.plata { text-align: right; white-space: nowrap; width: 1%; font-variant-numeric: tabular-nums; }
   tr.total td { font-weight: bold; background: #f4f6fb; }
+  .pago { margin-top: 14px; border: 1px solid #999; padding: 8px 12px; font-size: 11px; width: fit-content; }
+  .pago strong { display: block; margin-bottom: 3px; }
   .pie { margin-top: 14px; font-size: 10px; color: #666; text-align: center; }
-  @media print { body { padding: 0; } }
+  /* Con margen de página cero, el navegador no imprime sus propios
+     encabezados y pies —la fecha y el "about:blank" de la ventana— y el
+     margen visual lo pone el documento. */
+  @page { size: A4; margin: 0; }
+  @media print { body { padding: 15mm 14mm; } }
 </style>
 </head>
 <body>
@@ -100,6 +106,14 @@ export function htmlDelResumen(opciones: {
       <tr class="total"><td colspan="3">TOTAL</td><td class="plata">${plata(total)}</td></tr>
     </tbody>
   </table>
+
+  <div class="pago">
+    <strong>En caso de realizar el pago por transferencia:</strong>
+    Alias: ${esc(DATOS_PAGO.alias)}<br />
+    Titular: ${esc(DATOS_PAGO.titular)}<br />
+    CUIT: ${esc(DATOS_PAGO.cuit)}<br />
+    Banco: ${esc(DATOS_PAGO.banco)}
+  </div>
 
   <p class="pie">Envíos DosRuedas · Mensajería y logística de última milla · Mar del Plata</p>
 

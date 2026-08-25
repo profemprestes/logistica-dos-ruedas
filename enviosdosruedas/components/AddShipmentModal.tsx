@@ -14,7 +14,7 @@ import {
 } from '@/lib/format';
 import VerificarPunto from '@/components/admin/VerificarPunto';
 import ElegirComercio from '@/components/admin/ElegirComercio';
-import { asegurarComercio, problemaDelComercio } from '@/lib/admin/comercios';
+import { asegurarComercio, claveDeComercio, problemaDelComercio } from '@/lib/admin/comercios';
 import {
   fetchPedidos,
   fetchStock,
@@ -450,9 +450,15 @@ function ShipmentForm({
     const objetivo = new Set<number>();
     if (form.client_id && conStock.has(form.client_id)) objetivo.add(form.client_id);
     for (const c of comerciosConocidos) {
+      /*
+       * La clave CANÓNICA (sin mayúsculas, puntos ni tildes), la misma del
+       * índice único de comercios: así "CONECTTA SA" en el WhatsApp encuentra
+       * la ficha "Conectta S.A". Con la comparación literal, un punto de
+       * diferencia escondía el bloque del pedido.
+       */
       if (
         conStock.has(c.id) &&
-        rows.some((r) => claveComercio(r.clientName) === claveComercio(c.name))
+        rows.some((r) => claveDeComercio(r.clientName) === claveDeComercio(c.name))
       ) {
         objetivo.add(c.id);
       }
@@ -1438,7 +1444,7 @@ function ShipmentForm({
                                    de su listado; sin eso, la fila queda igual
                                    que siempre. */
                                 const c = comerciosConocidos.find(
-                                  (x) => claveComercio(x.name) === claveComercio(r.clientName),
+                                  (x) => claveDeComercio(x.name) === claveDeComercio(r.clientName),
                                 );
                                 if (!c || !conStock.has(c.id)) return null;
                                 return (
@@ -1539,7 +1545,7 @@ function ShipmentForm({
  * (paso 56). Un producto por línea; el mismo producto dos veces se corrige
  * subiendo la cantidad.
  */
-function PedidoDeStock({
+export function PedidoDeStock({
   productos,
   lineas,
   onChange,
@@ -1570,8 +1576,15 @@ function PedidoDeStock({
             const elegido = productos.find((p) => p.product_id === l.productId);
             return (
               <div key={i} className="mb-1.5 flex items-center gap-2">
+                {/* El desplegable abierto usa el menú NATIVO del sistema, que
+                    en Windows es blanco: sin colores propios, las opciones
+                    heredaban el texto claro del tema y salían blanco sobre
+                    blanco. Reportado por Matías el 25/08/2026. */}
+                {/* `flex-auto` y no `flex-1`: con basis 0 el navegador colapsa
+                    el select a la flecha sola cuando otro hermano empuja. */}
                 <select
-                  className={`${field} min-w-0 flex-1`}
+                  className={`${field} min-w-0 flex-auto text-white [&>option]:bg-[var(--edr-surface)] [&>option]:text-white [&>option:disabled]:text-[var(--edr-muted)]`}
+                  style={{ colorScheme: 'dark' }}
                   value={l.productId}
                   onChange={(e) => setLinea(i, { productId: e.target.value })}
                 >
@@ -1586,10 +1599,14 @@ function PedidoDeStock({
                     </option>
                   ))}
                 </select>
+                {/* `max-w-20` porque `field` trae `w-full` y le gana al `w-20`:
+                    sin el tope, esta casilla se comía toda la fila y el
+                    desplegable quedaba colapsado en 22px — era lo que se veía
+                    como "no se ve el producto". */}
                 <input
                   type="number"
                   min={1}
-                  className={`${field} w-20 text-right`}
+                  className={`${field} w-20 max-w-20 text-right`}
                   value={l.cantidad || ''}
                   onChange={(e) => setLinea(i, { cantidad: Number(e.target.value) || 0 })}
                 />

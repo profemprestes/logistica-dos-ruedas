@@ -298,6 +298,64 @@ const CASOS: Caso[] = [
       pickupAddress: 'BASE',
     },
   },
+  /*
+   * La tanda de FLOW del 26/08/2026, con el producto ADELANTE y adentro del
+   * MISMO paréntesis que el contacto: "(Control flow, Silvia aldaya
+   * 2233399043)". Como no dice "x1" no había con qué separarlo y el
+   * destinatario quedaba "Control flow Silvia aldaya": el nombre del producto
+   * pegado adelante del nombre de la persona, en la etiqueta y en el
+   * seguimiento que ve quien recibe.
+   */
+  {
+    titulo: 'Flow: el producto adelante del contacto, en el mismo parentesis',
+    texto:
+      'CONECTTA FLOW\nRETIRA EN BASE\n' +
+      '- ANTES 19HS SAAVEDRA 2845 DPTO FRENTE. (Control flow, Silvia aldaya 2233399043) (NO COBRAR)',
+    exactos: ['recipientName', 'productDetail'],
+    espera: {
+      addressStreet: 'SAAVEDRA 2845',
+      addressExtra: 'DPTO FRENTE',
+      recipientName: 'Silvia aldaya',
+      recipientPhone: '2233399043',
+      productDetail: 'Control flow',
+      deliveryWindow: 'antes de 19 hs',
+      paymentMode: 'no_cobrar',
+    },
+  },
+  {
+    titulo: 'Flow: el producto escrito dos veces no se repite ni cae en notas',
+    texto:
+      'CONECTTA FLOW\nRETIRA EN BASE\n' +
+      '- ANTES 19HS NASSER 1956. (control flow, Claudia di vicenzo 2234482907)(CONTROL FLOW)(NO COBRAR)',
+    exactos: ['recipientName', 'productDetail', 'notes'],
+    espera: {
+      addressStreet: 'NASSER 1956',
+      recipientName: 'Claudia di vicenzo',
+      recipientPhone: '2234482907',
+      productDetail: 'control flow',
+      notes: '',
+    },
+  },
+  /*
+   * La misma tanda, con un paréntesis al que se le comió la apertura al
+   * editarla a mano. El contacto entero se iba a las notas —envío sin teléfono,
+   * o sea sin seguimiento para quien recibe— y el producto del paréntesis de al
+   * lado quedaba de destinatario.
+   */
+  {
+    titulo: 'un parentesis sin abrir no se lleva puesto al destinatario',
+    texto:
+      'CONECTTA FLOW\nRETIRA EN BASE\n' +
+      '- ANTES 19HS SAAVEDRA 2845 DPTO FRENTE. Silvia aldaya 2233399043) (CONTROL FLOW)(NO COBRAR)',
+    exactos: ['recipientName', 'productDetail'],
+    espera: {
+      addressStreet: 'SAAVEDRA 2845',
+      addressExtra: 'DPTO FRENTE',
+      recipientName: 'Silvia aldaya',
+      recipientPhone: '2233399043',
+      productDetail: 'CONTROL FLOW',
+    },
+  },
 ];
 
 let fallos = 0;

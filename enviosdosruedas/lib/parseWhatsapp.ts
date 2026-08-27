@@ -107,6 +107,52 @@ function sinFormatoWhatsapp(texto: string): string {
     .trim();
 }
 
+/**
+ * Un paréntesis al que le falta la apertura.
+ *
+ * "...DPTO FRENTE. Silvia aldaya 2233399043) (CONTROL FLOW)" — así quedó una
+ * línea de la tanda del 26/08/2026 después de editarla a mano. Sin el "(" ese
+ * pedazo no es un paréntesis para el parser: el nombre y el teléfono se van a
+ * las notas, el envío sale sin contacto —y sin contacto no hay seguimiento que
+ * mandarle a quien recibe— y el producto del paréntesis de al lado termina
+ * ocupando el lugar del destinatario.
+ *
+ * Se abre en el último punto SEGUIDO DE ESPACIO que haya antes, que es donde
+ * termina la dirección. El espacio importa: sin él, "ENVIO $4.000 Juan 223..."
+ * abriría en el punto de los miles y el contacto empezaría en "000".
+ *
+ * Si no hay punto no se toca nada: envolver desde el principio de la línea se
+ * llevaría puesta la dirección entera, que es peor que dejar el contacto en las
+ * notas.
+ */
+function abrirParentesisHuerfano(linea: string): { linea: string; arreglado: boolean } {
+  let abiertos = 0;
+
+  for (let i = 0; i < linea.length; i++) {
+    if (linea[i] === '(') abiertos++;
+    else if (linea[i] === ')') {
+      if (abiertos > 0) {
+        abiertos--;
+        continue;
+      }
+
+      const punto = [...linea.slice(0, i).matchAll(/\.\s+/g)].pop();
+      if (!punto) return { linea, arreglado: false };
+
+      const corte = (punto.index ?? 0) + punto[0].length;
+      const adentro = linea.slice(corte, i).trim();
+      if (!adentro) return { linea, arreglado: false };
+
+      return {
+        linea: `${linea.slice(0, corte)}(${adentro})${linea.slice(i + 1)}`,
+        arreglado: true,
+      };
+    }
+  }
+
+  return { linea, arreglado: false };
+}
+
 /* ---------------------------------------------------------------- regexes */
 
 const RE_RANGE =
@@ -215,6 +261,16 @@ const PALABRAS_DE_INSTRUCCION = [
 const sinAcentos = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+/** Si un pedazo de texto suena a instrucción para el repartidor y no a un dato. */
+const pareceInstruccion = (t: string) =>
+  t
+    .split(/\s+/)
+    .some((p) => PALABRAS_DE_INSTRUCCION.includes(sinAcentos(p.replace(/[.,;:]/g, ''))));
+
+/** El mismo texto escrito de dos maneras: "control flow" y "CONTROL FLOW". */
+const mismoTexto = (a: string, b: string) =>
+  Boolean(a) && Boolean(b) && sinAcentos(clean(a)) === sinAcentos(clean(b));
+
 /**
  * Si un paréntesis sin teléfono parece el nombre de quien recibe.
  *
@@ -234,7 +290,7 @@ function pareceNombre(t: string): boolean {
   const palabras = texto.split(/\s+/);
   if (palabras.length < 1 || palabras.length > 3) return false;
 
-  return !palabras.some((p) => PALABRAS_DE_INSTRUCCION.includes(sinAcentos(p.replace(/[.,;:]/g, ''))));
+  return !pareceInstruccion(texto);
 }
 
 function takeWindow(text: string): { window: string; rest: string } {
@@ -260,33 +316,81 @@ function takeWindow(text: string): { window: string; rest: string } {
  */
 const RE_CANTIDAD = /\bx\s*\d+\b|\b\d+\s*x\b/i;
 
+
 /**
- * Separa el producto del nombre adentro del paréntesis.
+ * Reparte lo que hay adentro de un paréntesis: teléfono, nombre, producto y
+ * aclaraciones.
  *
- * KILLARI escribe "(nad x1, Julia 542233489609)": producto, nombre y teléfono,
- * separados por comas. El teléfono ya salió antes; lo que queda se parte por la
- * coma y el pedazo con cantidad es la mercadería.
+ * KILLARI escribe "(nad x1, Julia 542233489609)" y FLOW "(Control flow, Silvia
+ * aldaya 2233399043)": la mercadería adelante, el contacto atrás, separados por
+ * coma.
  *
- * SI NO HAY DOS PEDAZOS, TODO ES NOMBRE. La duda se resuelve siempre para el
- * lado del nombre: es el dato que se lee en la puerta, y una etiqueta que dice
- * "nad x1" en vez de "Julia" no sirve para tocar un timbre.
+ * EL TELÉFONO ES EL ANCLA. Antes se buscaba la cantidad ("x1") para saber cuál
+ * pedazo era la mercadería, y por eso el de FLOW no se separaba nunca: "Control
+ * flow" no lleva cantidad. El destinatario quedaba "Control flow Silvia
+ * aldaya" —el producto pegado adelante del nombre de la persona, en la etiqueta
+ * y en el seguimiento que ve quien recibe— y el campo Producto, vacío.
+ *
+ * Con el teléfono alcanza y sirve para cualquier producto: el pedazo donde está
+ * el número es el del contacto, y lo que sobra NO es la persona. Si ese pedazo
+ * trae sólo el número —"(Antonio Louro, 2235762833)", que es la otra forma en
+ * que llegan los pedidos de FLOW— el nombre es el pedazo de al lado y no hay
+ * producto que separar.
+ *
+ * Lo que sobra va a producto, salvo que suene a instrucción para el repartidor
+ * ("dejar en portería"): eso va a notas. Una cantidad manda siempre a producto,
+ * porque "caja x2" es mercadería aunque "caja" esté en la lista de arriba.
  */
-function separarProducto(texto: string): { producto: string; nombre: string } {
-  const partes = texto
-    .split(/[,;]/)
-    .map(clean)
-    .filter(Boolean);
+function separarContacto(texto: string): {
+  telefono: string;
+  nombre: string;
+  producto: string;
+  notas: string[];
+} {
+  const partes = texto.split(/[,;]/).map(clean).filter(Boolean);
+  const conTelefono = partes.findIndex((p) => tieneTelefono(p));
 
-  const producto = partes.filter((p) => RE_CANTIDAD.test(p));
-  const nombre = partes.filter((p) => !RE_CANTIDAD.test(p));
-
-  // Con uno solo de los dos lados no hay nada que separar: si viniera sólo
-  // "nad x1" y se lo mandara al producto, el envío quedaría sin destinatario.
-  if (!producto.length || !nombre.length) {
-    return { producto: '', nombre: clean(texto.replace(/[,;]/g, ' ')) };
+  /*
+   * Sin teléfono no hay ancla, y ahí se sigue como antes: separa sólo si hay
+   * una cantidad, y si no, todo es nombre. La duda se resuelve para el lado del
+   * nombre porque es el dato que se lee en la puerta, y una etiqueta que dice
+   * "nad x1" en vez de "Julia" no sirve para tocar un timbre.
+   */
+  if (conTelefono === -1) {
+    const conCantidad = partes.filter((p) => RE_CANTIDAD.test(p));
+    const sinCantidad = partes.filter((p) => !RE_CANTIDAD.test(p));
+    if (!conCantidad.length || !sinCantidad.length) {
+      return { telefono: '', nombre: clean(texto.replace(/[,;]/g, ' ')), producto: '', notas: [] };
+    }
+    return {
+      telefono: '',
+      nombre: sinCantidad.join(' '),
+      producto: conCantidad.join(', '),
+      notas: [],
+    };
   }
 
-  return { producto: producto.join(', '), nombre: nombre.join(' ') };
+  const { telefono, resto } = sacarTelefono(partes[conTelefono]);
+
+  // El pedazo del teléfono sin el número ES el nombre. Salvo que venga el
+  // número solo: ahí el nombre es el de al lado —el de antes, que es como se
+  // escribe— y ese pedazo deja de estar en juego para el producto.
+  let indiceDelNombre = conTelefono;
+  let nombre = resto;
+  if (!nombre) {
+    indiceDelNombre = conTelefono > 0 ? conTelefono - 1 : conTelefono + 1;
+    nombre = partes[indiceDelNombre] ?? '';
+  }
+
+  const producto: string[] = [];
+  const notas: string[] = [];
+  partes.forEach((p, i) => {
+    if (i === conTelefono || i === indiceDelNombre) return;
+    if (RE_CANTIDAD.test(p) || !pareceInstruccion(p)) producto.push(p);
+    else notas.push(p);
+  });
+
+  return { telefono, nombre: clean(nombre), producto: producto.join(', '), notas };
 }
 
 function takeAddress(segment: string): { street: string; extra: string; rest: string } {
@@ -467,6 +571,14 @@ export function parseWhatsappText(
     // ---------- Línea de entrega ----------
     const warnings: string[] = [];
 
+    // Un ")" sin su "(": se lo pone antes de leer los paréntesis, y se avisa
+    // para que se mire en la revisión. Ver `abrirParentesisHuerfano`.
+    const huerfano = abrirParentesisHuerfano(line);
+    if (huerfano.arreglado) {
+      line = huerfano.linea;
+      warnings.push('Faltaba abrir un paréntesis: revisá el destinatario.');
+    }
+
     /*
      * Cada paréntesis va a un lado distinto, y se miran de a uno.
      *
@@ -506,16 +618,14 @@ export function parseWhatsappText(
     let productDetail = '';
 
     if (contactos.length) {
-      const { telefono, resto } = sacarTelefono(contactos[0]);
-      recipientPhone = telefono;
-      // Lo que queda al sacarle el teléfono puede traer el producto adelante:
-      // "nad x1, Julia". Ver `separarProducto`.
-      const partido = separarProducto(resto);
+      const partido = separarContacto(contactos[0]);
+      recipientPhone = partido.telefono;
       productDetail = partido.producto;
       recipientName = partido.nombre;
+      notasSueltas.push(...partido.notas);
       // Sin teléfono, que sea un nombre es una corazonada: se avisa para que
       // se vea antes de guardar, que es cuando todavía se puede corregir.
-      if (!telefono && recipientName) {
+      if (!partido.telefono && recipientName) {
         warnings.push(`Tomé "${recipientName}" como destinatario. Si era una aclaración, corregilo.`);
       }
       /*
@@ -526,12 +636,18 @@ export function parseWhatsappText(
        * es más probablemente una aclaración, y va a notas como siempre. Un
        * segundo contacto CON teléfono también va a notas: son dos personas,
        * no un paquete.
+       *
+       * Y si repite el producto que ya salió del paréntesis del contacto
+       * —"(control flow, Claudia 2234482907)(CONTROL FLOW)", que es como quedó
+       * escrita la tanda del 26/08/2026— no es una nota nueva: es lo mismo dos
+       * veces y se descarta, en vez de colgarle al envío una nota que dice lo
+       * que el campo Producto ya dice.
        */
       for (const extra of contactos.slice(1)) {
         const otro = sacarTelefono(extra);
         if (!otro.telefono && !productDetail && recipientPhone) {
           productDetail = otro.resto.trim();
-        } else {
+        } else if (!mismoTexto(extra, productDetail)) {
           notasSueltas.push(extra);
         }
       }

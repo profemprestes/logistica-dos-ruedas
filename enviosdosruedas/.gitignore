@@ -49,3 +49,6 @@ android/keystore.properties
 next-env.d.ts
 
 .vercel
+
+# el worker de pdf.js lo copia scripts/copiar-worker-pdf.mjs en cada dev/build
+/public/pdf.worker.min.mjs

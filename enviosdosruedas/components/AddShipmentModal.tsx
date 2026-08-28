@@ -23,9 +23,17 @@ import {
   type LineaDePedido,
 } from '@/lib/stock/db';
 import type { StockRow } from '@/lib/stock/types';
+import { PLANTILLAS, enviosDeArchivo, type PedidoDelArchivo } from '@/lib/importar';
 import { notificarRepartidor } from '@/lib/notify';
 
-type Mode = 'manual' | 'pegar';
+/**
+ * De dónde salen los envíos.
+ *
+ * `archivo` es la hoja de ruta que mandan los comercios grandes —FLOW manda un
+ * PDF con trece— y termina en la MISMA tabla de revisión que `pegar`: lo único
+ * distinto es de dónde se sacan las filas.
+ */
+type Mode = 'manual' | 'pegar' | 'archivo';
 
 /**
  * Le pide al servidor que ubique los envíos recién cargados en el mapa.
@@ -360,6 +368,23 @@ function ShipmentForm({
    */
   const [enlacesElegidos, setEnlacesElegidos] = useState<Record<string, number>>({});
 
+  /* ---------------------------------------- la hoja de ruta de un comercio */
+
+  /** Con qué plantilla se lee el archivo: de qué comercio es la hoja de ruta. */
+  const [plantillaId, setPlantillaId] = useState(PLANTILLAS[0]?.id ?? '');
+  const [leyendoArchivo, setLeyendoArchivo] = useState(false);
+  const [errorArchivo, setErrorArchivo] = useState('');
+  /** Cómo se llama el archivo que se leyó, para que se vea qué se subió. */
+  const [nombreArchivo, setNombreArchivo] = useState('');
+  /**
+   * Lo que el archivo dice que lleva cada envío, todavía en texto.
+   *
+   * Se guarda aparte y no se convierte en el acto porque los productos del
+   * comercio se piden a la base y todavía están viajando cuando el archivo
+   * termina de leerse. El cruce lo hace el efecto de más abajo, cuando llegan.
+   */
+  const [pedidoDelArchivo, setPedidoDelArchivo] = useState<PedidoDelArchivo[]>([]);
+
   /*
    * ---------- El pedido de stock (paso 56) ----------
    *
@@ -531,6 +556,73 @@ function ShipmentForm({
         .catch(() => {});
     }
   });
+
+  /**
+   * Lee la hoja de ruta y la deja en la tabla de revisión.
+   *
+   * No guarda nada: deja los envíos en pantalla igual que "Interpretar texto",
+   * para que se miren antes. Un archivo de trece se revisa una vez y se guarda
+   * de una; el que no se revisa sale a la calle con lo que dijo el PDF.
+   */
+  const leerArchivo = async (archivo: File) => {
+    const plantilla = PLANTILLAS.find((p) => p.id === plantillaId);
+    if (!plantilla) return;
+
+    setLeyendoArchivo(true);
+    setErrorArchivo('');
+    try {
+      const { filas, fecha, pedidos } = await enviosDeArchivo(
+        await archivo.arrayBuffer(),
+        plantilla,
+        fechaLote,
+      );
+      if (!filas.length) {
+        setErrorArchivo('El archivo se leyó pero no tenía ningún envío adentro.');
+        return;
+      }
+      setRows(filas);
+      setPedidoDelArchivo(pedidos);
+      setNombreArchivo(archivo.name);
+      // La fecha del reparto la trae el archivo: es más confiable que la que
+      // esté elegida en pantalla, que quedó de la vez anterior.
+      if (fecha) setFechaLote(fecha);
+    } catch (e) {
+      setErrorArchivo((e as Error).message);
+    } finally {
+      setLeyendoArchivo(false);
+    }
+  };
+
+  /**
+   * El pedido del depósito de una fila.
+   *
+   * Sale de dos lados: lo que se eligió a mano en la tabla, y lo que venía
+   * escrito en el archivo del comercio. LO DE LA MANO SIEMPRE GANA.
+   *
+   * Se calcula acá y no se guarda en estado a propósito. El archivo trae
+   * "CONTROL FLOW", un texto; para que eso sea un pedido hace falta el producto
+   * de la ficha, que la base todavía está mandando cuando el archivo termina de
+   * leerse. Copiarlo a estado apenas llegue sería sincronizar dos copias de lo
+   * mismo —y pisar lo que alguien haya tocado mientras tanto—; calcularlo cada
+   * vez no tiene ese problema.
+   *
+   * El nombre se busca SIN MAYÚSCULAS NI ACENTOS Y ENTERO: con un parecido
+   * alcanza para descontar la mercadería equivocada, y eso después se arregla
+   * contando cajas. Lo que no se encuentra queda escrito igual en el campo
+   * Producto —el repartidor ve qué lleva— y sin pedido, como era antes.
+   */
+  const pedidoDe = (tempId: string, deStock: number | null): LineaDePedido[] => {
+    const aMano = pedidosFila[tempId];
+    if (aMano) return aMano;
+
+    const delArchivo = pedidoDelArchivo.find((p) => p.tempId === tempId);
+    if (!delArchivo || deStock == null) return [];
+
+    const producto = (productosDe[deStock] ?? []).find(
+      (p) => claveDeComercio(p.nombre) === claveDeComercio(delArchivo.nombre),
+    );
+    return producto ? [{ productId: producto.product_id, cantidad: delArchivo.cantidad }] : [];
+  };
 
   /**
    * Los comercios distintos de la tanda pegada, uno por nombre.
@@ -846,7 +938,7 @@ function ShipmentForm({
           const ficha = fichaEnlazada(r.clientName);
           const deStock = ficha ? fichaDeStock(ficha.id) : null;
           return deStock != null
-            ? textoDelPedido(pedidosFila[r.tempId] ?? [], productosDe[deStock] ?? [])
+            ? textoDelPedido(pedidoDe(r.tempId, deStock), productosDe[deStock] ?? [])
             : '';
         })(),
       notes: r.notes,
@@ -883,7 +975,11 @@ function ShipmentForm({
     const fallasPedido: string[] = [];
     await Promise.all(
       toSave.map(async (r, i) => {
-        const lineas = pedidosFila[r.tempId] ?? [];
+        // Por `pedidoDe` y no por `pedidosFila` a secas: el pedido que trajo el
+        // archivo del comercio no está en ese estado, y sin esto los trece
+        // envíos de FLOW se guardarían sin descontar una sola caja.
+        const ficha = fichaEnlazada(r.clientName);
+        const lineas = pedidoDe(r.tempId, ficha ? fichaDeStock(ficha.id) : null);
         const id = guardados?.[i]?.id;
         if (!lineas.length || !id) return;
         const res = await guardarPedido(id, lineas);
@@ -974,7 +1070,7 @@ function ShipmentForm({
 
         {!editing && (
           <div className="flex gap-1 border-b border-[var(--edr-border)] px-5 pt-3">
-            {(['manual', 'pegar'] as Mode[]).map((m) => (
+            {(['manual', 'pegar', 'archivo'] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -984,7 +1080,11 @@ function ShipmentForm({
                     : 'text-[var(--edr-muted)] hover:text-[var(--edr-muted)]'
                 }`}
               >
-                {m === 'manual' ? 'Carga manual' : 'Pegar mensaje de WhatsApp'}
+                {m === 'manual'
+                  ? 'Carga manual'
+                  : m === 'pegar'
+                    ? 'Pegar mensaje de WhatsApp'
+                    : 'Subir archivo del comercio'}
               </button>
             ))}
           </div>
@@ -1238,7 +1338,11 @@ function ShipmentForm({
           )}
 
           {/* ============================ PEGAR ============================= */}
-          {mode === 'pegar' && (
+          {/* La tanda pegada y el archivo del comercio comparten TODO lo de
+              abajo: la fecha del lote, la tarjeta del punto de retiro y la
+              tabla de revisión. Lo único distinto es de dónde salen las filas,
+              y eso son los dos bloques que siguen. */}
+          {mode !== 'manual' && (
             <div>
               {/* La fecha va ANTES del texto a propósito: es la decisión que hay
                   que tomar mirando el mensaje, no después de interpretarlo. */}
@@ -1280,23 +1384,84 @@ function ShipmentForm({
                 </p>
               </div>
 
-              <Field label="Pegá acá el mensaje tal cual te llega">
-                <textarea
-                  className={`${field} font-mono text-xs`}
-                  rows={8}
-                  value={raw}
-                  onChange={(e) => setRaw(e.target.value)}
-                  placeholder={`STARCELL\nRETIRA DESDE 10HS EN ALDREY\n- 10 A 13HS ALBERTI 2791. ENVIO $3000 (NO COBRAR)\n- ANTES 19HS C PELLEGRINI 4957. COBRAR $55930 (óxido nítrico x2, Gustavo 542235783553)`}
-                />
-              </Field>
+              {mode === 'pegar' && (
+                <Field label="Pegá acá el mensaje tal cual te llega">
+                  <textarea
+                    className={`${field} font-mono text-xs`}
+                    rows={8}
+                    value={raw}
+                    onChange={(e) => setRaw(e.target.value)}
+                    placeholder={`STARCELL\nRETIRA DESDE 10HS EN ALDREY\n- 10 A 13HS ALBERTI 2791. ENVIO $3000 (NO COBRAR)\n- ANTES 19HS C PELLEGRINI 4957. COBRAR $55930 (óxido nítrico x2, Gustavo 542235783553)`}
+                  />
+                </Field>
+              )}
+
+              {mode === 'archivo' && (
+                <div className="rounded-lg border border-[var(--edr-border)] bg-[var(--edr-surface-2)] px-4 py-4">
+                  <Field label="¿De qué comercio es la hoja de ruta?">
+                    <select
+                      className={`${field} [&>option]:bg-[var(--edr-surface)] [&>option]:text-white`}
+                      style={{ colorScheme: 'dark' }}
+                      value={plantillaId}
+                      onChange={(e) => setPlantillaId(e.target.value)}
+                    >
+                      {PLANTILLAS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <div className="mt-3">
+                    <label className={labelCls}>El archivo tal cual te lo mandan</label>
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      disabled={leyendoArchivo}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        // Se limpia el input para poder volver a subir EL MISMO
+                        // archivo después de corregirlo: si no, el navegador no
+                        // avisa que cambió y no pasa nada al elegirlo.
+                        e.target.value = '';
+                        if (f) void leerArchivo(f);
+                      }}
+                      className="block w-full text-sm text-[var(--edr-muted)] file:mr-3 file:rounded file:border-0 file:bg-[var(--edr-yellow)] file:px-4 file:py-2 file:text-sm file:font-black file:text-[var(--edr-blue)] hover:file:brightness-95"
+                    />
+                  </div>
+
+                  {leyendoArchivo && (
+                    <p className="mt-3 text-sm font-bold text-[var(--edr-acento)]">Leyendo el archivo…</p>
+                  )}
+                  {nombreArchivo && !leyendoArchivo && !errorArchivo && (
+                    <p className="mt-3 text-sm text-[var(--edr-muted)]">
+                      Leído: <span className="font-bold">{nombreArchivo}</span> · {rows.length} envíos.
+                      Revisalos abajo antes de guardar.
+                    </p>
+                  )}
+                  {errorArchivo && (
+                    <p className="mt-3 rounded border-2 border-[var(--edr-naranja-claro)] px-3 py-2 text-sm font-bold text-[var(--edr-naranja-claro)]">
+                      {errorArchivo}
+                    </p>
+                  )}
+
+                  <p className="mt-3 text-xs text-[var(--edr-muted)]">
+                    Tiene que ser el PDF original que manda el comercio. Uno escaneado o una foto no
+                    sirven: adentro no hay texto, hay una imagen.
+                  </p>
+                </div>
+              )}
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={() => setRows(parseWhatsappText(raw, 'Mar del Plata', fechaLote))}
-                  className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95"
-                >
-                  Interpretar texto
-                </button>
+                {mode === 'pegar' && (
+                  <button
+                    onClick={() => setRows(parseWhatsappText(raw, 'Mar del Plata', fechaLote))}
+                    className="rounded bg-[var(--edr-yellow)] px-4 py-2 text-sm font-black text-[var(--edr-blue)] hover:brightness-95"
+                  >
+                    Interpretar texto
+                  </button>
+                )}
                 {rows.length > 0 && (
                   <>
                     <span className="text-sm text-[var(--edr-muted)]">
@@ -1602,7 +1767,7 @@ function ShipmentForm({
                                   <div className="sm:col-span-3">
                                     <PedidoDeStock
                                       productos={productosDe[deStock] ?? []}
-                                      lineas={pedidosFila[r.tempId] ?? []}
+                                      lineas={pedidoDe(r.tempId, deStock)}
                                       onChange={(ls) =>
                                         setPedidosFila((prev) => ({ ...prev, [r.tempId]: ls }))
                                       }

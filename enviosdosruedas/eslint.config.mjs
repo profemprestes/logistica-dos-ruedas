@@ -15,6 +15,10 @@ const eslintConfig = defineConfig([
     // El service worker corre en otro contexto (self, caches, clients),
     // no en el del navegador ni en el de Node: las reglas de acá no aplican.
     "public/sw.js",
+    // El worker de pdf.js: no es nuestro, viene minificado en una sola línea y
+    // lo copia `scripts/copiar-worker-pdf.mjs` antes de cada dev y cada build.
+    // Sin esto, un `npm run lint` son mil setecientos avisos de una biblioteca.
+    "public/pdf.worker.min.mjs",
     // El proyecto de Android: código Java y archivos que genera Capacitor al
     // compilar. No es nuestro y no se edita a mano, así que revisarlo sólo
     // llena la salida de avisos que nadie va a arreglar nunca.

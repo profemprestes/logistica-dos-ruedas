@@ -10,7 +10,10 @@
     "parser": "tsx --tsconfig tsconfig.json scripts/probar-parser.ts",
     "panel": "tsx --tsconfig tsconfig.json scripts/probar-panel.ts",
     "aviso": "tsx --tsconfig tsconfig.json scripts/probar-aviso.ts",
-    "comercios": "tsx --tsconfig tsconfig.json scripts/cargar-comercios.ts"
+    "comercios": "tsx --tsconfig tsconfig.json scripts/cargar-comercios.ts",
+    "archivo": "tsx --tsconfig tsconfig.json scripts/probar-archivo.ts",
+    "predev": "node scripts/copiar-worker-pdf.mjs",
+    "prebuild": "node scripts/copiar-worker-pdf.mjs"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",
@@ -29,6 +32,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^1.31.0",
     "next": "16.3.0",
+    "pdfjs-dist": "^5.7.284",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-qr-code": "^2.2.0",
